@@ -53,6 +53,13 @@ window.DashboardView = function DashboardView() {
 
   const recent = app.records.slice(0, 5);
 
+  // pending deposits — records with deposit not yet returned
+  const pendingDeposits = useMemo(() => app.records.filter(r =>
+    Number(r.depositAmount) > 0 &&
+    (!r.depositStatus || r.depositStatus === 'pending')
+  ), [app.records]);
+  const pendingDepositTotal = pendingDeposits.reduce((s, r) => s + Number(r.depositAmount), 0);
+
   return (
     <>
       <div className="page-header">
@@ -72,6 +79,48 @@ window.DashboardView = function DashboardView() {
           </button>
         </div>
       </div>
+
+      {/* Pending deposit alert banner */}
+      {pendingDeposits.length > 0 && (
+        <div style={{
+          display:'flex', alignItems:'flex-start', gap:16, padding:'14px 20px',
+          background:'rgba(59,130,246,0.07)', border:'1px solid rgba(59,130,246,0.28)',
+          borderRadius:14, marginBottom:20,
+        }}>
+          <div style={{
+            width:38, height:38, borderRadius:10, flexShrink:0,
+            background:'rgba(59,130,246,0.15)', display:'grid', placeItems:'center', color:'#3b82f6',
+          }}><Icon name="bell" size={18} /></div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontWeight:600, fontSize:14, color:'#1e40af', marginBottom:6 }}>
+              มีเงินค่าประกันสินค้า {pendingDeposits.length} รายการ รอรับคืน — ยอดรวม ฿{fmt(pendingDepositTotal)}
+            </div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+              {pendingDeposits.map(r => {
+                const proj = app.projects.find(p => p.id === r.projectId);
+                return (
+                  <button key={r.id}
+                    onClick={() => app.setDetailId(r.id)}
+                    style={{
+                      display:'flex', alignItems:'center', gap:7, padding:'5px 12px',
+                      borderRadius:20, border:'1px solid rgba(59,130,246,0.35)',
+                      background:'rgba(59,130,246,0.1)', cursor:'pointer', fontFamily:'inherit',
+                      fontSize:12, color:'#1e40af',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background='rgba(59,130,246,0.18)'}
+                    onMouseLeave={e => e.currentTarget.style.background='rgba(59,130,246,0.1)'}
+                  >
+                    <span className="proj-chip-dot" style={{ background: proj?.color || '#3b82f6' }}></span>
+                    <span style={{ fontWeight:500 }}>{r.vendor}</span>
+                    <span className="mono" style={{ fontWeight:700 }}>฿{fmt(Number(r.depositAmount))}</span>
+                    <Icon name="chevron" size={11} stroke={2} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="stat-grid">
         <div className="stat">
@@ -517,6 +566,98 @@ window.CategoriesView = function CategoriesView() {
   );
 };
 
+// ---- Deposit return inline form (used in DetailDrawer) ----
+function DepositReturnForm({ rec }) {
+  const app = window.useApp();
+  const [expanded, setExpanded] = useState(false);
+  const [returnDate, setReturnDate] = useState(todayStr());
+  const [returnImages, setReturnImages] = useState([]);
+  const [returnNote, setReturnNote] = useState('');
+
+  const handleConfirm = () => {
+    if (!returnImages.length) {
+      app.pushToast('กรุณาแนบสลิปโอนเงินคืนก่อนยืนยัน', 'error');
+      return;
+    }
+    app.updateRecord(rec.id, {
+      depositStatus: 'returned',
+      depositReturnDate: returnDate,
+      depositReturnImages: returnImages,
+      depositReturnNote: returnNote,
+    });
+    app.pushToast('บันทึกรับเงินประกันคืนแล้ว ✓');
+  };
+
+  return (
+    <div>
+      {/* Status row */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px',
+        background:'rgba(234,179,8,0.08)', border:'1px solid rgba(234,179,8,0.3)', borderRadius:10 }}>
+        <div style={{ flex:1 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <span style={{ padding:'2px 10px', borderRadius:20, fontSize:11, fontWeight:600,
+              background:'rgba(234,179,8,0.18)', color:'#ca8a04', border:'1px solid rgba(234,179,8,0.35)' }}>
+              ⏳ รอรับเงินคืน
+            </span>
+          </div>
+          <div className="mono" style={{ fontSize:17, fontWeight:700, color:'#3b82f6' }}>
+            ฿{fmt(Number(rec.depositAmount))}
+          </div>
+          <div style={{ fontSize:11.5, color:'var(--ink-3)', marginTop:2 }}>
+            วางประกันวันที่ {fmtDate(rec.date)} — {rec.vendor}
+          </div>
+        </div>
+        <button className="btn btn-accent btn-sm" onClick={() => setExpanded(v => !v)}>
+          <Icon name={expanded ? 'x' : 'check'} size={12} />
+          {expanded ? 'ยกเลิก' : 'บันทึกรับเงินคืน'}
+        </button>
+      </div>
+
+      {/* Expand: receipt form */}
+      {expanded && (
+        <div style={{ marginTop:10, padding:16, background:'var(--surface)',
+          border:'1px solid var(--line)', borderRadius:10, display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div>
+              <label style={{ fontSize:12, fontWeight:600, color:'var(--ink-2)', display:'block', marginBottom:5 }}>
+                วันที่รับเงินคืน
+              </label>
+              <input className="input" type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize:12, fontWeight:600, color:'var(--ink-2)', display:'block', marginBottom:5 }}>
+                หมายเหตุ
+              </label>
+              <input className="input" placeholder="เช่น รับเงินสดจากร้าน" value={returnNote} onChange={e => setReturnNote(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, display:'block', marginBottom:6,
+              color: returnImages.length ? 'var(--ink-2)' : 'var(--danger)' }}>
+              <Icon name="image" size={13} />
+              {' '}แนบสลิปโอนเงินคืน{' '}
+              <span style={{ fontWeight:400, color:'var(--danger)' }}>* (บังคับ)</span>
+            </label>
+            <window.ImageUploader images={returnImages} onChange={setReturnImages} max={5} />
+          </div>
+          <button
+            onClick={handleConfirm}
+            style={{
+              padding:'11px 0', border:'none', borderRadius:10, cursor:'pointer',
+              background: returnImages.length ? 'var(--accent)' : '#d1d5db',
+              color: returnImages.length ? '#1f1d18' : '#9ca3af',
+              fontFamily:'inherit', fontWeight:600, fontSize:14,
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+            }}>
+            <Icon name="check" size={14} stroke={2.5} />
+            ยืนยันรับเงินประกันคืน ฿{fmt(Number(rec.depositAmount))}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Teams view (worker teams management) ----
 window.TeamsView = function TeamsView() {
   const app = window.useApp();
@@ -781,6 +922,56 @@ window.DetailDrawer = function DetailDrawer() {
               <span className="badge gray mono">{(rec.workLogs || []).length} บันทึก</span>
             </div>
             <window.WorkLogsEditor logs={rec.workLogs || []} onChange={updateLogs} />
+          </div>
+        )}
+
+        {/* Deposit section — shown when depositAmount > 0 */}
+        {Number(rec.depositAmount) > 0 && (
+          <div className="detail-section" style={{ background:'rgba(59,130,246,0.03)', borderTop:'2px solid rgba(59,130,246,0.2)' }}>
+            <h3 style={{ fontSize:13, color:'#3b82f6', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12,
+              display:'flex', alignItems:'center', gap:6 }}>
+              <Icon name="money" size={13} /> เงินค่าประกันสินค้า
+            </h3>
+
+            {rec.depositStatus === 'returned' ? (
+              /* ---- Returned state ---- */
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ padding:'3px 12px', borderRadius:20, fontSize:12, fontWeight:600,
+                    background:'rgba(22,163,74,0.15)', color:'#16a34a', border:'1px solid rgba(22,163,74,0.3)' }}>
+                    ✓ รับเงินคืนแล้ว
+                  </span>
+                  <span style={{ fontSize:12, color:'var(--ink-3)' }}>{fmtDate(rec.depositReturnDate)}</span>
+                </div>
+                <div className="detail-row">
+                  <div className="label">ยอดที่รับคืน</div>
+                  <div className="value mono" style={{ fontWeight:700, color:'#16a34a', fontSize:16 }}>
+                    ฿{fmt(Number(rec.depositAmount))}
+                  </div>
+                </div>
+                {rec.depositReturnNote && (
+                  <div className="detail-row">
+                    <div className="label">หมายเหตุ</div>
+                    <div className="value">{rec.depositReturnNote}</div>
+                  </div>
+                )}
+                {rec.depositReturnImages && rec.depositReturnImages.length > 0 && (
+                  <div>
+                    <div style={{ fontSize:11, color:'var(--ink-3)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>
+                      สลิปโอนเงินคืน
+                    </div>
+                    <div className="detail-images">
+                      {rec.depositReturnImages.map((img, i) => (
+                        <img key={i} src={img.dataUrl} alt="สลิป" style={{ borderRadius:8 }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ---- Pending state — show return form ---- */
+              <DepositReturnForm rec={rec} />
+            )}
           </div>
         )}
 

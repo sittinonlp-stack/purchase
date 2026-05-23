@@ -253,6 +253,11 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
     docs: [],
     note: '',
     images: [],
+    depositAmount: 0,
+    depositStatus: 'none',
+    depositReturnDate: '',
+    depositReturnImages: [],
+    depositReturnNote: '',
   });
 
   const [form, setForm] = useState(() => initial ? { ...initial } : blank());
@@ -335,6 +340,45 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
             </div>
             <div className="card-body">
               <ItemsTable items={form.items} setItems={(items) => set({ items })} cats={cats} onAddCat={() => setCatModalOpen(true)} type={type} />
+            </div>
+          </div>
+
+          {/* Card 2.5: product security deposit */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">เงินค่าประกันสินค้า</div>
+                <div className="card-sub">มัดจำ / ประกันที่วางกับผู้ขาย — รับคืนหลังส่งสินค้าคืน</div>
+              </div>
+              {Number(form.depositAmount) > 0 && (
+                <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600,
+                  background:'rgba(59,130,246,0.15)', color:'#3b82f6', border:'1px solid rgba(59,130,246,0.3)' }}>
+                  มีเงินประกัน
+                </span>
+              )}
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label"><Icon name="money" size={13} /> ยอดเงินค่าประกัน</label>
+                  <div className="input-affix">
+                    <div className="input-affix-prefix">฿</div>
+                    <input className="input mono" type="number" min="0" step="any"
+                      value={form.depositAmount}
+                      onChange={(e) => set({ depositAmount: e.target.value, depositStatus: Number(e.target.value) > 0 ? 'pending' : 'none' })}
+                      placeholder="0.00" />
+                  </div>
+                  <div className="field-hint">กรอก 0 ถ้าไม่มีเงินค่าประกัน — ระบบจะสร้างการแจ้งเตือนให้ติดตามเงินคืนโดยอัตโนมัติ</div>
+                </div>
+              </div>
+              {Number(form.depositAmount) > 0 && (
+                <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10,
+                  background:'rgba(59,130,246,0.07)', border:'1px solid rgba(59,130,246,0.2)',
+                  fontSize:12.5, color:'#3b82f6', display:'flex', alignItems:'center', gap:8 }}>
+                  <Icon name="bell" size={13} />
+                  ระบบจะแจ้งเตือนในโครงการนี้ว่ามีเงินค่าประกัน <strong>฿{fmt(Number(form.depositAmount))}</strong> รอรับคืน
+                </div>
+              )}
             </div>
           </div>
 
@@ -441,6 +485,14 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                   <span className="label">ยอดสุทธิ</span>
                   <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
                 </div>
+                {Number(form.depositAmount) > 0 && (
+                  <div className="summary-row" style={{ borderTop:'1px dashed rgba(59,130,246,0.4)', paddingTop:10, marginTop:4 }}>
+                    <span className="label" style={{ color:'#3b82f6', display:'flex', alignItems:'center', gap:5 }}>
+                      <Icon name="bell" size={11} /> เงินค่าประกัน (ติดตามแยก)
+                    </span>
+                    <span className="value" style={{ color:'#3b82f6' }}>฿{fmt(Number(form.depositAmount))}</span>
+                  </div>
+                )}
               </div>
 
               <div className="mt-20" style={{ padding: 14, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
