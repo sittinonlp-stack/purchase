@@ -191,7 +191,8 @@ window.ImageUploader = ImageUploader;
 
 // ---- Sidebar ----
 function Sidebar() {
-  const { view, setView, records, projects } = window.useApp();
+  const app = window.useApp();
+  const { view, setView, records, projects } = app;
   const matCount = records.filter(r => r.type === 'material').length;
   const machCount = records.filter(r => r.type === 'machine').length;
   return (
