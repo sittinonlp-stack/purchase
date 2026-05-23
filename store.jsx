@@ -327,40 +327,101 @@ window.AppProvider = function AppProvider({ children }) {
       return;
     }
 
-    // Check existing session
-    window.supabaseClient.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      if (s) {
-        loadProfileAndData(s.user.id);
-      } else {
+    // Check existing session (with proper error handling)
+    window.supabaseClient.auth.getSession()
+      .then(({ data: { session: s } }) => {
+        setSession(s);
+        if (s) {
+          loadProfileAndData(s.user.id);
+        } else {
+          setAuthChecked(true);
+          setDbReady(true);
+        }
+      })
+      .catch((err) => {
+        console.error('[Auth] getSession failed:', err);
+        // Don't crash — fall back to offline mode
         setAuthChecked(true);
         setDbReady(true);
-      }
-    });
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = window.supabaseClient.auth.onAuthStateChange(
       async (event, s) => {
-        setSession(s);
-        if (event === 'SIGNED_IN' && s) {
-          setDbReady(false);
-          await loadProfileAndData(s.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          setUserProfile(null);
-          setDbOnline(false);
-          setView('dashboard');
-          // Reset to seed data
-          setProjects(SEED_PROJECTS);
-          setMatCats(SEED_MAT_CATEGORIES);
-          setMachCats(SEED_MACH_CATEGORIES);
-          setLaborCats(SEED_LABOR_CATEGORIES);
-          setWorkerTeams(SEED_WORKER_TEAMS);
-          setRecords(seedRecords());
+        try {
+          setSession(s);
+          if (event === 'SIGNED_IN' && s) {
+            setDbReady(false);
+            await loadProfileAndData(s.user.id);
+          } else if (event === 'SIGNED_OUT') {
+            setUserProfile(null);
+            setDbOnline(false);
+            setView('dashboard');
+            // Reset to seed data
+            setProjects(SEED_PROJECTS);
+            setMatCats(SEED_MAT_CATEGORIES);
+            setMachCats(SEED_MACH_CATEGORIES);
+            setLaborCats(SEED_LABOR_CATEGORIES);
+            setWorkerTeams(SEED_WORKER_TEAMS);
+            setRecords(seedRecords());
+          } else if (event === 'TOKEN_REFRESHED' && s) {
+            // Token was refreshed silently — keep current data, just update session
+            // (no need to reload everything)
+          }
+        } catch (err) {
+          console.error('[Auth] onAuthStateChange handler failed:', err);
         }
       }
     );
     return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Tab visibility recovery ─────────────────────────
+  // When tab is backgrounded long enough, JS timers get throttled and the
+  // Supabase auto-refresh may fail. On returning, re-verify the session
+  // silently so the app doesn't crash on the next data fetch.
+  useEffect(() => {
+    if (!window.supabaseClient) return;
+
+    let lastHiddenAt = 0;
+
+    const onVisibility = async () => {
+      if (document.visibilityState === 'hidden') {
+        lastHiddenAt = Date.now();
+        return;
+      }
+      // Visible again — only re-check if we were hidden > 60s
+      if (!lastHiddenAt || (Date.now() - lastHiddenAt) < 60000) return;
+      lastHiddenAt = 0;
+
+      try {
+        const { data: { session: s }, error } = await window.supabaseClient.auth.getSession();
+        if (error) throw error;
+
+        // Session expired while away → onAuthStateChange will handle SIGNED_OUT
+        if (!s && session) {
+          console.warn('[Auth] session expired while tab was hidden');
+          return;
+        }
+        // Session still valid → quietly refresh data so any stale fetches don't break UI
+        if (s && s.user?.id) {
+          // Only re-fetch data, no loading spinner flicker
+          loadProfileAndData(s.user.id).catch(err =>
+            console.warn('[Auth] background data refresh failed:', err));
+        }
+      } catch (err) {
+        console.error('[Auth] visibility re-check failed:', err);
+        // Don't crash — user can still use the app or refresh manually
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onVisibility);
+    };
+  }, [session, loadProfileAndData]);
 
   // ── Sign out ────────────────────────────────────────
   const signOut = useCallback(async () => {

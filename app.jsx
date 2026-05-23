@@ -3,11 +3,62 @@
 // App root
 // ============================
 
+// ErrorBoundary — prevents white screen when something crashes
+// (e.g. session expired after long tab inactivity, network errors)
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('[App] Render error:', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          minHeight:'100vh', display:'flex', flexDirection:'column',
+          alignItems:'center', justifyContent:'center', padding:24,
+          background:'#f8f7f4', fontFamily:'Prompt, IBM Plex Sans Thai, sans-serif',
+        }}>
+          <div style={{
+            width:64, height:64, borderRadius:'50%',
+            background:'rgba(239,68,68,0.12)', display:'grid', placeItems:'center',
+            marginBottom:20, fontSize:28,
+          }}>⚠️</div>
+          <h2 style={{ fontSize:18, marginBottom:8, color:'#1f1d18' }}>เกิดข้อผิดพลาดในการแสดงผล</h2>
+          <p style={{ color:'#7a6f64', fontSize:13, marginBottom:20, maxWidth:380, textAlign:'center', lineHeight:1.6 }}>
+            อาจเกิดจากเซสชั่นหมดอายุหลังจากที่หน้านี้ไม่ได้ใช้งานนาน — โหลดหน้าใหม่เพื่อใช้งานต่อ
+          </p>
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={() => window.location.reload()} style={{
+              padding:'10px 22px', background:'#d97706', color:'#1f1d18',
+              border:'none', borderRadius:8, cursor:'pointer', fontFamily:'inherit',
+              fontWeight:600, fontSize:14,
+            }}>🔄 โหลดหน้าใหม่</button>
+            <button onClick={() => this.setState({ error: null })} style={{
+              padding:'10px 16px', background:'transparent', color:'#7a6f64',
+              border:'1px solid #e2ddd8', borderRadius:8, cursor:'pointer',
+              fontFamily:'inherit', fontSize:13,
+            }}>ลองอีกครั้ง</button>
+          </div>
+          <details style={{ marginTop:24, fontSize:11, color:'#9ca3af', maxWidth:520 }}>
+            <summary style={{ cursor:'pointer' }}>รายละเอียดข้อผิดพลาด (สำหรับนักพัฒนา)</summary>
+            <pre style={{ marginTop:8, padding:10, background:'#f0ebe4', borderRadius:6,
+              overflow:'auto', fontSize:10, lineHeight:1.5 }}>
+              {String(this.state.error?.stack || this.state.error)}
+            </pre>
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   return (
-    <window.AppProvider>
-      <Shell />
-    </window.AppProvider>
+    <ErrorBoundary>
+      <window.AppProvider>
+        <Shell />
+      </window.AppProvider>
+    </ErrorBoundary>
   );
 }
 
