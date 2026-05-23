@@ -290,8 +290,14 @@ window.AppProvider = function AppProvider({ children }) {
   // ── Load profile + app data after login ─────────────
   const loadProfileAndData = useCallback(async (userId) => {
     try {
-      const profile = await window.db.getProfile(userId);
-      setUserProfile(profile);
+      // Load profile separately — non-fatal if profiles table not set up yet
+      try {
+        const profile = await window.db.getProfile(userId);
+        setUserProfile(profile);
+      } catch (profileErr) {
+        console.warn('[DB] ไม่สามารถโหลด profile (ตาราง profiles อาจยังไม่ได้สร้าง):', profileErr);
+        // userProfile stays null → isAdmin = true (safe fallback)
+      }
 
       const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
               workerTeams: teams, records: recs } = await window.db.loadAll();

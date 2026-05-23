@@ -265,8 +265,8 @@ function Sidebar() {
             </span>
           </div>
         </div>
-        {/* Logout button */}
-        {app.dbOnline && (
+        {/* Logout button — show whenever there is an active session */}
+        {app.session && (
           <button onClick={app.signOut} title="ออกจากระบบ"
             style={{
               background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:6,
