@@ -1,0 +1,288 @@
+/* global React */
+// ============================
+// UI primitives: icons, buttons, switches, modal, toast, etc.
+// ============================
+
+
+
+// ---- Icon set (inline SVG) ----
+const Icon = ({ name, size = 16, stroke = 1.75 }) => {
+  const paths = {
+    home: <><path d="M3 11.5L12 4l9 7.5"/><path d="M5 10v10h14V10"/></>,
+    cart: <><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 3h2l2.4 11.6a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 7H6"/></>,
+    truck: <><rect x="2" y="7" width="11" height="10" rx="1"/><path d="M13 10h4l4 4v3h-8"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></>,
+    history: <><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></>,
+    folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>,
+    tag: <><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z"/><circle cx="8" cy="8" r="1.5"/></>,
+    plus: <><path d="M12 5v14M5 12h14"/></>,
+    minus: <path d="M5 12h14"/>,
+    x: <><path d="M6 6l12 12M18 6 6 18"/></>,
+    check: <path d="M5 12.5 10 17 19 7.5"/>,
+    search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></>,
+    bell: <><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 19a2 2 0 0 0 4 0"/></>,
+    image: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m3 17 5-5 4 4 3-3 6 6"/></>,
+    upload: <><path d="M12 4v11"/><path d="m7 9 5-5 5 5"/><path d="M4 17v3h16v-3"/></>,
+    trash: <><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></>,
+    edit: <><path d="M14 4l6 6L10 20l-7 1 1-7Z"/></>,
+    save: <><path d="M5 4h11l4 4v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 4v6h8V4"/><path d="M8 14h8v7H8z"/></>,
+    eye: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>,
+    settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></>,
+    receipt: <><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2V3Z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+    money: <><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></>,
+    percent: <><path d="M5 19 19 5"/><circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/></>,
+    chevron: <path d="m9 6 6 6-6 6"/>,
+    arrowDown: <><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></>,
+    arrowUp: <><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></>,
+    filter: <path d="M3 5h18l-7 9v6l-4-2v-4L3 5Z"/>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></>,
+    download: <><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 18v2h16v-2"/></>,
+    copy: <><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></>,
+    dots: <><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></>,
+    sparkle: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></>,
+    hammer: <><path d="M14 4l6 6-2 2-3-3-7 7 3 3-2 2-6-6 2-2 3 3 7-7-3-3z"/></>,
+    users: <><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="6" r="2.5"/><path d="M16 13c3 0 6 2 6 5"/></>,
+    clipboard: <><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10h6M9 14h6M9 18h4"/></>,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" className="icon">
+      {paths[name] || null}
+    </svg>
+  );
+};
+window.Icon = Icon;
+
+// ---- Switch ----
+function Switch({ on, onChange, label, sub }) {
+  return (
+    <div className={"switch-row" + (on ? " active" : "")} onClick={() => onChange(!on)} role="switch" aria-checked={on}>
+      <div>
+        <div className="switch-row-label">{label}</div>
+        {sub && <div className="switch-row-sub">{sub}</div>}
+      </div>
+      <div className="spacer"></div>
+      <div className={"switch" + (on ? " on" : "")}></div>
+    </div>
+  );
+}
+window.Switch = Switch;
+
+// ---- OptionPill (multi or single) ----
+function OptionPill({ selected, onClick, children, mode = 'check', icon }) {
+  return (
+    <button type="button" className={"option-pill" + (selected ? " selected" : "")} onClick={onClick}>
+      {mode === 'check' && (
+        <span className="pill-check">
+          {selected && <Icon name="check" size={12} stroke={2.5} />}
+        </span>
+      )}
+      {mode === 'radio' && <span className="pill-radio"></span>}
+      {icon}
+      <span>{children}</span>
+    </button>
+  );
+}
+window.OptionPill = OptionPill;
+
+// ---- Modal ----
+function Modal({ open, onClose, title, children, footer, width }) {
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={width ? { width } : undefined} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="card-title">{title}</h3>
+          <button className="topbar-icon-btn" onClick={onClose}><Icon name="x" /></button>
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+window.Modal = Modal;
+
+// ---- Toast stack ----
+function ToastStack() {
+  const { toasts } = window.useApp();
+  return (
+    <div className="toast-stack">
+      {toasts.map((t) => (
+        <div key={t.id} className={"toast" + (t.kind === 'error' ? ' error' : t.kind === 'warn' ? ' warn' : '')}>
+          <span className="toast-icon">
+            <Icon name={t.kind === 'error' ? 'x' : t.kind === 'warn' ? 'percent' : 'check'} size={12} stroke={3} />
+          </span>
+          <span>{t.msg}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+window.ToastStack = ToastStack;
+
+// ---- Image uploader ----
+// Stores base64 data-URIs (synthetic) in record.images.
+// Generates a placeholder colored swatch on "pick file" to avoid touching disk.
+function ImageUploader({ images, onChange, max = 10 }) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef(null);
+
+  const pick = () => inputRef.current?.click();
+  const remove = (idx) => onChange(images.filter((_, i) => i !== idx));
+
+  const fromFiles = (fileList) => {
+    const files = Array.from(fileList).slice(0, max - images.length);
+    Promise.all(files.map((f) => new Promise((res) => {
+      const r = new FileReader();
+      r.onload = () => res({ id: newId(), name: f.name, dataUrl: r.result });
+      r.readAsDataURL(f);
+    }))).then((arr) => onChange([...images, ...arr]));
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer?.files?.length) fromFiles(e.dataTransfer.files);
+  };
+
+  return (
+    <div className="col gap-8">
+      <div className="image-grid">
+        {images.map((img, idx) => (
+          <div key={img.id || idx} className="image-tile">
+            {img.dataUrl
+              ? <img src={img.dataUrl} alt={img.name} />
+              : <div style={{ width: '100%', height: '100%', background: img.color || '#d6d1c1' }}></div>}
+            <button type="button" className="remove" onClick={() => remove(idx)} aria-label="ลบ">
+              <Icon name="x" size={11} stroke={2.5} />
+            </button>
+          </div>
+        ))}
+        {images.length < max && (
+          <div
+            className={"image-tile upload" + (dragging ? " dragging" : "")}
+            onClick={pick}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+          >
+            <Icon name="upload" size={20} stroke={1.5} />
+            <span>วาง / เลือกรูป</span>
+          </div>
+        )}
+      </div>
+      <div className="row gap-8" style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+        <Icon name="image" size={12} />
+        <span>แนบรูปได้สูงสุด <strong>{max}</strong> รูป — ตอนนี้ <strong className="mono">{images.length}/{max}</strong></span>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+        onChange={(e) => { if (e.target.files) fromFiles(e.target.files); e.target.value = ''; }} />
+    </div>
+  );
+}
+window.ImageUploader = ImageUploader;
+
+// ---- Sidebar ----
+function Sidebar() {
+  const { view, setView, records, projects } = window.useApp();
+  const matCount = records.filter(r => r.type === 'material').length;
+  const machCount = records.filter(r => r.type === 'machine').length;
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-brand">
+        <div className="sidebar-logo">จ</div>
+        <div>
+          <div className="sidebar-brand-name">จัดซื้อ</div>
+          <div className="sidebar-brand-sub">งานรับเหมาก่อสร้าง</div>
+        </div>
+      </div>
+
+      <div className="nav-section-label">ภาพรวม</div>
+      <button className={"nav-item" + (view === 'dashboard' ? " active" : "")} onClick={() => setView('dashboard')}>
+        <Icon name="home" /> แดชบอร์ด
+      </button>
+
+      <div className="nav-section-label">บันทึกรายการ</div>
+      <button className={"nav-item" + (view === 'new-material' ? " active" : "")} onClick={() => setView('new-material')}>
+        <Icon name="cart" /> จัดซื้อวัสดุ
+      </button>
+      <button className={"nav-item" + (view === 'new-machine' ? " active" : "")} onClick={() => setView('new-machine')}>
+        <Icon name="truck" /> เช่าเครื่องจักร
+      </button>
+      <button className={"nav-item" + (view === 'new-labor' ? " active" : "")} onClick={() => setView('new-labor')}>
+        <Icon name="hammer" /> บันทึกค่าแรง
+      </button>
+
+      <div className="nav-section-label">เรียกดู</div>
+      <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => setView('history')}>
+        <Icon name="history" /> ประวัติทั้งหมด
+        <span className="badge">{records.length}</span>
+      </button>
+
+      <div className="nav-section-label">ตั้งค่า</div>
+      <button className={"nav-item" + (view === 'projects' ? " active" : "")} onClick={() => setView('projects')}>
+        <Icon name="folder" /> โครงการ
+        <span className="badge">{projects.length}</span>
+      </button>
+      <button className={"nav-item" + (view === 'categories' ? " active" : "")} onClick={() => setView('categories')}>
+        <Icon name="tag" /> หมวดหมู่
+      </button>
+      <button className={"nav-item" + (view === 'teams' ? " active" : "")} onClick={() => setView('teams')}>
+        <Icon name="users" /> ทีมช่าง
+      </button>
+
+      <div className="sidebar-footer">
+        <div className="avatar">ก</div>
+        <div className="avatar-meta">
+          <div className="avatar-name">เกรียงไกร</div>
+          <div className="avatar-role">หัวหน้าฝ่ายจัดซื้อ</div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+window.Sidebar = Sidebar;
+
+// ---- Topbar ----
+function Topbar({ title, sub }) {
+  const app = window.useApp();
+  const online = app && app.dbOnline;
+  return (
+    <div className="topbar">
+      <div>
+        <div className="topbar-title">{title}</div>
+        {sub && <div className="topbar-crumb">{sub}</div>}
+      </div>
+      <div className="topbar-search">
+        <Icon name="search" size={14} />
+        <input placeholder="ค้นหารายการ บิล โครงการ ผู้ขาย..." />
+        <span className="badge gray mono">⌘K</span>
+      </div>
+      <div title={online ? 'เชื่อมต่อ Supabase แล้ว' : 'Offline — ใช้ข้อมูลตัวอย่าง'}
+        style={{ display:'flex', alignItems:'center', gap:5, fontSize:11,
+          color: online ? '#16a34a' : '#9ca3af', fontFamily:'Prompt, sans-serif',
+          padding:'4px 10px', borderRadius:20,
+          background: online ? 'rgba(22,163,74,0.08)' : 'rgba(156,163,175,0.10)',
+          border:`1px solid ${online ? 'rgba(22,163,74,0.2)' : 'rgba(156,163,175,0.2)'}`,
+          whiteSpace:'nowrap', cursor:'default', userSelect:'none' }}>
+        <span style={{ width:7, height:7, borderRadius:'50%',
+          background: online ? '#22c55e' : '#9ca3af', display:'inline-block',
+          boxShadow: online ? '0 0 0 2px rgba(34,197,94,0.25)' : 'none' }} />
+        {online ? 'Supabase' : 'Offline'}
+      </div>
+      <button className="topbar-icon-btn" title="การแจ้งเตือน">
+        <Icon name="bell" />
+        <span className="dot"></span>
+      </button>
+      <button className="topbar-icon-btn" title="ตั้งค่า">
+        <Icon name="settings" />
+      </button>
+    </div>
+  );
+}
+window.Topbar = Topbar;
