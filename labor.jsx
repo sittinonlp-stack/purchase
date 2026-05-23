@@ -134,12 +134,12 @@ function LaborItemsTable({ items, setItems, cats, onAddCat }) {
       <table className="items-table" style={{ minWidth: 780 }}>
         <thead>
           <tr>
-            <th style={{ width: '40%' }}>รายการงาน</th>
-            <th style={{ width: '18%' }}>หมวดงาน</th>
+            <th style={{ width: '36%' }}>รายการงาน</th>
+            <th style={{ width: '17%' }}>หมวดงาน</th>
             <th style={{ width: '8%' }} className="num">ปริมาณ</th>
-            <th style={{ width: '9%' }}>หน่วย</th>
-            <th style={{ width: '12%' }} className="num">ค่าแรง/หน่วย</th>
-            <th style={{ width: '13%' }} className="num">รวม</th>
+            <th style={{ width: '12%' }}>หน่วย</th>
+            <th style={{ width: '13%' }} className="num">ค่าแรง/หน่วย</th>
+            <th style={{ width: '14%' }} className="num">รวม</th>
             <th style={{ width: 36 }}></th>
           </tr>
         </thead>

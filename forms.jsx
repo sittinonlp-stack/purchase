@@ -64,47 +64,81 @@ function ProjectPicker({ value, onChange, projects, onAdd }) {
 
 function CategorySelect({ value, onChange, cats, onAdd, placeholder = 'เลือก' }) {
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, minWidth: 260 });
+  const btnRef = useRef(null);
   const cur = cats.find((c) => c.id === value);
+
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      // flip upward if not enough space below
+      const spaceBelow = window.innerHeight - r.bottom;
+      const dropH = Math.min(cats.length * 36 + 48, 280);
+      const top = spaceBelow < dropH && r.top > dropH ? r.top - dropH - 2 : r.bottom + 2;
+      setDropPos({ top, left: r.left, minWidth: Math.max(r.width, 260) });
+    }
+    setOpen(v => !v);
+  };
+
+  // Close on scroll anywhere (position:fixed would drift)
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, { capture: true, passive: true });
+    return () => window.removeEventListener('scroll', close, { capture: true });
+  }, [open]);
+
   return (
     <div style={{ position: 'relative' }}>
-      <button type="button" className="cell-input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }} onClick={() => setOpen(!open)}>
+      <button ref={btnRef} type="button" className="cell-input"
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}
+        onClick={handleToggle}>
         {cur ? <><span className="cat-dot" style={{ background: cur.color }}></span><span style={{ flex: 1, fontSize: 12.5 }}>{cur.name}</span></>
              : <span style={{ flex: 1, color: 'var(--ink-4)', fontSize: 12.5 }}>{placeholder}</span>}
         <Icon name="chevron" size={11} stroke={2} />
       </button>
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 2px)', left: 0, minWidth: 240, zIndex: 30,
-          background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10,
-          boxShadow: 'var(--shadow-lg)', overflow: 'hidden', maxHeight: 280, overflowY: 'auto'
-        }}>
-          {cats.map((c) => (
-            <button key={c.id} type="button"
-              onClick={() => { onChange(c.id); setOpen(false); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer',
-                fontSize: 12.5, textAlign: 'left', fontFamily: 'inherit'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-2)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-            >
-              <span className="cat-dot" style={{ background: c.color }}></span>
-              <span>{c.name}</span>
-            </button>
-          ))}
-          {onAdd && (
-            <button type="button" onClick={() => { setOpen(false); onAdd(); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                padding: '10px 12px', border: 'none', cursor: 'pointer',
-                background: 'var(--bg-2)', borderTop: '1px solid var(--line)', fontFamily: 'inherit',
-                fontSize: 12, color: 'var(--accent-ink)', fontWeight: 500
-              }}>
-              <Icon name="plus" size={12} /> เพิ่มหมวดหมู่
-            </button>
-          )}
-        </div>
+        <>
+          {/* Transparent overlay — catches outside clicks */}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9990 }} onClick={() => setOpen(false)} />
+          {/* Dropdown — always on top of everything */}
+          <div style={{
+            position: 'fixed',
+            top: dropPos.top,
+            left: dropPos.left,
+            minWidth: dropPos.minWidth,
+            zIndex: 9999,
+            background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.22)', overflow: 'hidden', maxHeight: 280, overflowY: 'auto',
+          }}>
+            {cats.map((c) => (
+              <button key={c.id} type="button"
+                onClick={() => { onChange(c.id); setOpen(false); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '9px 14px', border: 'none', background: 'transparent', cursor: 'pointer',
+                  fontSize: 13, textAlign: 'left', fontFamily: 'inherit',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-2)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <span className="cat-dot" style={{ background: c.color }}></span>
+                <span>{c.name}</span>
+              </button>
+            ))}
+            {onAdd && (
+              <button type="button" onClick={() => { setOpen(false); onAdd(); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '10px 14px', border: 'none', cursor: 'pointer',
+                  background: 'var(--bg-2)', borderTop: '1px solid var(--line)', fontFamily: 'inherit',
+                  fontSize: 12, color: 'var(--accent-ink)', fontWeight: 500,
+                }}>
+                <Icon name="plus" size={12} /> เพิ่มหมวดหมู่
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
