@@ -522,17 +522,14 @@ window.TeamsView = function TeamsView() {
   const app = window.useApp();
   const [open, setOpen] = useState(false);
 
-  // compute stats per team
+  // compute stats per team — only count and projects (no money shown here)
   const stats = useMemo(() => {
     const m = {};
     app.records.filter(r => r.type === 'labor').forEach(r => {
       const k = r.workerTeamId;
       if (!k) return;
-      m[k] = m[k] || { count: 0, total: 0, projects: new Set(), advance: 0, retention: 0 };
+      m[k] = m[k] || { count: 0, projects: new Set() };
       m[k].count++;
-      m[k].total += computeTotals(r).total;
-      m[k].advance += Number(r.advanceDeduction || 0);
-      m[k].retention += Number(r.retentionDeduction || 0);
       m[k].projects.add(r.projectId);
     });
     return m;
@@ -543,7 +540,7 @@ window.TeamsView = function TeamsView() {
       <div className="page-header">
         <div>
           <h1 className="page-title">ทีมช่าง</h1>
-          <div className="page-sub">จัดการทีมช่าง — ดูประวัติการเบิกค่าแรงและยอดเงินประกันของแต่ละทีม</div>
+          <div className="page-sub">จัดการทีมช่าง — ดูประวัติการเบิกค่าแรงของแต่ละทีม</div>
         </div>
         <button className="btn btn-accent" onClick={() => setOpen(true)}>
           <Icon name="plus" size={14} stroke={2.5} /> เพิ่มทีมช่าง
@@ -552,49 +549,62 @@ window.TeamsView = function TeamsView() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
         {app.workerTeams.map((t) => {
-          const s = stats[t.id] || { count: 0, total: 0, projects: new Set(), advance: 0, retention: 0 };
+          const s = stats[t.id] || { count: 0, projects: new Set() };
+          const coverImg = t.images && t.images.length > 0 ? t.images[0] : null;
+          const extraImgs = t.images && t.images.length > 1 ? t.images.slice(1) : [];
           return (
             <div key={t.id} className="card" style={{ transition: 'transform 200ms, box-shadow 200ms' }}
               onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
             >
               <div className="card-body">
-                <div className="row gap-12 mb-16">
-                  <div style={{
-                    width: 48, height: 48, borderRadius: 12,
-                    background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))',
-                    display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 600, fontSize: 20,
-                    flexShrink: 0,
-                  }}>{t.name.charAt(0)}</div>
+                {/* Header row: avatar + name */}
+                <div className="row gap-12 mb-12">
+                  {/* Avatar — photo if available, else letter */}
+                  {coverImg ? (
+                    <img src={coverImg.dataUrl} alt={t.name} style={{
+                      width: 52, height: 52, borderRadius: 12, objectFit: 'cover', flexShrink: 0,
+                      border: '2px solid var(--line)',
+                    }} />
+                  ) : (
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 12, flexShrink: 0,
+                      background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))',
+                      display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 700, fontSize: 22,
+                    }}>{t.name.charAt(0)}</div>
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={{ fontSize: 16, marginBottom: 2 }}>{t.name}</h3>
+                    <h3 style={{ fontSize: 16, marginBottom: 3 }}>{t.name}</h3>
                     <div className="text-small text-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {t.leader} · <span className="mono">{t.phone}</span>
+                      {t.leader}{t.phone ? <> · <span className="mono">{t.phone}</span></> : null}
                     </div>
                   </div>
                 </div>
-                <div className="row gap-6 wrap mb-16">
+
+                {/* Tags */}
+                <div className="row gap-6 wrap mb-14">
                   {t.specialty && <span className="badge amber">{t.specialty}</span>}
                   <span className="badge gray">{t.size} คน</span>
                   <span className="badge gray">{s.projects.size} โครงการ</span>
+                  <span className="badge gray mono">{s.count} บิล</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: '14px 14px', background: 'var(--bg)', borderRadius: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 10.5, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>เบิกสะสม</div>
-                    <div className="mono" style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>฿{fmt(s.total)}</div>
+
+                {/* Extra images strip (images 2-5) */}
+                {extraImgs.length > 0 && (
+                  <div className="row gap-6 mb-14" style={{ flexWrap: 'wrap' }}>
+                    {extraImgs.map((img, i) => (
+                      <img key={img.id || i} src={img.dataUrl} alt="" style={{
+                        width: 52, height: 52, borderRadius: 8, objectFit: 'cover',
+                        border: '1px solid var(--line)',
+                      }} />
+                    ))}
                   </div>
-                  <div>
-                    <div style={{ fontSize: 10.5, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>เงินประกัน</div>
-                    <div className="mono" style={{ fontSize: 15, fontWeight: 600, marginTop: 2, color: 'var(--info)' }}>฿{fmt(s.retention)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10.5, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>บิล</div>
-                    <div className="mono" style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{s.count}</div>
-                  </div>
-                </div>
-                <div className="row gap-8 mt-16">
+                )}
+
+                {/* Action row */}
+                <div className="row gap-8" style={{ marginTop: extraImgs.length > 0 ? 0 : 4 }}>
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => app.setView('history')}>
-                    <Icon name="eye" size={12} /> ดูประวัติเบิก
+                    <Icon name="history" size={12} /> ดูประวัติ
                   </button>
                   {app.isAdmin && (
                     <button className="btn btn-danger btn-sm" onClick={() => {

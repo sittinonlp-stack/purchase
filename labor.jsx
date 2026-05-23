@@ -77,23 +77,24 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
   const [phone, setPhone] = useState('');
   const [size, setSize] = useState(1);
   const [specialty, setSpecialty] = useState('');
+  const [images, setImages] = useState([]);
   useEffect(() => {
-    if (open) { setName(''); setLeader(''); setPhone(''); setSize(1); setSpecialty(''); }
+    if (open) { setName(''); setLeader(''); setPhone(''); setSize(1); setSpecialty(''); setImages([]); }
   }, [open]);
   return (
-    <Modal open={open} onClose={onClose} title="เพิ่มทีมช่างใหม่"
+    <Modal open={open} onClose={onClose} title="เพิ่มทีมช่างใหม่" width={560}
       footer={<>
         <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
         <button className="btn btn-accent" onClick={() => name.trim() && onAdd({
           name: name.trim(), leader: leader.trim(), phone: phone.trim(),
-          size: Number(size) || 1, specialty: specialty.trim()
+          size: Number(size) || 1, specialty: specialty.trim(), images,
         })}>
           <Icon name="plus" size={14} /> เพิ่มทีม
         </button>
       </>}>
       <div className="form-grid">
         <div className="field full">
-          <label className="field-label">ชื่อทีม</label>
+          <label className="field-label">ชื่อทีม <span className="req">*</span></label>
           <input className="input" autoFocus placeholder="เช่น ทีมช่างประสิทธิ์" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field">
@@ -111,6 +112,10 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
         <div className="field">
           <label className="field-label">ความชำนาญ</label>
           <input className="input" placeholder="เช่น ก่อ-ฉาบ, ปูกระเบื้อง" value={specialty} onChange={(e) => setSpecialty(e.target.value)} />
+        </div>
+        <div className="field full">
+          <label className="field-label"><Icon name="image" size={13} /> รูปภาพทีมช่าง <span style={{ fontWeight:400, color:'var(--ink-3)', fontSize:11 }}>(สูงสุด 5 รูป)</span></label>
+          <window.ImageUploader images={images} onChange={setImages} max={5} />
         </div>
       </div>
     </Modal>
