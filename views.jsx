@@ -990,6 +990,169 @@ window.DetailDrawer = function DetailDrawer() {
   );
 };
 
+// ---- Deposits history view ----
+window.DepositsView = function DepositsView() {
+  const app = window.useApp();
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [projFilter, setProjFilter]     = useState('all');
+
+  const allDeposits = useMemo(() =>
+    app.records.filter(r => Number(r.depositAmount) > 0),
+    [app.records]
+  );
+
+  const isPending = (r) => !r.depositStatus || r.depositStatus === 'pending';
+
+  const filtered = useMemo(() => {
+    let arr = allDeposits.slice();
+    if (statusFilter === 'pending')  arr = arr.filter(isPending);
+    if (statusFilter === 'returned') arr = arr.filter(r => r.depositStatus === 'returned');
+    if (projFilter !== 'all')        arr = arr.filter(r => r.projectId === projFilter);
+    return arr.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [allDeposits, statusFilter, projFilter]);
+
+  const pendingList  = allDeposits.filter(isPending);
+  const returnedList = allDeposits.filter(r => r.depositStatus === 'returned');
+  const pendingTotal  = pendingList.reduce((s, r)  => s + Number(r.depositAmount), 0);
+  const returnedTotal = returnedList.reduce((s, r) => s + Number(r.depositAmount), 0);
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">เงินประกันสินค้า</h1>
+          <div className="page-sub">ติดตามเงินมัดจำ / ค่าประกันที่วางกับผู้ขาย พร้อมสถานะการรับคืน</div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:20 }}>
+        <div className="stat">
+          <div className="stat-label">รอรับคืน</div>
+          <div className="stat-value mono" style={{ color:'#ca8a04' }}>฿{fmt(pendingTotal)}</div>
+          <div className="stat-delta">
+            <Icon name="bell" size={11} stroke={2.5} /> {pendingList.length} รายการที่ยังค้างอยู่
+          </div>
+          <div className="stat-icon" style={{ background:'rgba(234,179,8,0.12)', color:'#ca8a04' }}>
+            <Icon name="bell" size={18} />
+          </div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">รับคืนแล้ว</div>
+          <div className="stat-value mono" style={{ color:'#16a34a' }}>฿{fmt(returnedTotal)}</div>
+          <div className="stat-delta">
+            <Icon name="check" size={11} stroke={2.5} /> {returnedList.length} รายการเสร็จสมบูรณ์
+          </div>
+          <div className="stat-icon" style={{ background:'rgba(22,163,74,0.12)', color:'#16a34a' }}>
+            <Icon name="check" size={18} />
+          </div>
+        </div>
+      </div>
+
+      {/* Filter + table card */}
+      <div className="card">
+        <div className="filter-bar">
+          <div className="tabs">
+            <button className={"tab"+(statusFilter==='all'?' active':'')} onClick={()=>setStatusFilter('all')}>
+              ทั้งหมด <span className="badge gray mono">{allDeposits.length}</span>
+            </button>
+            <button className={"tab"+(statusFilter==='pending'?' active':'')} onClick={()=>setStatusFilter('pending')}>
+              ⏳ รอรับคืน <span className="badge gray mono">{pendingList.length}</span>
+            </button>
+            <button className={"tab"+(statusFilter==='returned'?' active':'')} onClick={()=>setStatusFilter('returned')}>
+              ✓ รับคืนแล้ว <span className="badge gray mono">{returnedList.length}</span>
+            </button>
+          </div>
+          <select className="select" value={projFilter} onChange={e=>setProjFilter(e.target.value)}>
+            <option value="all">ทุกโครงการ</option>
+            {app.projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="safe" size={28} /></div>
+            <div className="empty-title">ไม่มีรายการเงินประกัน</div>
+            <div className="empty-sub">เมื่อบันทึกจัดซื้อ / เช่าเครื่องจักร พร้อมระบุยอดเงินประกัน รายการจะปรากฏที่นี่</div>
+          </div>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th style={{ width:130 }}>เลขที่</th>
+                  <th style={{ width:90  }}>วันที่ซื้อ</th>
+                  <th>โครงการ</th>
+                  <th>ผู้ขาย / ผู้ให้เช่า</th>
+                  <th style={{ width:95  }}>ประเภท</th>
+                  <th style={{ width:120 }} className="num">ยอดประกัน</th>
+                  <th style={{ width:135 }}>สถานะ</th>
+                  <th style={{ width:95  }}>วันรับคืน</th>
+                  <th style={{ width:62  }}>สลิป</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(r => {
+                  const proj    = app.projects.find(p => p.id === r.projectId);
+                  const pending = isPending(r);
+                  return (
+                    <tr key={r.id} onClick={() => app.setDetailId(r.id)}>
+                      <td className="mono" style={{ fontSize:12.5, fontWeight:500 }}>{r.docNo}</td>
+                      <td style={{ color:'var(--ink-2)' }}>{fmtDate(r.date)}</td>
+                      <td>
+                        <div className="row gap-8">
+                          <span className="proj-chip-dot" style={{ background:proj?.color||'#999' }}></span>
+                          <span style={{ fontSize:13 }}>{proj?.name||'—'}</span>
+                        </div>
+                      </td>
+                      <td style={{ color:'var(--ink-2)' }}>{r.vendor}</td>
+                      <td>
+                        {r.type === 'material'
+                          ? <span className="badge amber dot">วัสดุ</span>
+                          : <span className="badge blue dot">เครื่องจักร</span>}
+                      </td>
+                      <td className="num mono" style={{ fontWeight:700, fontSize:13.5, color:'#3b82f6' }}>
+                        {fmt(Number(r.depositAmount))}
+                      </td>
+                      <td>
+                        {pending ? (
+                          <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:'nowrap',
+                            background:'rgba(234,179,8,0.15)', color:'#ca8a04', border:'1px solid rgba(234,179,8,0.35)' }}>
+                            ⏳ รอรับคืน
+                          </span>
+                        ) : (
+                          <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:'nowrap',
+                            background:'rgba(22,163,74,0.13)', color:'#16a34a', border:'1px solid rgba(22,163,74,0.3)' }}>
+                            ✓ รับคืนแล้ว
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ color:'var(--ink-2)', fontSize:12.5 }}>
+                        {r.depositReturnDate ? fmtDate(r.depositReturnDate) : (
+                          <span style={{ color:'var(--ink-4)' }}>—</span>
+                        )}
+                      </td>
+                      <td>
+                        {r.depositReturnImages && r.depositReturnImages.length > 0 ? (
+                          <img src={r.depositReturnImages[0].dataUrl} alt="สลิป"
+                            style={{ width:42, height:42, borderRadius:7, objectFit:'cover',
+                              border:'1px solid var(--line)', display:'block' }} />
+                        ) : (
+                          <span style={{ color:'var(--ink-4)', fontSize:12 }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
 // ---- Users Management view (admin only) ----
 window.UsersView = function UsersView() {
   const app = window.useApp();
