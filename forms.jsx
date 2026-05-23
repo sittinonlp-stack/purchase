@@ -80,13 +80,6 @@ function CategorySelect({ value, onChange, cats, onAdd, placeholder = 'เลื
     setOpen(v => !v);
   };
 
-  // Close on scroll anywhere (position:fixed would drift)
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener('scroll', close, { capture: true, passive: true });
-    return () => window.removeEventListener('scroll', close, { capture: true });
-  }, [open]);
 
   return (
     <div style={{ position: 'relative' }}>
