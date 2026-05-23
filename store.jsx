@@ -228,7 +228,7 @@ const AppCtx = createContext(null);
 window.useApp = () => useContext(AppCtx);
 
 // ---- Loading screen ----
-function DbLoadingScreen() {
+function DbLoadingScreen({ msg }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
@@ -241,7 +241,7 @@ function DbLoadingScreen() {
         animation: 'spin 0.8s linear infinite',
       }} />
       <p style={{ fontFamily: 'Prompt, sans-serif', color: 'var(--ink-3, #7a6f64)', fontSize: 14, margin: 0 }}>
-        กำลังโหลดข้อมูลจาก Supabase…
+        {msg || 'กำลังโหลด…'}
       </p>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
@@ -249,8 +249,14 @@ function DbLoadingScreen() {
 }
 
 window.AppProvider = function AppProvider({ children }) {
-  const [dbReady,    setDbReady]    = useState(false);   // true once initial load done
-  const [dbOnline,   setDbOnline]   = useState(false);   // true when Supabase is connected
+  // ── Auth state ──────────────────────────────────────
+  const [authChecked,  setAuthChecked]  = useState(false);
+  const [session,      setSession]      = useState(null);
+  const [userProfile,  setUserProfile]  = useState(null);
+
+  // ── Data state ──────────────────────────────────────
+  const [dbReady,    setDbReady]    = useState(false);
+  const [dbOnline,   setDbOnline]   = useState(false);
   const [view, setView] = useState('dashboard');
 
   const [projects,    setProjects]    = useState(SEED_PROJECTS);
@@ -263,14 +269,17 @@ window.AppProvider = function AppProvider({ children }) {
   const [detailId,    setDetailId]    = useState(null);
   const [editingId,   setEditingId]   = useState(null);
 
-  // ── Helper: push toast ──────────────────────────────
+  // ── Computed ────────────────────────────────────────
+  // Offline or no profile yet → treat as admin (seed-data mode)
+  const isAdmin = !dbOnline || !userProfile || userProfile.role === 'admin';
+
+  // ── Helpers ─────────────────────────────────────────
   const pushToast = useCallback((msg, kind = 'success') => {
     const id = newId();
     setToasts((t) => [...t, { id, msg, kind }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   }, []);
 
-  // ── Helper: background DB sync (fire and forget) ────
   const dbSync = useCallback((promise, label) => {
     promise.catch((err) => {
       console.error(`[DB] ${label} failed:`, err);
@@ -278,35 +287,79 @@ window.AppProvider = function AppProvider({ children }) {
     });
   }, [pushToast]);
 
-  // ── Load from Supabase on mount ─────────────────────
+  // ── Load profile + app data after login ─────────────
+  const loadProfileAndData = useCallback(async (userId) => {
+    try {
+      const profile = await window.db.getProfile(userId);
+      setUserProfile(profile);
+
+      const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
+              workerTeams: teams, records: recs } = await window.db.loadAll();
+
+      setProjects(ps);
+      setMatCats(mc.length   ? mc   : SEED_MAT_CATEGORIES);
+      setMachCats(kc.length  ? kc   : SEED_MACH_CATEGORIES);
+      setLaborCats(lc.length ? lc   : SEED_LABOR_CATEGORIES);
+      setWorkerTeams(teams);
+      setRecords(recs);
+      setDbOnline(true);
+    } catch (err) {
+      console.error('[DB] โหลดข้อมูลไม่สำเร็จ:', err);
+      pushToast('โหลดข้อมูลไม่สำเร็จ — แสดงข้อมูลตัวอย่าง', 'error');
+    } finally {
+      setDbReady(true);
+      setAuthChecked(true);
+    }
+  }, [pushToast]);
+
+  // ── Auth lifecycle ───────────────────────────────────
   useEffect(() => {
     if (!window.supabaseClient || !window.db) {
-      // No Supabase → use seed data
+      // Offline mode — skip auth entirely
+      setAuthChecked(true);
       setDbReady(true);
-      setDbOnline(false);
       return;
     }
 
-    window.db.loadAll()
-      .then(({ projects: ps, matCats: mc, machCats: kc, laborCats: lc, workerTeams: teams, records: recs }) => {
-        // Use DB data; fall back to seeds only for categories (to pre-populate on first run)
-        setProjects(ps);
-        setMatCats(mc.length  ? mc   : SEED_MAT_CATEGORIES);
-        setMachCats(kc.length ? kc   : SEED_MACH_CATEGORIES);
-        setLaborCats(lc.length ? lc  : SEED_LABOR_CATEGORIES);
-        setWorkerTeams(teams);
-        setRecords(recs);
-        setDbOnline(true);
+    // Check existing session
+    window.supabaseClient.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s) {
+        loadProfileAndData(s.user.id);
+      } else {
+        setAuthChecked(true);
         setDbReady(true);
-        console.log('[DB] โหลดข้อมูลสำเร็จ ✓');
-      })
-      .catch((err) => {
-        console.error('[DB] โหลดข้อมูลไม่สำเร็จ — ใช้ข้อมูลตัวอย่าง:', err);
-        pushToast('เชื่อมต่อ Supabase ไม่ได้ — แสดงข้อมูลตัวอย่าง', 'error');
-        setDbReady(true);
-        setDbOnline(false);
-      });
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = window.supabaseClient.auth.onAuthStateChange(
+      async (event, s) => {
+        setSession(s);
+        if (event === 'SIGNED_IN' && s) {
+          setDbReady(false);
+          await loadProfileAndData(s.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          setUserProfile(null);
+          setDbOnline(false);
+          setView('dashboard');
+          // Reset to seed data
+          setProjects(SEED_PROJECTS);
+          setMatCats(SEED_MAT_CATEGORIES);
+          setMachCats(SEED_MACH_CATEGORIES);
+          setLaborCats(SEED_LABOR_CATEGORIES);
+          setWorkerTeams(SEED_WORKER_TEAMS);
+          setRecords(seedRecords());
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sign out ────────────────────────────────────────
+  const signOut = useCallback(async () => {
+    if (window.supabaseClient) await window.supabaseClient.auth.signOut();
+  }, []);
 
   // ── Records ─────────────────────────────────────────
   const addRecord = useCallback((rec) => {
@@ -395,7 +448,7 @@ window.AppProvider = function AppProvider({ children }) {
   // ── Context value ────────────────────────────────────
   const value = useMemo(() => ({
     view, setView,
-    dbOnline,
+    session, userProfile, isAdmin, signOut, dbOnline,
     projects, addProject, deleteProject,
     matCats, addMatCat, deleteMatCat,
     machCats, addMachCat, deleteMachCat,
@@ -405,12 +458,19 @@ window.AppProvider = function AppProvider({ children }) {
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
-  }), [view, dbOnline, projects, matCats, machCats, laborCats, workerTeams, records, toasts, detailId, editingId,
+  }), [view, session, userProfile, isAdmin, signOut, dbOnline,
+       projects, matCats, machCats, laborCats, workerTeams, records, toasts, detailId, editingId,
        addRecord, updateRecord, deleteRecord, addProject, deleteProject,
        addMatCat, deleteMatCat, addMachCat, deleteMachCat,
        addLaborCat, deleteLaborCat, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam, pushToast]);
 
-  if (!dbReady) return <DbLoadingScreen />;
+  // ── Render guards ─────────────────────────────────────
+  if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;
+
+  // Not logged in + Supabase is available → show login screen
+  if (!session && window.supabaseClient) return <window.AuthScreen />;
+
+  if (!dbReady) return <DbLoadingScreen msg="กำลังโหลดข้อมูล…" />;
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 };

@@ -23,6 +23,7 @@ function Shell() {
   if (view === 'projects')     { title = 'โครงการ'; sub = 'จัดการโครงการ'; }
   if (view === 'categories')   { title = 'หมวดหมู่'; sub = 'จัดการหมวดหมู่'; }
   if (view === 'teams')        { title = 'ทีมช่าง'; sub = 'จัดการทีมช่างและประวัติ'; }
+  if (view === 'users')        { title = 'จัดการผู้ใช้'; sub = 'กำหนดสิทธิ์การเข้าถึง'; }
 
   const initial = app.editingId ? app.records.find(r => r.id === app.editingId) : null;
   const clearEditing = () => app.setEditingId(null);
@@ -72,10 +73,11 @@ function Shell() {
               onCancel={() => { clearEditing(); app.setView('dashboard'); }}
             />
           )}
-          {view === 'history' && <window.HistoryView />}
-          {view === 'projects' && <window.ProjectsView />}
+          {view === 'history'    && <window.HistoryView />}
+          {view === 'projects'   && <window.ProjectsView />}
           {view === 'categories' && <window.CategoriesView />}
-          {view === 'teams' && <window.TeamsView />}
+          {view === 'teams'      && <window.TeamsView />}
+          {view === 'users'      && app.isAdmin && <window.UsersView />}
           {view === 'new-labor' && (
             <window.LaborForm
               key={'lab-' + (app.editingId || 'new')}

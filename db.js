@@ -321,6 +321,34 @@
       const { error } = await window.supabaseClient.from('records').delete().eq('id', id);
       if (error) throw error;
     },
+
+    // ── Profiles ──────────────────────────────────
+    async getProfile(userId) {
+      const { data, error } = await window.supabaseClient
+        .from('profiles').select('*').eq('id', userId).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || null;
+    },
+
+    async getAllProfiles() {
+      const { data, error } = await window.supabaseClient
+        .from('profiles').select('*').order('created_at');
+      if (error) throw error;
+      return data || [];
+    },
+
+    async updateProfileName(userId, fullName) {
+      const { error } = await window.supabaseClient
+        .from('profiles').update({ full_name: fullName }).eq('id', userId);
+      if (error) throw error;
+    },
+
+    // Admin only: change a user's role
+    async updateUserRole(userId, role) {
+      const { error } = await window.supabaseClient
+        .from('profiles').update({ role }).eq('id', userId);
+      if (error) throw error;
+    },
   };
 
   window.db = db;

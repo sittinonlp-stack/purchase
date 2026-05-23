@@ -41,6 +41,8 @@ const Icon = ({ name, size = 16, stroke = 1.75 }) => {
     sparkle: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></>,
     hammer: <><path d="M14 4l6 6-2 2-3-3-7 7 3 3-2 2-6-6 2-2 3 3 7-7-3-3z"/></>,
     users: <><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="6" r="2.5"/><path d="M16 13c3 0 6 2 6 5"/></>,
+    shield: <><path d="M12 3l8 4v5c0 5-8 9-8 9S4 17 4 12V7z"/></>,
+    logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
     clipboard: <><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10h6M9 14h6M9 18h4"/></>,
   };
   return (
@@ -235,13 +237,46 @@ function Sidebar() {
       <button className={"nav-item" + (view === 'teams' ? " active" : "")} onClick={() => setView('teams')}>
         <Icon name="users" /> ทีมช่าง
       </button>
+      {/* Admin only: manage users */}
+      {app.isAdmin && app.dbOnline && (
+        <button className={"nav-item" + (view === 'users' ? " active" : "")} onClick={() => setView('users')}
+          style={{ color: 'var(--accent-light, #fbbf24)' }}>
+          <Icon name="shield" /> จัดการผู้ใช้
+        </button>
+      )}
 
       <div className="sidebar-footer">
-        <div className="avatar">ก</div>
-        <div className="avatar-meta">
-          <div className="avatar-name">เกรียงไกร</div>
-          <div className="avatar-role">หัวหน้าฝ่ายจัดซื้อ</div>
+        {/* Avatar with first letter of name */}
+        <div className="avatar" style={{ flexShrink: 0 }}>
+          {(app.userProfile?.full_name || app.userProfile?.email || 'U').slice(0,1).toUpperCase()}
         </div>
+        <div className="avatar-meta" style={{ flex: 1, minWidth: 0 }}>
+          <div className="avatar-name" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {app.userProfile?.full_name || app.userProfile?.email || 'ผู้ใช้งาน'}
+          </div>
+          <div className="avatar-role" style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <span style={{
+              display:'inline-block', padding:'1px 6px', borderRadius:4, fontSize:10, fontWeight:600,
+              background: app.isAdmin ? 'rgba(217,119,6,0.25)' : 'rgba(100,116,139,0.25)',
+              color: app.isAdmin ? '#fbbf24' : '#94a3b8',
+            }}>
+              {app.isAdmin ? 'Admin' : 'User'}
+            </span>
+          </div>
+        </div>
+        {/* Logout button */}
+        {app.dbOnline && (
+          <button onClick={app.signOut} title="ออกจากระบบ"
+            style={{
+              background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:6,
+              color:'#6b7280', display:'flex', alignItems:'center', flexShrink:0,
+              transition:'color .15s',
+            }}
+            onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
+            onMouseLeave={e=>e.currentTarget.style.color='#6b7280'}>
+            <Icon name="logout" size={15} />
+          </button>
+        )}
       </div>
     </aside>
   );

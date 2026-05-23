@@ -394,12 +394,14 @@ window.ProjectsView = function ProjectsView() {
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => app.setView('history')}>
                     <Icon name="eye" size={12} /> ดูรายการ
                   </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => {
-                    if (stats[p.id]) { app.pushToast('ลบไม่ได้ — มีรายการอยู่ในโครงการนี้', 'error'); return; }
-                    app.deleteProject(p.id); app.pushToast('ลบโครงการแล้ว');
-                  }}>
-                    <Icon name="trash" size={12} />
-                  </button>
+                  {app.isAdmin && (
+                    <button className="btn btn-danger btn-sm" onClick={() => {
+                      if (stats[p.id]) { app.pushToast('ลบไม่ได้ — มีรายการอยู่ในโครงการนี้', 'error'); return; }
+                      app.deleteProject(p.id); app.pushToast('ลบโครงการแล้ว');
+                    }}>
+                      <Icon name="trash" size={12} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -438,15 +440,17 @@ window.CategoriesView = function CategoriesView() {
           <span style={{ width: 14, height: 14, borderRadius: 4, background: c.color, flexShrink: 0 }}></span>
           <span style={{ flex: 1, fontWeight: 500, fontSize: 13.5 }}>{c.name}</span>
           <span className="badge gray mono">ใช้ {countByCat[c.id] || 0} ครั้ง</span>
-          <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="ลบ"
-            onClick={() => {
-              if (countByCat[c.id]) { app.pushToast('ลบไม่ได้ — มีรายการใช้หมวดนี้อยู่', 'error'); return; }
-              const fn = which === 'mach' ? app.deleteMachCat : which === 'labor' ? app.deleteLaborCat : app.deleteMatCat;
-              fn(c.id);
-              app.pushToast('ลบหมวดหมู่แล้ว');
-            }}>
-            <Icon name="trash" size={13} />
-          </button>
+          {app.isAdmin && (
+            <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="ลบ"
+              onClick={() => {
+                if (countByCat[c.id]) { app.pushToast('ลบไม่ได้ — มีรายการใช้หมวดนี้อยู่', 'error'); return; }
+                const fn = which === 'mach' ? app.deleteMachCat : which === 'labor' ? app.deleteLaborCat : app.deleteMatCat;
+                fn(c.id);
+                app.pushToast('ลบหมวดหมู่แล้ว');
+              }}>
+              <Icon name="trash" size={13} />
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -592,12 +596,14 @@ window.TeamsView = function TeamsView() {
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => app.setView('history')}>
                     <Icon name="eye" size={12} /> ดูประวัติเบิก
                   </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => {
-                    if (s.count) { app.pushToast('ลบไม่ได้ — มีรายการเบิกของทีมนี้อยู่', 'error'); return; }
-                    app.deleteWorkerTeam(t.id); app.pushToast('ลบทีมช่างแล้ว');
-                  }}>
-                    <Icon name="trash" size={12} />
-                  </button>
+                  {app.isAdmin && (
+                    <button className="btn btn-danger btn-sm" onClick={() => {
+                      if (s.count) { app.pushToast('ลบไม่ได้ — มีรายการเบิกของทีมนี้อยู่', 'error'); return; }
+                      app.deleteWorkerTeam(t.id); app.pushToast('ลบทีมช่างแล้ว');
+                    }}>
+                      <Icon name="trash" size={12} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -646,10 +652,12 @@ window.DetailDrawer = function DetailDrawer() {
               </div>
               <h2 style={{ fontSize: 20 }}>{rec.vendor}</h2>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => {
-              if (!confirm('ยืนยันลบรายการนี้?')) return;
-              app.deleteRecord(rec.id); app.pushToast('ลบรายการแล้ว'); close();
-            }}><Icon name="trash" size={13} /> ลบ</button>
+            {app.isAdmin && (
+              <button className="btn btn-ghost btn-sm" onClick={() => {
+                if (!confirm('ยืนยันลบรายการนี้?')) return;
+                app.deleteRecord(rec.id); app.pushToast('ลบรายการแล้ว'); close();
+              }}><Icon name="trash" size={13} /> ลบ</button>
+            )}
             <button className="btn btn-accent btn-sm" onClick={() => {
               app.setEditingId(rec.id);
               const v = rec.type === 'machine' ? 'new-machine' : rec.type === 'labor' ? 'new-labor' : 'new-material';
@@ -777,6 +785,132 @@ window.DetailDrawer = function DetailDrawer() {
           </div>
         )}
       </aside>
+    </>
+  );
+};
+
+// ---- Users Management view (admin only) ----
+window.UsersView = function UsersView() {
+  const app = window.useApp();
+  const [profiles, setProfiles] = React.useState([]);
+  const [loading, setLoading]   = React.useState(true);
+
+  const load = React.useCallback(() => {
+    if (!window.db) return;
+    setLoading(true);
+    window.db.getAllProfiles()
+      .then(data => { setProfiles(data); setLoading(false); })
+      .catch(() => { app.pushToast('โหลดรายชื่อผู้ใช้ไม่สำเร็จ', 'error'); setLoading(false); });
+  }, []);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const toggleRole = async (profile) => {
+    const newRole = profile.role === 'admin' ? 'user' : 'admin';
+    if (profile.id === app.session?.user?.id) {
+      app.pushToast('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้', 'error'); return;
+    }
+    try {
+      await window.db.updateUserRole(profile.id, newRole);
+      app.pushToast(`เปลี่ยนสิทธิ์ ${profile.full_name || profile.email} เป็น ${newRole === 'admin' ? 'Admin' : 'User'} แล้ว`);
+      load();
+    } catch (e) {
+      app.pushToast('เปลี่ยนสิทธิ์ไม่สำเร็จ', 'error');
+    }
+  };
+
+  const isSelf = (p) => p.id === app.session?.user?.id;
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">จัดการผู้ใช้งาน</h1>
+          <p className="page-sub">กำหนดสิทธิ์ผู้ใช้ที่ลงทะเบียนเข้ามา</p>
+        </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: 760 }}>
+        {/* Legend */}
+        <div style={{ display:'flex', gap:16, marginBottom:20, padding:'12px 16px',
+          background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--line)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ padding:'2px 10px', borderRadius:20, fontSize:11, fontWeight:700,
+              background:'rgba(217,119,6,0.18)', color:'#d97706' }}>Admin</span>
+            <span style={{ fontSize:12, color:'var(--ink-3)' }}>ดำเนินการได้ทุกอย่าง รวมถึงลบข้อมูล</span>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ padding:'2px 10px', borderRadius:20, fontSize:11, fontWeight:700,
+              background:'rgba(100,116,139,0.15)', color:'#64748b' }}>User</span>
+            <span style={{ fontSize:12, color:'var(--ink-3)' }}>เพิ่ม/แก้ไขได้ ไม่สามารถลบข้อมูลได้</span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign:'center', padding:40, color:'var(--ink-3)' }}>กำลังโหลด…</div>
+        ) : profiles.length === 0 ? (
+          <div style={{ textAlign:'center', padding:40, color:'var(--ink-4)' }}>ยังไม่มีผู้ใช้งาน</div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {profiles.map(p => (
+              <div key={p.id} style={{
+                display:'flex', alignItems:'center', gap:14, padding:'14px 16px',
+                borderRadius:10, border:'1px solid var(--line)',
+                background: isSelf(p) ? 'var(--bg-2)' : 'transparent',
+                transition:'background .15s',
+              }}>
+                {/* Avatar */}
+                <div style={{
+                  width:38, height:38, borderRadius:'50%', flexShrink:0,
+                  background: p.role === 'admin' ? '#d97706' : '#64748b',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  color:'#fff', fontWeight:700, fontSize:15,
+                }}>
+                  {(p.full_name || p.email || 'U').slice(0,1).toUpperCase()}
+                </div>
+
+                {/* Info */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ fontWeight:600, fontSize:14 }}>
+                      {p.full_name || '(ไม่ระบุชื่อ)'}
+                    </span>
+                    {isSelf(p) && (
+                      <span style={{ fontSize:10, fontWeight:600, padding:'1px 6px', borderRadius:4,
+                        background:'rgba(16,185,129,0.15)', color:'#059669' }}>คุณ</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize:12, color:'var(--ink-3)', marginTop:2 }}>{p.email}</div>
+                  <div style={{ fontSize:11, color:'var(--ink-4)', marginTop:1 }}>
+                    สมัครเมื่อ {fmtDate(p.created_at)}
+                  </div>
+                </div>
+
+                {/* Role badge */}
+                <span style={{
+                  padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600,
+                  background: p.role === 'admin' ? 'rgba(217,119,6,0.15)' : 'rgba(100,116,139,0.12)',
+                  color: p.role === 'admin' ? '#d97706' : '#64748b',
+                }}>
+                  {p.role === 'admin' ? 'Admin' : 'User'}
+                </span>
+
+                {/* Toggle button (can't change own role) */}
+                {!isSelf(p) && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => toggleRole(p)}
+                    title={`เปลี่ยนเป็น ${p.role === 'admin' ? 'User' : 'Admin'}`}
+                    style={{ whiteSpace:'nowrap', fontSize:12 }}>
+                    <Icon name="shield" size={12} />
+                    {p.role === 'admin' ? 'ลด → User' : 'เลื่อน → Admin'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </>
   );
 };
