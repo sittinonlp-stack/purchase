@@ -43,7 +43,7 @@ const Icon = ({ name, size = 16, stroke = 1.75 }) => {
     users: <><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="6" r="2.5"/><path d="M16 13c3 0 6 2 6 5"/></>,
     shield: <><path d="M12 3l8 4v5c0 5-8 9-8 9S4 17 4 12V7z"/></>,
     logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
-    safe: <><rect x="2" y="6" width="20" height="14" rx="2"/><circle cx="12" cy="13" r="3.2"/><path d="M12 9.8V11M12 15v1.2M8 13H9.8M14.2 13H16"/><path d="M12 3v3M7 4l1.5 2M17 4l-1.5 2"/></>,
+    safe: <><rect x="3" y="2" width="15" height="19" rx="2"/><circle cx="10.5" cy="12" r="3.5"/><path d="M10.5 8.5V10M10.5 14v1.5M7 12h1.5M12.5 12H14"/><rect x="18" y="9" width="2.5" height="6" rx="1.2"/></>,
     clipboard: <><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10h6M9 14h6M9 18h4"/></>,
   };
   return (
@@ -194,8 +194,6 @@ window.ImageUploader = ImageUploader;
 function Sidebar() {
   const app = window.useApp();
   const { view, setView, records, projects } = app;
-  const matCount = records.filter(r => r.type === 'material').length;
-  const machCount = records.filter(r => r.type === 'machine').length;
   const pendingDeposits = records.filter(r =>
     Number(r.depositAmount) > 0 && (!r.depositStatus || r.depositStatus === 'pending')
   ).length;
