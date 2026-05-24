@@ -207,57 +207,59 @@ function Sidebar() {
         </div>
       </div>
 
-      <div className="nav-section-label">ภาพรวม</div>
-      <button className={"nav-item" + (view === 'dashboard' ? " active" : "")} onClick={() => setView('dashboard')}>
-        <Icon name="home" /> แดชบอร์ด
-      </button>
-
-      <div className="nav-section-label">บันทึกรายการ</div>
-      <button className={"nav-item" + (view === 'new-material' ? " active" : "")} onClick={() => setView('new-material')}>
-        <Icon name="cart" /> จัดซื้อวัสดุ
-      </button>
-      <button className={"nav-item" + (view === 'new-machine' ? " active" : "")} onClick={() => setView('new-machine')}>
-        <Icon name="truck" /> เช่าเครื่องจักร
-      </button>
-      <button className={"nav-item" + (view === 'new-labor' ? " active" : "")} onClick={() => setView('new-labor')}>
-        <Icon name="hammer" /> บันทึกค่าแรง
-      </button>
-      <button className={"nav-item" + (view === 'new-lump-labor' ? " active" : "")} onClick={() => setView('new-lump-labor')}>
-        <Icon name="clipboard" /> ค่าแรงเหมาจ่าย
-      </button>
-
-      <div className="nav-section-label">เรียกดู</div>
-      <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => setView('history')}>
-        <Icon name="history" /> ประวัติทั้งหมด
-        <span className="badge">{records.length}</span>
-      </button>
-      <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => setView('deposits')}
-        style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>
-        <Icon name="safe" /> เงินประกันสินค้า
-        {pendingDeposits > 0 && (
-          <span className="badge" style={{ background:'rgba(59,130,246,0.18)', color:'#3b82f6',
-            border:'1px solid rgba(59,130,246,0.35)' }}>{pendingDeposits}</span>
-        )}
-      </button>
-
-      <div className="nav-section-label">ตั้งค่า</div>
-      <button className={"nav-item" + (view === 'projects' ? " active" : "")} onClick={() => setView('projects')}>
-        <Icon name="folder" /> โครงการ
-        <span className="badge">{projects.length}</span>
-      </button>
-      <button className={"nav-item" + (view === 'categories' ? " active" : "")} onClick={() => setView('categories')}>
-        <Icon name="tag" /> หมวดหมู่
-      </button>
-      <button className={"nav-item" + (view === 'teams' ? " active" : "")} onClick={() => setView('teams')}>
-        <Icon name="users" /> ทีมช่าง
-      </button>
-      {/* Admin only: manage users */}
-      {app.isAdmin && app.dbOnline && (
-        <button className={"nav-item" + (view === 'users' ? " active" : "")} onClick={() => setView('users')}
-          style={{ color: 'var(--accent-light, #fbbf24)' }}>
-          <Icon name="shield" /> จัดการผู้ใช้
+      <div className="sidebar-scroll">
+        <div className="nav-section-label">ภาพรวม</div>
+        <button className={"nav-item" + (view === 'dashboard' ? " active" : "")} onClick={() => setView('dashboard')}>
+          <Icon name="home" /> แดชบอร์ด
         </button>
-      )}
+
+        <div className="nav-section-label">บันทึกรายการ</div>
+        <button className={"nav-item" + (view === 'new-material' ? " active" : "")} onClick={() => setView('new-material')}>
+          <Icon name="cart" /> จัดซื้อวัสดุ
+        </button>
+        <button className={"nav-item" + (view === 'new-machine' ? " active" : "")} onClick={() => setView('new-machine')}>
+          <Icon name="truck" /> เช่าเครื่องจักร
+        </button>
+        <button className={"nav-item" + (view === 'new-labor' ? " active" : "")} onClick={() => setView('new-labor')}>
+          <Icon name="hammer" /> บันทึกค่าแรง
+        </button>
+        <button className={"nav-item" + (view === 'new-lump-labor' ? " active" : "")} onClick={() => setView('new-lump-labor')}>
+          <Icon name="clipboard" /> ค่าแรงเหมาจ่าย
+        </button>
+
+        <div className="nav-section-label">เรียกดู</div>
+        <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => setView('history')}>
+          <Icon name="history" /> ประวัติทั้งหมด
+          <span className="badge">{records.length}</span>
+        </button>
+        <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => setView('deposits')}
+          style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>
+          <Icon name="safe" /> เงินประกันสินค้า
+          {pendingDeposits > 0 && (
+            <span className="badge" style={{ background:'rgba(59,130,246,0.18)', color:'#3b82f6',
+              border:'1px solid rgba(59,130,246,0.35)' }}>{pendingDeposits}</span>
+          )}
+        </button>
+
+        <div className="nav-section-label">ตั้งค่า</div>
+        <button className={"nav-item" + (view === 'projects' ? " active" : "")} onClick={() => setView('projects')}>
+          <Icon name="folder" /> โครงการ
+          <span className="badge">{projects.length}</span>
+        </button>
+        <button className={"nav-item" + (view === 'categories' ? " active" : "")} onClick={() => setView('categories')}>
+          <Icon name="tag" /> หมวดหมู่
+        </button>
+        <button className={"nav-item" + (view === 'teams' ? " active" : "")} onClick={() => setView('teams')}>
+          <Icon name="users" /> ทีมช่าง
+        </button>
+        {/* Admin only: manage users */}
+        {app.isAdmin && app.dbOnline && (
+          <button className={"nav-item" + (view === 'users' ? " active" : "")} onClick={() => setView('users')}
+            style={{ color: 'var(--accent-light, #fbbf24)' }}>
+            <Icon name="shield" /> จัดการผู้ใช้
+          </button>
+        )}
+      </div>
 
       <div className="sidebar-footer">
         {/* Avatar with first letter of name */}
