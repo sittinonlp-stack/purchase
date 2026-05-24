@@ -238,7 +238,7 @@ function TeamHistoryPanel({ teamId, projectId, excludeId, compact }) {
   const app = window.useApp();
   if (!teamId || !projectId) return null;
   const records = app.records.filter(r =>
-    r.type === 'labor' && r.workerTeamId === teamId && r.projectId === projectId && r.id !== excludeId
+    (r.type === 'labor' || r.type === 'lump-labor') && r.workerTeamId === teamId && r.projectId === projectId && r.id !== excludeId
   );
   const total = records.reduce((s, r) => s + computeTotals(r).total, 0);
   const advTotal = records.reduce((s, r) => s + Number(r.advanceDeduction || 0), 0);
@@ -287,7 +287,9 @@ function TeamHistoryPanel({ teamId, projectId, excludeId, compact }) {
             <span className="mono" style={{ color: 'var(--ink-3)' }}>{r.docNo}</span>
             <span style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <span className="badge gray" style={{ marginRight: 6, fontSize: 10.5 }}>{r.period || '—'}</span>
+              <span className={`badge ${r.type === 'lump-labor' ? 'green' : 'gray'}`} style={{ marginRight: 6, fontSize: 10.5 }}>
+                {r.period || (r.type === 'lump-labor' ? 'เหมาจ่าย' : '—')}
+              </span>
               {r.items.map(i => i.name).filter(Boolean).join(', ') || '—'}
             </span>
             <span className="mono" style={{ fontWeight: 500 }}>฿{fmt(computeTotals(r).total)}</span>
@@ -645,6 +647,404 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                   <Icon name="sparkle" size={13} /> เคล็ดลับ
                 </div>
                 เงินประกันผลงานจะถูก "ตั้งพัก" ไว้ก่อน — เมื่องวดสุดท้ายตรวจรับงานเรียบร้อย สามารถสร้างบิลค่าแรงใหม่เพื่อ "คืนเงินประกัน" ได้
+              </div>
+            </div>
+          </div>
+
+          <div className="row gap-8 mt-16">
+            <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}>
+              <Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}
+            </button>
+            <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+          </div>
+        </div>
+      </div>
+
+      <window.AddCategoryModal open={catModalOpen} onClose={() => setCatModalOpen(false)} onAdd={(c) => { app.addLaborCat(c); app.pushToast('เพิ่มหมวดงานแล้ว'); setCatModalOpen(false); }} title="เพิ่มหมวดงาน" />
+      <window.AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
+      <AddWorkerTeamModal open={teamModalOpen} onClose={() => setTeamModalOpen(false)} onAdd={(t) => {
+        const team = app.addWorkerTeam(t);
+        setForm((f) => ({ ...f, workerTeamId: team.id, vendor: team.name }));
+        app.pushToast('เพิ่มทีมช่างแล้ว');
+        setTeamModalOpen(false);
+      }} />
+
+      <style>{`
+        @media (max-width: 1100px) {
+          .form-layout { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </>
+  );
+};
+
+// ============================================================
+// LumpLaborForm — ค่าแรงเหมาจ่าย (ตกลงราคาเป็นยอดรวม)
+// ============================================================
+
+// ---- Items table for lump-labor (no qty/unit — just lump price) ----
+function LumpLaborItemsTable({ items, setItems, cats, onAddCat }) {
+  const updateItem = (id, patch) => setItems(items.map((i) => i.id === id ? { ...i, ...patch } : i));
+  const removeItem = (id) => setItems(items.filter((i) => i.id !== id));
+  const addItem = () => setItems([...items, { id: newId(), name: '', categoryId: '', qty: 1, unit: 'เหมา', price: 0 }]);
+  return (
+    <div className="col gap-8" style={{ overflowX: 'auto' }}>
+      <table className="items-table" style={{ minWidth: 580 }}>
+        <thead>
+          <tr>
+            <th style={{ width: '50%' }}>รายการงานเหมา</th>
+            <th style={{ width: '24%' }}>หมวดงาน</th>
+            <th style={{ width: '22%' }} className="num">ราคาเหมา (฿)</th>
+            <th style={{ width: 36 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it) => (
+            <tr key={it.id}>
+              <td>
+                <input className="cell-input" placeholder="เช่น งานก่อ-ฉาบทั้งชั้น, งานปูกระเบื้องห้องน้ำ"
+                  value={it.name} onChange={(e) => updateItem(it.id, { name: e.target.value })} />
+              </td>
+              <td>
+                <window.CategorySelect value={it.categoryId} onChange={(v) => updateItem(it.id, { categoryId: v })} cats={cats} onAdd={onAddCat} placeholder="—" />
+              </td>
+              <td>
+                <input className="cell-input num" type="number" min="0" step="any" value={it.price}
+                  onChange={(e) => updateItem(it.id, { price: e.target.value })} />
+              </td>
+              <td>
+                <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบ">
+                  <Icon name="trash" size={13} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={addItem} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+        <Icon name="plus" size={13} /> เพิ่มรายการเหมา
+      </button>
+    </div>
+  );
+}
+
+// ---- LumpLaborForm ----
+window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
+  const app = window.useApp();
+
+  const blank = () => ({
+    type: 'lump-labor',
+    docNo: 'LS-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
+    date: todayStr(),
+    projectId: '',
+    workerTeamId: '',
+    vendor: '',
+    period: '',
+    items: [{ id: newId(), name: '', categoryId: '', qty: 1, unit: 'เหมา', price: 0 }],
+    vatMode: 'exclusive',
+    vatRate: 0,
+    whtEnabled: false,
+    whtRate: 3,
+    advanceDeduction: 0,
+    retentionDeduction: 0,
+    docs: ['voucher-pay'],
+    note: '',
+    images: [],
+    workLogs: [],
+  });
+
+  const [form, setForm] = useState(() => initial ? { ...initial, workLogs: initial.workLogs || [] } : blank());
+  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [projModalOpen, setProjModalOpen] = useState(false);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+
+  const totals = useMemo(() => computeTotals(form), [form]);
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const toggleDoc = (id) => set({ docs: form.docs.includes(id) ? form.docs.filter(d => d !== id) : [...form.docs, id] });
+
+  const setTeam = (teamId) => {
+    const t = app.workerTeams.find(x => x.id === teamId);
+    set({ workerTeamId: teamId, vendor: t ? t.name : form.vendor });
+  };
+
+  const handleSubmit = () => {
+    if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
+    if (!form.workerTeamId) return app.pushToast('โปรดเลือกทีมช่างก่อนบันทึก', 'error');
+    if (!form.items.some(it => it.name.trim() && Number(it.price) > 0)) return app.pushToast('โปรดเพิ่มรายการงานพร้อมราคาเหมาอย่างน้อย 1 รายการ', 'error');
+    onSubmit(form);
+  };
+
+  const isEditing = !!initial;
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{isEditing ? 'แก้ไขรายการเหมาจ่าย' : 'บันทึกค่าแรงเหมาจ่าย'}</h1>
+          <div className="page-sub">ตกลงราคาเป็นยอดรวมต่องาน — ไม่ต้องแยกปริมาณหรือหน่วย</div>
+        </div>
+        <div className="row gap-8">
+          <button className="btn btn-ghost" onClick={onCancel}><Icon name="x" size={14} /> ยกเลิก</button>
+          <button className="btn btn-accent" onClick={handleSubmit}>
+            <Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }} className="form-layout">
+        <div className="col gap-16">
+
+          {/* Card 1: header */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">ข้อมูลการเบิก</div>
+                <div className="card-sub">เลขที่เอกสาร โครงการ และทีมช่าง</div>
+              </div>
+              <span className="badge green dot">เหมาจ่าย</span>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label">เลขที่เอกสาร <span className="req">*</span></label>
+                  <input className="input mono" value={form.docNo} onChange={(e) => set({ docNo: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">วันที่ <span className="req">*</span></label>
+                  <input className="input" type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">โครงการ <span className="req">*</span></label>
+                  <window.ProjectPicker value={form.projectId} onChange={(v) => set({ projectId: v })} projects={app.projects} onAdd={() => setProjModalOpen(true)} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">ทีมช่าง <span className="req">*</span></label>
+                  <WorkerTeamPicker value={form.workerTeamId} onChange={setTeam} teams={app.workerTeams} onAdd={() => setTeamModalOpen(true)} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">หมายเหตุ / รายละเอียดงาน</label>
+                  <input className="input" placeholder="เช่น งานก่อ-ฉาบชั้น 2 ทั้งหมด, งานปูกระเบื้องห้องน้ำทุกห้อง"
+                    value={form.note} onChange={(e) => set({ note: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Team history panel */}
+          {form.workerTeamId && form.projectId && (
+            <TeamHistoryPanel teamId={form.workerTeamId} projectId={form.projectId} excludeId={initial?.id} compact />
+          )}
+
+          {/* Card 2: items */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รายการงานเหมา</div>
+                <div className="card-sub">ระบุชื่องานและยอดตกลงรวมในแต่ละรายการ</div>
+              </div>
+              <span className="badge gray mono">{form.items.length} รายการ</span>
+            </div>
+            <div className="card-body">
+              <LumpLaborItemsTable items={form.items} setItems={(items) => set({ items })} cats={app.laborCats} onAddCat={() => setCatModalOpen(true)} />
+            </div>
+          </div>
+
+          {/* Card 3: deductions */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">การหักเงิน</div>
+                <div className="card-sub">หักเบิกล่วงหน้า และหักเงินประกันผลงาน (ถ้ามี)</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label" style={{ color: 'var(--warn)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--warn)', display: 'inline-block', marginRight: 6 }}></span>
+                    หักเบิกล่วงหน้า
+                  </label>
+                  <div className="input-affix">
+                    <div className="input-affix-prefix">฿</div>
+                    <input className="input mono" type="number" min="0" step="any" value={form.advanceDeduction}
+                      onChange={(e) => set({ advanceDeduction: e.target.value })} placeholder="0.00" />
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="field-label" style={{ color: 'var(--info)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--info)', display: 'inline-block', marginRight: 6 }}></span>
+                    หักเงินประกันผลงาน
+                  </label>
+                  <div className="input-affix">
+                    <div className="input-affix-prefix">฿</div>
+                    <input className="input mono" type="number" min="0" step="any" value={form.retentionDeduction}
+                      onChange={(e) => set({ retentionDeduction: e.target.value })} placeholder="0.00" />
+                  </div>
+                </div>
+                <div className="field full">
+                  <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>คำนวณเงินประกันเร็ว:</span>
+                    {[3, 5, 10].map((pct) => (
+                      <button key={pct} type="button" className="badge"
+                        style={{ cursor: 'pointer', padding: '4px 10px' }}
+                        onClick={() => {
+                          const sub = form.items.reduce((s, i) => s + Number(i.price || 0), 0);
+                          set({ retentionDeduction: Math.round(sub * pct / 100) });
+                        }}>
+                        เงินประกัน {pct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: docs + tax */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">เอกสาร และภาษี</div>
+                <div className="card-sub">เลือกเอกสารที่ต้องออก พร้อมเงื่อนไข Vat และหัก ณ ที่จ่าย</div>
+              </div>
+            </div>
+            <div className="card-body col gap-20">
+              <div className="field">
+                <label className="field-label"><Icon name="receipt" size={14} /> เอกสารที่ต้องออก</label>
+                <div className="option-row">
+                  {DOC_TYPES.map((d) => (
+                    <button key={d.id} type="button"
+                      className={"option-pill" + (form.docs.includes(d.id) ? " selected" : "")}
+                      onClick={() => toggleDoc(d.id)}
+                      style={{ padding: '10px 14px' }}
+                    >
+                      <span className="pill-check">
+                        {form.docs.includes(d.id) && <Icon name="check" size={12} stroke={2.5} />}
+                      </span>
+                      <span>{d.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label"><Icon name="money" size={14} /> เงื่อนไข Vat</label>
+                  <div className="option-row">
+                    <button type="button" className={"option-pill" + (form.vatMode === 'exclusive' ? ' selected' : '')} onClick={() => set({ vatMode: 'exclusive' })}>
+                      <span className="pill-radio"></span><span>ไม่รวม Vat</span>
+                    </button>
+                    <button type="button" className={"option-pill" + (form.vatMode === 'inclusive' ? ' selected' : '')} onClick={() => set({ vatMode: 'inclusive' })}>
+                      <span className="pill-radio"></span><span>รวม Vat แล้ว</span>
+                    </button>
+                  </div>
+                  <div className="row gap-8 mt-12">
+                    <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา Vat</span>
+                    <div className="input-affix" style={{ width: 110 }}>
+                      <input className="input mono" type="number" step="0.5" value={form.vatRate} onChange={(e) => set({ vatRate: e.target.value })} />
+                      <div className="input-affix-suffix">%</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>(ส่วนมากค่าแรงตรง = 0%)</span>
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="field-label"><Icon name="percent" size={14} /> หัก ณ ที่จ่าย</label>
+                  <window.Switch on={form.whtEnabled} onChange={(v) => set({ whtEnabled: v })}
+                    label={form.whtEnabled ? 'เปิดหัก ณ ที่จ่าย' : 'ไม่หัก ณ ที่จ่าย'}
+                    sub={form.whtEnabled ? `คำนวณ ${form.whtRate}% จากยอดก่อน Vat` : 'แตะเพื่อเปิดใช้งาน'} />
+                  {form.whtEnabled && (
+                    <div className="option-row mt-12">
+                      {[1, 2, 3, 5].map((r) => (
+                        <window.OptionPill key={r} mode="radio" selected={Number(form.whtRate) === r} onClick={() => set({ whtRate: r })}>
+                          <span className="mono">{r}%</span>
+                        </window.OptionPill>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 5: work logs */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รายละเอียดงาน <span style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 400, marginLeft: 6 }}>(เพิ่ม-แก้ไขได้ตลอด)</span></div>
+                <div className="card-sub">บันทึกความคืบหน้าและรูปหน้างาน</div>
+              </div>
+              <span className="badge gray mono">{form.workLogs.length} บันทึก</span>
+            </div>
+            <div className="card-body">
+              <WorkLogsEditor logs={form.workLogs} onChange={(logs) => set({ workLogs: logs })} />
+            </div>
+          </div>
+
+          {/* Card 6: images */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รูปภาพและสลิปโอน</div>
+                <div className="card-sub">แนบสลิปโอน รูปงาน หรือรูปสัญญา (สูงสุด 10 รูป)</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <window.ImageUploader images={form.images} onChange={(imgs) => set({ images: imgs })} max={10} />
+            </div>
+          </div>
+        </div>
+
+        {/* Right: summary */}
+        <div style={{ position: 'sticky', top: 84 }}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">สรุปยอดจ่าย</div>
+              <span className="badge green dot">เหมาจ่าย</span>
+            </div>
+            <div className="card-body">
+              <div className="summary-rows">
+                <div className="summary-row">
+                  <span className="label">ยอดเหมารวม</span>
+                  <span className="value">{fmt(totals.subTotal)}</span>
+                </div>
+                {Number(form.vatRate) > 0 && (
+                  <div className="summary-row">
+                    <span className="label">Vat {form.vatRate}%</span>
+                    <span className="value">{fmt(totals.vat)}</span>
+                  </div>
+                )}
+                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
+                  <span className="label">รวมก่อนหัก</span>
+                  <span className="value">{fmt(totals.beforeWht)}</span>
+                </div>
+                {form.whtEnabled && (
+                  <div className="summary-row">
+                    <span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
+                  </div>
+                )}
+                {Number(form.advanceDeduction) > 0 && (
+                  <div className="summary-row">
+                    <span className="label" style={{ color: 'var(--warn)' }}>หักเบิกล่วงหน้า</span>
+                    <span className="value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span>
+                  </div>
+                )}
+                {Number(form.retentionDeduction) > 0 && (
+                  <div className="summary-row">
+                    <span className="label" style={{ color: 'var(--info)' }}>หักเงินประกัน</span>
+                    <span className="value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span>
+                  </div>
+                )}
+                <div className="summary-row total">
+                  <span className="label">ยอดจ่ายสุทธิ</span>
+                  <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
+                </div>
+              </div>
+
+              <div className="mt-20" style={{ padding: 14, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="clipboard" size={13} /> เหมาจ่าย คืออะไร?
+                </div>
+                ตกลงราคาเป็นยอดรวมต่องาน ไม่ต้องนับปริมาณ/หน่วย — เหมาะสำหรับงานที่คุยราคาเหมาทั้งก้อน เช่น เหมาก่อ-ฉาบทั้งชั้น เหมาปูกระเบื้องทั้งห้อง
               </div>
             </div>
           </div>

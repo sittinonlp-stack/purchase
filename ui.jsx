@@ -224,6 +224,9 @@ function Sidebar() {
       <button className={"nav-item" + (view === 'new-labor' ? " active" : "")} onClick={() => setView('new-labor')}>
         <Icon name="hammer" /> บันทึกค่าแรง
       </button>
+      <button className={"nav-item" + (view === 'new-lump-labor' ? " active" : "")} onClick={() => setView('new-lump-labor')}>
+        <Icon name="clipboard" /> ค่าแรงเหมาจ่าย
+      </button>
 
       <div className="nav-section-label">เรียกดู</div>
       <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => setView('history')}>

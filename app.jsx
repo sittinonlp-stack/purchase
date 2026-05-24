@@ -69,7 +69,8 @@ function Shell() {
   let title = 'แดชบอร์ด', sub = 'ภาพรวมทั้งหมด';
   if (view === 'new-material') { title = 'จัดซื้อวัสดุ'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-machine')  { title = 'เช่าเครื่องจักร'; sub = 'บันทึก / แก้ไข'; }
-  if (view === 'new-labor')    { title = 'บันทึกค่าแรง'; sub = 'บันทึก / แก้ไข'; }
+  if (view === 'new-labor')      { title = 'บันทึกค่าแรง'; sub = 'บันทึก / แก้ไข'; }
+  if (view === 'new-lump-labor') { title = 'ค่าแรงเหมาจ่าย'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'history')      { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
   if (view === 'projects')     { title = 'โครงการ'; sub = 'จัดการโครงการ'; }
   if (view === 'categories')   { title = 'หมวดหมู่'; sub = 'จัดการหมวดหมู่'; }
@@ -142,6 +143,24 @@ function Shell() {
                 } else {
                   app.addRecord(rec);
                   app.pushToast('บันทึกค่าแรงแล้ว');
+                }
+                clearEditing();
+                app.setView('history');
+              }}
+              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+            />
+          )}
+          {view === 'new-lump-labor' && (
+            <window.LumpLaborForm
+              key={'ll-' + (app.editingId || 'new')}
+              initial={initial && initial.type === 'lump-labor' ? initial : null}
+              onSubmit={(rec) => {
+                if (app.editingId) {
+                  app.updateRecord(app.editingId, rec);
+                  app.pushToast('แก้ไขรายการเหมาจ่ายเรียบร้อย');
+                } else {
+                  app.addRecord(rec);
+                  app.pushToast('บันทึกค่าแรงเหมาจ่ายแล้ว');
                 }
                 clearEditing();
                 app.setView('history');

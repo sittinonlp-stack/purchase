@@ -13,7 +13,7 @@ window.DashboardView = function DashboardView() {
     const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
     const matCount = app.records.filter(r => r.type === 'material').length;
     const machCount = app.records.filter(r => r.type === 'machine').length;
-    const laborCount = app.records.filter(r => r.type === 'labor').length;
+    const laborCount = app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor').length;
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
     const retentionTotal = app.records.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
     return { totalAmount, matCount, machCount, laborCount, whtTotal, retentionTotal };
@@ -45,7 +45,7 @@ window.DashboardView = function DashboardView() {
       const total = computeTotals(r).total;
       if (r.type === 'material') m.mat += total;
       else if (r.type === 'machine') m.mach += total;
-      else if (r.type === 'labor') m.labor += total;
+      else if (r.type === 'labor' || r.type === 'lump-labor') m.labor += total;
     });
     return months;
   }, [app.records]);
@@ -280,6 +280,8 @@ function RecordsTable({ records, onOpen }) {
                     ? <span className="badge amber dot">วัสดุ</span>
                     : r.type === 'machine'
                     ? <span className="badge blue dot">เครื่องจักร</span>
+                    : r.type === 'lump-labor'
+                    ? <span className="badge green dot">เหมาจ่าย</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
                 <td>
@@ -356,6 +358,7 @@ window.HistoryView = function HistoryView() {
             <button className={"tab" + (typeFilter === 'material' ? ' active' : '')} onClick={() => setTypeFilter('material')}><Icon name="cart" size={13} /> วัสดุ</button>
             <button className={"tab" + (typeFilter === 'machine' ? ' active' : '')} onClick={() => setTypeFilter('machine')}><Icon name="truck" size={13} /> เครื่องจักร</button>
             <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
+            <button className={"tab" + (typeFilter === 'lump-labor' ? ' active' : '')} onClick={() => setTypeFilter('lump-labor')}><Icon name="clipboard" size={13} /> เหมาจ่าย</button>
           </div>
           <div className="topbar-search" style={{ width: 280, margin: 0 }}>
             <Icon name="search" size={14} />
@@ -666,7 +669,7 @@ window.TeamsView = function TeamsView() {
   // compute stats per team — only count and projects (no money shown here)
   const stats = useMemo(() => {
     const m = {};
-    app.records.filter(r => r.type === 'labor').forEach(r => {
+    app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor').forEach(r => {
       const k = r.workerTeamId;
       if (!k) return;
       m[k] = m[k] || { count: 0, projects: new Set() };
@@ -775,8 +778,9 @@ window.DetailDrawer = function DetailDrawer() {
   const rec = app.records.find(r => r.id === app.detailId);
   if (!rec) return null;
   const proj = app.projects.find(p => p.id === rec.projectId);
-  const cats = rec.type === 'machine' ? app.machCats : rec.type === 'labor' ? app.laborCats : app.matCats;
-  const team = rec.type === 'labor' ? app.workerTeams.find(t => t.id === rec.workerTeamId) : null;
+  const isLaborType = rec.type === 'labor' || rec.type === 'lump-labor';
+  const cats = rec.type === 'machine' ? app.machCats : isLaborType ? app.laborCats : app.matCats;
+  const team = isLaborType ? app.workerTeams.find(t => t.id === rec.workerTeamId) : null;
   const totals = computeTotals(rec);
   const close = () => app.setDetailId(null);
 
@@ -784,6 +788,8 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge amber dot">จัดซื้อวัสดุ</span>
     : rec.type === 'machine'
     ? <span className="badge blue dot">เช่าเครื่องจักร</span>
+    : rec.type === 'lump-labor'
+    ? <span className="badge green dot">เหมาจ่าย</span>
     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>บันทึกค่าแรง</span>;
 
   // Editable work logs inline (saves immediately via updateRecord)
@@ -799,7 +805,7 @@ window.DetailDrawer = function DetailDrawer() {
               <div className="row gap-8" style={{ marginBottom: 4 }}>
                 {typeBadge}
                 <span className="mono text-small text-muted">{rec.docNo}</span>
-                {rec.type === 'labor' && rec.period && <span className="badge gray">{rec.period}</span>}
+                {isLaborType && rec.period && <span className="badge gray">{rec.period}</span>}
               </div>
               <h2 style={{ fontSize: 20 }}>{rec.vendor}</h2>
             </div>
@@ -811,7 +817,7 @@ window.DetailDrawer = function DetailDrawer() {
             )}
             <button className="btn btn-accent btn-sm" onClick={() => {
               app.setEditingId(rec.id);
-              const v = rec.type === 'machine' ? 'new-machine' : rec.type === 'labor' ? 'new-labor' : 'new-material';
+              const v = rec.type === 'machine' ? 'new-machine' : rec.type === 'labor' ? 'new-labor' : rec.type === 'lump-labor' ? 'new-lump-labor' : 'new-material';
               app.setView(v);
               close();
             }}><Icon name="edit" size={13} /> แก้ไข</button>
@@ -834,7 +840,7 @@ window.DetailDrawer = function DetailDrawer() {
             <div className="value">{fmtDate(rec.date)}</div>
           </div>
           <div className="detail-row">
-            <div className="label">{rec.type === 'labor' ? 'ทีมช่าง' : 'ผู้ขาย'}</div>
+            <div className="label">{isLaborType ? 'ทีมช่าง' : 'ผู้ขาย'}</div>
             <div className="value">
               {team ? (
                 <div>
@@ -852,8 +858,8 @@ window.DetailDrawer = function DetailDrawer() {
           )}
         </div>
 
-        {/* Team history in same project — labor only */}
-        {rec.type === 'labor' && team && (
+        {/* Team history in same project — labor types only */}
+        {isLaborType && team && (
           <div className="detail-section">
             <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>ประวัติทีมในโครงการเดียวกัน</h3>
             <window.TeamHistoryPanel teamId={rec.workerTeamId} projectId={rec.projectId} excludeId={rec.id} compact />
@@ -861,12 +867,12 @@ window.DetailDrawer = function DetailDrawer() {
         )}
 
         <div className="detail-section">
-          <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{rec.type === 'labor' ? `รายการงาน (${rec.items.length})` : `รายการ (${rec.items.length})`}</h3>
+          <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{isLaborType ? `รายการงาน (${rec.items.length})` : `รายการ (${rec.items.length})`}</h3>
           <table className="items-table">
             <thead>
               <tr>
-                <th>{rec.type === 'labor' ? 'งาน' : 'รายการ'}</th>
-                <th style={{ width: 100 }}>{rec.type === 'labor' ? 'หมวดงาน' : 'หมวดหมู่'}</th>
+                <th>{isLaborType ? 'งาน' : 'รายการ'}</th>
+                <th style={{ width: 100 }}>{isLaborType ? 'หมวดงาน' : 'หมวดหมู่'}</th>
                 <th style={{ width: 90 }} className="num">จำนวน</th>
                 <th style={{ width: 90 }} className="num">ราคา</th>
                 <th style={{ width: 110 }} className="num">รวม</th>
@@ -903,7 +909,7 @@ window.DetailDrawer = function DetailDrawer() {
             {rec.whtEnabled && <span className="badge">หัก ณ ที่จ่าย {rec.whtRate}%</span>}
           </div>
           <div className="summary-rows" style={{ maxWidth: 380, marginLeft: 'auto' }}>
-            <div className="summary-row"><span className="label">{rec.type === 'labor' ? 'ค่าแรงรวม' : 'ยอดก่อนภาษี'}</span><span className="value">{fmt(totals.subTotal)}</span></div>
+            <div className="summary-row"><span className="label">{rec.type === 'lump-labor' ? 'ยอดเหมารวม' : isLaborType ? 'ค่าแรงรวม' : 'ยอดก่อนภาษี'}</span><span className="value">{fmt(totals.subTotal)}</span></div>
             {Number(rec.vatRate) > 0 && <div className="summary-row"><span className="label">Vat {rec.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>}
             {rec.whtEnabled && <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {rec.whtRate}%</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>}
             {Number(rec.advanceDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--warn)' }}>หักเบิกล่วงหน้า</span><span className="value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span></div>}
@@ -912,8 +918,8 @@ window.DetailDrawer = function DetailDrawer() {
           </div>
         </div>
 
-        {/* Editable work logs — labor only */}
-        {rec.type === 'labor' && (
+        {/* Editable work logs — labor types only */}
+        {isLaborType && (
           <div className="detail-section" style={{ background: 'var(--surface-2)' }}>
             <div className="row between mb-16">
               <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
