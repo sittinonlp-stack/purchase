@@ -377,9 +377,17 @@ window.AppProvider = function AppProvider({ children }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tab visibility recovery ─────────────────────────
-  // When tab is backgrounded long enough, JS timers get throttled and the
-  // Supabase auto-refresh may fail. On returning, re-verify the session
-  // silently so the app doesn't crash on the next data fetch.
+  // Keep a ref to the latest session so the handler below can read it
+  // without being listed as a dependency (avoids re-registering on every login).
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
+  // When the tab is backgrounded for a long time, Supabase's auto-refresh timer
+  // gets throttled by the browser. On returning we silently verify the token.
+  // We do NOT call loadProfileAndData here — that sets setDbReady(false) which
+  // triggers a loading spinner mid-session and can cause render errors caught by
+  // the ErrorBoundary. Supabase's onAuthStateChange already fires TOKEN_REFRESHED
+  // and SIGNED_OUT events, so we don't need to do anything extra.
   useEffect(() => {
     if (!window.supabaseClient) return;
 
@@ -390,28 +398,20 @@ window.AppProvider = function AppProvider({ children }) {
         lastHiddenAt = Date.now();
         return;
       }
-      // Visible again — only re-check if we were hidden > 60s
+      // Visible again — only act if we were hidden for more than 60 s
       if (!lastHiddenAt || (Date.now() - lastHiddenAt) < 60000) return;
       lastHiddenAt = 0;
 
       try {
-        const { data: { session: s }, error } = await window.supabaseClient.auth.getSession();
-        if (error) throw error;
-
-        // Session expired while away → onAuthStateChange will handle SIGNED_OUT
-        if (!s && session) {
+        const { data: { session: s } } = await window.supabaseClient.auth.getSession();
+        if (!s && sessionRef.current) {
+          // Session expired — onAuthStateChange handles the SIGNED_OUT event
           console.warn('[Auth] session expired while tab was hidden');
-          return;
         }
-        // Session still valid → quietly refresh data so any stale fetches don't break UI
-        if (s && s.user?.id) {
-          // Only re-fetch data, no loading spinner flicker
-          loadProfileAndData(s.user.id).catch(err =>
-            console.warn('[Auth] background data refresh failed:', err));
-        }
+        // If s is valid, Supabase already refreshed the token silently — nothing to do.
       } catch (err) {
-        console.error('[Auth] visibility re-check failed:', err);
-        // Don't crash — user can still use the app or refresh manually
+        // Network error etc. — don't crash the app, let the user continue
+        console.warn('[Auth] visibility re-check failed (non-fatal):', err);
       }
     };
 
@@ -421,7 +421,7 @@ window.AppProvider = function AppProvider({ children }) {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', onVisibility);
     };
-  }, [session, loadProfileAndData]);
+  }, []); // ← empty deps: register once, read session via ref
 
   // ── Sign out ────────────────────────────────────────
   const signOut = useCallback(async () => {
