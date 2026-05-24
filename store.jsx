@@ -44,6 +44,16 @@ const SEED_LABOR_CATEGORIES = [
   { id: 'lc8', name: 'งานเบ็ดเตล็ด', color: '#9ca3af' },
 ];
 
+const SEED_LUMP_LABOR_CATEGORIES = [
+  { id: 'llc1', name: 'งานสถาปัตยกรรม', color: '#8b5cf6' },
+  { id: 'llc2', name: 'งานฐานราก', color: '#92400e' },
+  { id: 'llc3', name: 'งานโครงสร้าง', color: '#64748b' },
+  { id: 'llc4', name: 'งานระบบ MEP', color: '#0ea5e9' },
+  { id: 'llc5', name: 'งานตกแต่งภายใน', color: '#ec4899' },
+  { id: 'llc6', name: 'งานภายนอกอาคาร', color: '#16a34a' },
+  { id: 'llc7', name: 'งานเหมารวม', color: '#d97706' },
+];
+
 const SEED_WORKER_TEAMS = [
   { id: 't1', name: 'ทีมช่างประสิทธิ์', leader: 'นาย ประสิทธิ์ ทองดี', phone: '081-234-5678', size: 6, specialty: 'ก่อ-ฉาบ, ปูกระเบื้อง' },
   { id: 't2', name: 'ทีมช่างวิชัย', leader: 'นาย วิชัย แสงเดือน', phone: '089-555-1212', size: 4, specialty: 'งานเหล็ก, ฐานราก' },
@@ -262,7 +272,8 @@ window.AppProvider = function AppProvider({ children }) {
   const [projects,    setProjects]    = useState(SEED_PROJECTS);
   const [matCats,     setMatCats]     = useState(SEED_MAT_CATEGORIES);
   const [machCats,    setMachCats]    = useState(SEED_MACH_CATEGORIES);
-  const [laborCats,   setLaborCats]   = useState(SEED_LABOR_CATEGORIES);
+  const [laborCats,     setLaborCats]     = useState(SEED_LABOR_CATEGORIES);
+  const [lumpLaborCats, setLumpLaborCats] = useState(SEED_LUMP_LABOR_CATEGORIES);
   const [workerTeams, setWorkerTeams] = useState(SEED_WORKER_TEAMS);
   const [records,     setRecords]     = useState(seedRecords());
   const [toasts,      setToasts]      = useState([]);
@@ -300,12 +311,13 @@ window.AppProvider = function AppProvider({ children }) {
       }
 
       const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
-              workerTeams: teams, records: recs } = await window.db.loadAll();
+              lumpLaborCats: llc, workerTeams: teams, records: recs } = await window.db.loadAll();
 
       setProjects(ps);
-      setMatCats(mc.length   ? mc   : SEED_MAT_CATEGORIES);
-      setMachCats(kc.length  ? kc   : SEED_MACH_CATEGORIES);
-      setLaborCats(lc.length ? lc   : SEED_LABOR_CATEGORIES);
+      setMatCats(mc.length    ? mc  : SEED_MAT_CATEGORIES);
+      setMachCats(kc.length   ? kc  : SEED_MACH_CATEGORIES);
+      setLaborCats(lc.length  ? lc  : SEED_LABOR_CATEGORIES);
+      setLumpLaborCats(llc && llc.length ? llc : SEED_LUMP_LABOR_CATEGORIES);
       setWorkerTeams(teams);
       setRecords(recs);
       setDbOnline(true);
@@ -362,6 +374,7 @@ window.AppProvider = function AppProvider({ children }) {
             setMatCats(SEED_MAT_CATEGORIES);
             setMachCats(SEED_MACH_CATEGORIES);
             setLaborCats(SEED_LABOR_CATEGORIES);
+        setLumpLaborCats(SEED_LUMP_LABOR_CATEGORIES);
             setWorkerTeams(SEED_WORKER_TEAMS);
             setRecords(seedRecords());
           } else if (event === 'TOKEN_REFRESHED' && s) {
@@ -494,6 +507,18 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteLaborCat(id), 'deleteLaborCat');
   }, [dbOnline, dbSync]);
 
+  // ── Lump-labor categories ─────────────────────────────
+  const addLumpLaborCat = useCallback((c) => {
+    const nc = { ...c, id: newId() };
+    setLumpLaborCats((cs) => [...cs, nc]);
+    if (dbOnline) dbSync(window.db.insertLumpLaborCat(nc), 'insertLumpLaborCat');
+  }, [dbOnline, dbSync]);
+
+  const deleteLumpLaborCat = useCallback((id) => {
+    setLumpLaborCats((cs) => cs.filter((c) => c.id !== id));
+    if (dbOnline) dbSync(window.db.deleteLumpLaborCat(id), 'deleteLumpLaborCat');
+  }, [dbOnline, dbSync]);
+
   // ── Worker teams ──────────────────────────────────────
   const addWorkerTeam = useCallback((t) => {
     const team = { ...t, id: newId() };
@@ -520,16 +545,18 @@ window.AppProvider = function AppProvider({ children }) {
     matCats, addMatCat, deleteMatCat,
     machCats, addMachCat, deleteMachCat,
     laborCats, addLaborCat, deleteLaborCat,
+    lumpLaborCats, addLumpLaborCat, deleteLumpLaborCat,
     workerTeams, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
     records, addRecord, updateRecord, deleteRecord,
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, session, userProfile, isAdmin, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, workerTeams, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, workerTeams, records, toasts, detailId, editingId,
        addRecord, updateRecord, deleteRecord, addProject, deleteProject,
        addMatCat, deleteMatCat, addMachCat, deleteMachCat,
-       addLaborCat, deleteLaborCat, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam, pushToast]);
+       addLaborCat, deleteLaborCat, addLumpLaborCat, deleteLumpLaborCat,
+       addWorkerTeam, updateWorkerTeam, deleteWorkerTeam, pushToast]);
 
   // ── Render guards ─────────────────────────────────────
   if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;

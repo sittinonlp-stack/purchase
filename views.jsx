@@ -472,6 +472,7 @@ window.CategoriesView = function CategoriesView() {
   const [matOpen, setMatOpen] = useState(false);
   const [machOpen, setMachOpen] = useState(false);
   const [laborOpen, setLaborOpen] = useState(false);
+  const [lumpOpen, setLumpOpen] = useState(false);
 
   const countByCat = useMemo(() => {
     const m = {};
@@ -496,7 +497,7 @@ window.CategoriesView = function CategoriesView() {
             <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="ลบ"
               onClick={() => {
                 if (countByCat[c.id]) { app.pushToast('ลบไม่ได้ — มีรายการใช้หมวดนี้อยู่', 'error'); return; }
-                const fn = which === 'mach' ? app.deleteMachCat : which === 'labor' ? app.deleteLaborCat : app.deleteMatCat;
+                const fn = which === 'mach' ? app.deleteMachCat : which === 'labor' ? app.deleteLaborCat : which === 'lump-labor' ? app.deleteLumpLaborCat : app.deleteMatCat;
                 fn(c.id);
                 app.pushToast('ลบหมวดหมู่แล้ว');
               }}>
@@ -517,7 +518,7 @@ window.CategoriesView = function CategoriesView() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18 }} className="cat-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }} className="cat-grid">
         <div className="card">
           <div className="card-header">
             <div>
@@ -554,11 +555,24 @@ window.CategoriesView = function CategoriesView() {
           </div>
           <div className="card-body">{renderList(app.laborCats, 'labor')}</div>
         </div>
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title"><Icon name="clipboard" size={14} /> หมวดงานเหมาจ่าย</div>
+              <div className="card-sub">{(app.lumpLaborCats || []).length} หมวด</div>
+            </div>
+            <button className="btn btn-accent btn-sm" onClick={() => setLumpOpen(true)}>
+              <Icon name="plus" size={12} stroke={2.5} /> เพิ่ม
+            </button>
+          </div>
+          <div className="card-body">{renderList(app.lumpLaborCats || [], 'lump-labor')}</div>
+        </div>
       </div>
 
       <AddCategoryModal open={matOpen} onClose={() => setMatOpen(false)} onAdd={(c) => { app.addMatCat(c); app.pushToast('เพิ่มหมวดหมู่วัสดุแล้ว'); setMatOpen(false); }} title="เพิ่มหมวดหมู่วัสดุ" />
       <AddCategoryModal open={machOpen} onClose={() => setMachOpen(false)} onAdd={(c) => { app.addMachCat(c); app.pushToast('เพิ่มหมวดหมู่เครื่องจักรแล้ว'); setMachOpen(false); }} title="เพิ่มหมวดหมู่เครื่องจักร" />
       <AddCategoryModal open={laborOpen} onClose={() => setLaborOpen(false)} onAdd={(c) => { app.addLaborCat(c); app.pushToast('เพิ่มหมวดงานแล้ว'); setLaborOpen(false); }} title="เพิ่มหมวดงาน" />
+      <AddCategoryModal open={lumpOpen} onClose={() => setLumpOpen(false)} onAdd={(c) => { app.addLumpLaborCat(c); app.pushToast('เพิ่มหมวดงานเหมาจ่ายแล้ว'); setLumpOpen(false); }} title="เพิ่มหมวดงานเหมาจ่าย" />
 
       <style>{`
         @media (max-width: 1100px) {
@@ -779,7 +793,7 @@ window.DetailDrawer = function DetailDrawer() {
   if (!rec) return null;
   const proj = app.projects.find(p => p.id === rec.projectId);
   const isLaborType = rec.type === 'labor' || rec.type === 'lump-labor';
-  const cats = rec.type === 'machine' ? app.machCats : isLaborType ? app.laborCats : app.matCats;
+  const cats = rec.type === 'machine' ? app.machCats : rec.type === 'lump-labor' ? (app.lumpLaborCats || []) : rec.type === 'labor' ? app.laborCats : app.matCats;
   const team = isLaborType ? app.workerTeams.find(t => t.id === rec.workerTeamId) : null;
   const totals = computeTotals(rec);
   const close = () => app.setDetailId(null);

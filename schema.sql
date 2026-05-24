@@ -36,6 +36,13 @@ CREATE TABLE IF NOT EXISTS labor_categories (
   created_at  TIMESTAMPTZ      DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS lump_labor_categories (
+  id          TEXT PRIMARY KEY,
+  name        TEXT    NOT NULL DEFAULT '',
+  color       TEXT             DEFAULT '#9ca3af',
+  created_at  TIMESTAMPTZ      DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS worker_teams (
   id          TEXT PRIMARY KEY,
   name        TEXT    NOT NULL DEFAULT '',
@@ -48,7 +55,7 @@ CREATE TABLE IF NOT EXISTS worker_teams (
 
 CREATE TABLE IF NOT EXISTS records (
   id                  TEXT PRIMARY KEY,
-  type                TEXT    NOT NULL CHECK (type IN ('material','machine','labor')),
+  type                TEXT    NOT NULL CHECK (type IN ('material','machine','labor','lump-labor')),
   doc_no              TEXT    NOT NULL DEFAULT '',
   date                DATE    NOT NULL,
   project_id          TEXT    REFERENCES projects(id)      ON DELETE SET NULL,
@@ -93,7 +100,8 @@ CREATE TABLE IF NOT EXISTS work_logs (
 ALTER TABLE projects             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE material_categories  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE machinery_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE labor_categories     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE labor_categories       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lump_labor_categories  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE worker_teams         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE records              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE record_items         ENABLE ROW LEVEL SECURITY;
@@ -102,7 +110,8 @@ ALTER TABLE work_logs            ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anon_all" ON projects             FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON material_categories  FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON machinery_categories FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all" ON labor_categories     FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all" ON labor_categories       FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all" ON lump_labor_categories  FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON worker_teams         FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON records              FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON record_items         FOR ALL TO anon USING (true) WITH CHECK (true);

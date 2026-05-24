@@ -139,31 +139,34 @@
       if (!client) throw new Error('No Supabase client');
 
       const [
-        { data: projects, error: e1 },
-        { data: matCats,  error: e2 },
-        { data: machCats, error: e3 },
-        { data: labCats,  error: e4 },
-        { data: teams,    error: e5 },
-        { data: recs,     error: e6 },
+        { data: projects,    error: e1 },
+        { data: matCats,     error: e2 },
+        { data: machCats,    error: e3 },
+        { data: labCats,     error: e4 },
+        { data: lumpLabCats, error: e7 },
+        { data: teams,       error: e5 },
+        { data: recs,        error: e6 },
       ] = await Promise.all([
         client.from('projects').select('*').order('created_at'),
         client.from('material_categories').select('*').order('created_at'),
         client.from('machinery_categories').select('*').order('created_at'),
         client.from('labor_categories').select('*').order('created_at'),
+        client.from('lump_labor_categories').select('*').order('created_at'),
         client.from('worker_teams').select('*').order('created_at'),
         client.from('records').select('*, record_items(*), work_logs(*)').order('created_at', { ascending: false }),
       ]);
 
-      const firstErr = e1 || e2 || e3 || e4 || e5 || e6;
+      const firstErr = e1 || e2 || e3 || e4 || e7 || e5 || e6;
       if (firstErr) throw firstErr;
 
       return {
-        projects:    (projects  || []).map(dbProject),
-        matCats:     (matCats   || []).map(dbCat),
-        machCats:    (machCats  || []).map(dbCat),
-        laborCats:   (labCats   || []).map(dbCat),
-        workerTeams: (teams     || []).map(dbTeam),
-        records:     (recs      || []).map(dbRecord),
+        projects:        (projects    || []).map(dbProject),
+        matCats:         (matCats     || []).map(dbCat),
+        machCats:        (machCats    || []).map(dbCat),
+        laborCats:       (labCats     || []).map(dbCat),
+        lumpLaborCats:   (lumpLabCats || []).map(dbCat),
+        workerTeams:     (teams       || []).map(dbTeam),
+        records:         (recs        || []).map(dbRecord),
       };
     },
 
@@ -208,6 +211,16 @@
     },
     async deleteLaborCat(id) {
       const { error } = await window.supabaseClient.from('labor_categories').delete().eq('id', id);
+      if (error) throw error;
+    },
+
+    // ── Lump-labor categories ─────────────────────
+    async insertLumpLaborCat(c) {
+      const { error } = await window.supabaseClient.from('lump_labor_categories').insert(jsCat(c));
+      if (error) throw error;
+    },
+    async deleteLumpLaborCat(id) {
+      const { error } = await window.supabaseClient.from('lump_labor_categories').delete().eq('id', id);
       if (error) throw error;
     },
 

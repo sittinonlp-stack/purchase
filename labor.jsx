@@ -845,7 +845,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
               <span className="badge gray mono">{form.items.length} รายการ</span>
             </div>
             <div className="card-body">
-              <LumpLaborItemsTable items={form.items} setItems={(items) => set({ items })} cats={app.laborCats} onAddCat={() => setCatModalOpen(true)} />
+              <LumpLaborItemsTable items={form.items} setItems={(items) => set({ items })} cats={app.lumpLaborCats} onAddCat={() => setCatModalOpen(true)} />
             </div>
           </div>
 
@@ -1058,7 +1058,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
         </div>
       </div>
 
-      <window.AddCategoryModal open={catModalOpen} onClose={() => setCatModalOpen(false)} onAdd={(c) => { app.addLaborCat(c); app.pushToast('เพิ่มหมวดงานแล้ว'); setCatModalOpen(false); }} title="เพิ่มหมวดงาน" />
+      <window.AddCategoryModal open={catModalOpen} onClose={() => setCatModalOpen(false)} onAdd={(c) => { app.addLumpLaborCat(c); app.pushToast('เพิ่มหมวดเหมาจ่ายแล้ว'); setCatModalOpen(false); }} title="เพิ่มหมวดเหมาจ่าย" />
       <window.AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
       <AddWorkerTeamModal open={teamModalOpen} onClose={() => setTeamModalOpen(false)} onAdd={(t) => {
         const team = app.addWorkerTeam(t);
