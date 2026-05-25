@@ -812,16 +812,18 @@ window.Topbar = Topbar;
 // ---- Image Lightbox (fullscreen viewer) ----
 // ใช้ขยายดูรูปภาพแนบ — รองรับ string / object { dataUrl }
 function ImageLightbox({ images, index, onClose, onChange }) {
-  // ปิดด้วย Esc, prev/next ด้วยปุ่มลูกศร
+  // ⚠️ Hooks ทั้งหมดต้องเรียกก่อน early return เสมอ (Rules of Hooks)
+  const touchStartX = useRef(0);
+
+  // ปิดด้วย Esc, prev/next ด้วยปุ่มลูกศร + กัน scroll background
   useEffect(() => {
     if (index < 0) return;
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
       else if (e.key === 'ArrowLeft'  && index > 0) onChange(index - 1);
-      else if (e.key === 'ArrowRight' && index < images.length - 1) onChange(index + 1);
+      else if (e.key === 'ArrowRight' && index < (images?.length || 0) - 1) onChange(index + 1);
     };
     window.addEventListener('keydown', onKey);
-    // กัน scroll background
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
@@ -840,8 +842,6 @@ function ImageLightbox({ images, index, onClose, onChange }) {
   const isFirst  = index === 0;
   const isLast   = index === images.length - 1;
 
-  // swipe state (mobile)
-  const touchStartX = useRef(0);
   const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {
     if (!hasMulti) return;
