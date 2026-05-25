@@ -25,8 +25,11 @@ DROP POLICY IF EXISTS "admin_delete" ON other_categories;
 CREATE POLICY "auth_select"  ON other_categories FOR SELECT TO authenticated USING (true);
 CREATE POLICY "auth_insert"  ON other_categories FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "auth_update"  ON other_categories FOR UPDATE TO authenticated USING (true);
+-- ใช้ inline subquery แทน get_user_role() เผื่อ function ยังไม่ได้สร้าง
 CREATE POLICY "admin_delete" ON other_categories FOR DELETE TO authenticated
-  USING (public.get_user_role() = 'admin');
+  USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
 
 -- 3. อัปเดต CHECK constraint ของ records ให้รองรับ type='other'
 --    (ลบ constraint เก่าก่อน แล้วสร้างใหม่)
