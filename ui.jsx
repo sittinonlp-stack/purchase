@@ -45,6 +45,7 @@ const Icon = ({ name, size = 16, stroke = 1.75 }) => {
     logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
     safe: <><rect x="3" y="2" width="15" height="19" rx="2"/><circle cx="10.5" cy="12" r="3.5"/><path d="M10.5 8.5V10M10.5 14v1.5M7 12h1.5M12.5 12H14"/><rect x="18" y="9" width="2.5" height="6" rx="1.2"/></>,
     clipboard: <><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10h6M9 14h6M9 18h4"/></>,
+    menu: <><path d="M3 12h18M3 6h18M3 18h18"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" className="icon">
@@ -193,114 +194,123 @@ window.ImageUploader = ImageUploader;
 // ---- Sidebar ----
 function Sidebar() {
   const app = window.useApp();
-  const { view, setView, records, projects } = app;
+  const { view, setView, records, projects, sidebarOpen, setSidebarOpen } = app;
   const pendingDeposits = records.filter(r =>
     Number(r.depositAmount) > 0 && (!r.depositStatus || r.depositStatus === 'pending')
   ).length;
+
+  // ปิด sidebar และเปลี่ยน view (ใช้สำหรับปุ่มใน nav)
+  const go = (v) => { setView(v); setSidebarOpen(false); };
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">
-        <div className="sidebar-logo">จ</div>
-        <div>
-          <div className="sidebar-brand-name">จัดซื้อ</div>
-          <div className="sidebar-brand-sub">งานรับเหมาก่อสร้าง</div>
+    <>
+      {/* Backdrop — แสดงเฉพาะ tablet/mobile เมื่อ sidebar เปิด */}
+      <div
+        className={'sidebar-backdrop' + (sidebarOpen ? '' : ' hidden')}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      <aside className={'sidebar' + (sidebarOpen ? ' open' : '')}>
+        <div className="sidebar-brand">
+          <div className="sidebar-logo">จ</div>
+          <div>
+            <div className="sidebar-brand-name">จัดซื้อ</div>
+            <div className="sidebar-brand-sub">งานรับเหมาก่อสร้าง</div>
+          </div>
         </div>
-      </div>
 
-      <div className="sidebar-scroll">
-        <div className="nav-section-label">ภาพรวม</div>
-        <button className={"nav-item" + (view === 'dashboard' ? " active" : "")} onClick={() => setView('dashboard')}>
-          <Icon name="home" /> แดชบอร์ด
-        </button>
+        <div className="sidebar-scroll">
+          <div className="nav-section-label">ภาพรวม</div>
+          <button className={"nav-item" + (view === 'dashboard' ? " active" : "")} onClick={() => go('dashboard')}>
+            <Icon name="home" /> แดชบอร์ด
+          </button>
 
-        <div className="nav-section-label">บันทึกรายการ</div>
-        <button className={"nav-item" + (view === 'new-material' ? " active" : "")} onClick={() => setView('new-material')}>
-          <Icon name="cart" /> จัดซื้อวัสดุ
-        </button>
-        <button className={"nav-item" + (view === 'new-machine' ? " active" : "")} onClick={() => setView('new-machine')}>
-          <Icon name="truck" /> เช่าเครื่องจักร
-        </button>
-        <button className={"nav-item" + (view === 'new-labor' ? " active" : "")} onClick={() => setView('new-labor')}>
-          <Icon name="hammer" /> บันทึกค่าแรง
-        </button>
-        <button className={"nav-item" + (view === 'new-lump-labor' ? " active" : "")} onClick={() => setView('new-lump-labor')}>
-          <Icon name="clipboard" /> ค่าแรงเหมาจ่าย
-        </button>
-        <button className={"nav-item" + (view === 'new-other' ? " active" : "")} onClick={() => setView('new-other')}>
-          <Icon name="sparkle" /> ค่าใช้จ่ายอื่นๆ
-        </button>
+          <div className="nav-section-label">บันทึกรายการ</div>
+          <button className={"nav-item" + (view === 'new-material' ? " active" : "")} onClick={() => go('new-material')}>
+            <Icon name="cart" /> จัดซื้อวัสดุ
+          </button>
+          <button className={"nav-item" + (view === 'new-machine' ? " active" : "")} onClick={() => go('new-machine')}>
+            <Icon name="truck" /> เช่าเครื่องจักร
+          </button>
+          <button className={"nav-item" + (view === 'new-labor' ? " active" : "")} onClick={() => go('new-labor')}>
+            <Icon name="hammer" /> บันทึกค่าแรง
+          </button>
+          <button className={"nav-item" + (view === 'new-lump-labor' ? " active" : "")} onClick={() => go('new-lump-labor')}>
+            <Icon name="clipboard" /> ค่าแรงเหมาจ่าย
+          </button>
+          <button className={"nav-item" + (view === 'new-other' ? " active" : "")} onClick={() => go('new-other')}>
+            <Icon name="sparkle" /> ค่าใช้จ่ายอื่นๆ
+          </button>
 
-        <div className="nav-section-label">เรียกดู</div>
-        <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => setView('history')}>
-          <Icon name="history" /> ประวัติทั้งหมด
-          <span className="badge">{records.length}</span>
-        </button>
-        <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => setView('deposits')}
-          style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>
-          <Icon name="safe" /> เงินประกันสินค้า
-          {pendingDeposits > 0 && (
-            <span className="badge" style={{ background:'rgba(59,130,246,0.18)', color:'#3b82f6',
-              border:'1px solid rgba(59,130,246,0.35)' }}>{pendingDeposits}</span>
+          <div className="nav-section-label">เรียกดู</div>
+          <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => go('history')}>
+            <Icon name="history" /> ประวัติทั้งหมด
+            <span className="badge">{records.length}</span>
+          </button>
+          <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => go('deposits')}
+            style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>
+            <Icon name="safe" /> เงินประกันสินค้า
+            {pendingDeposits > 0 && (
+              <span className="badge" style={{ background:'rgba(59,130,246,0.18)', color:'#3b82f6',
+                border:'1px solid rgba(59,130,246,0.35)' }}>{pendingDeposits}</span>
+            )}
+          </button>
+
+          <div className="nav-section-label">ตั้งค่า</div>
+          <button className={"nav-item" + (view === 'projects' ? " active" : "")} onClick={() => go('projects')}>
+            <Icon name="folder" /> โครงการ
+            <span className="badge">{projects.length}</span>
+          </button>
+          <button className={"nav-item" + (view === 'categories' ? " active" : "")} onClick={() => go('categories')}>
+            <Icon name="tag" /> หมวดหมู่
+          </button>
+          <button className={"nav-item" + (view === 'teams' ? " active" : "")} onClick={() => go('teams')}>
+            <Icon name="users" /> ทีมช่าง
+          </button>
+          {app.isAdmin && app.dbOnline && (
+            <button className={"nav-item" + (view === 'users' ? " active" : "")} onClick={() => go('users')}
+              style={{ color: 'var(--accent-light, #fbbf24)' }}>
+              <Icon name="shield" /> จัดการผู้ใช้
+            </button>
           )}
-        </button>
-
-        <div className="nav-section-label">ตั้งค่า</div>
-        <button className={"nav-item" + (view === 'projects' ? " active" : "")} onClick={() => setView('projects')}>
-          <Icon name="folder" /> โครงการ
-          <span className="badge">{projects.length}</span>
-        </button>
-        <button className={"nav-item" + (view === 'categories' ? " active" : "")} onClick={() => setView('categories')}>
-          <Icon name="tag" /> หมวดหมู่
-        </button>
-        <button className={"nav-item" + (view === 'teams' ? " active" : "")} onClick={() => setView('teams')}>
-          <Icon name="users" /> ทีมช่าง
-        </button>
-        {/* Admin only: manage users */}
-        {app.isAdmin && app.dbOnline && (
-          <button className={"nav-item" + (view === 'users' ? " active" : "")} onClick={() => setView('users')}
-            style={{ color: 'var(--accent-light, #fbbf24)' }}>
-            <Icon name="shield" /> จัดการผู้ใช้
-          </button>
-        )}
-      </div>
-
-      <div className="sidebar-footer">
-        {/* Avatar — photo if set, else initial letter */}
-        <div className="avatar" style={{ flexShrink: 0, overflow: 'hidden', padding: 0 }}>
-          {app.userProfile?.avatar_url
-            ? <img src={app.userProfile.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-            : (app.userProfile?.full_name || app.userProfile?.email || 'U').slice(0,1).toUpperCase()
-          }
         </div>
-        <div className="avatar-meta" style={{ flex: 1, minWidth: 0 }}>
-          <div className="avatar-name" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {app.userProfile?.full_name || app.userProfile?.email || 'ผู้ใช้งาน'}
+
+        <div className="sidebar-footer">
+          <div className="avatar" style={{ flexShrink: 0, overflow: 'hidden', padding: 0 }}>
+            {app.userProfile?.avatar_url
+              ? <img src={app.userProfile.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+              : (app.userProfile?.full_name || app.userProfile?.email || 'U').slice(0,1).toUpperCase()
+            }
           </div>
-          <div className="avatar-role" style={{ display:'flex', alignItems:'center', gap:4 }}>
-            <span style={{
-              display:'inline-block', padding:'1px 6px', borderRadius:4, fontSize:10, fontWeight:600,
-              background: app.isAdmin ? 'rgba(217,119,6,0.25)' : 'rgba(100,116,139,0.25)',
-              color: app.isAdmin ? '#fbbf24' : '#94a3b8',
-            }}>
-              {app.isAdmin ? 'Admin' : 'User'}
-            </span>
+          <div className="avatar-meta" style={{ flex: 1, minWidth: 0 }}>
+            <div className="avatar-name" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {app.userProfile?.full_name || app.userProfile?.email || 'ผู้ใช้งาน'}
+            </div>
+            <div className="avatar-role" style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <span style={{
+                display:'inline-block', padding:'1px 6px', borderRadius:4, fontSize:10, fontWeight:600,
+                background: app.isAdmin ? 'rgba(217,119,6,0.25)' : 'rgba(100,116,139,0.25)',
+                color: app.isAdmin ? '#fbbf24' : '#94a3b8',
+              }}>
+                {app.isAdmin ? 'Admin' : 'User'}
+              </span>
+            </div>
           </div>
+          {app.session && (
+            <button onClick={app.signOut} title="ออกจากระบบ"
+              style={{
+                background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:6,
+                color:'#6b7280', display:'flex', alignItems:'center', flexShrink:0,
+                transition:'color .15s',
+              }}
+              onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
+              onMouseLeave={e=>e.currentTarget.style.color='#6b7280'}>
+              <Icon name="logout" size={15} />
+            </button>
+          )}
         </div>
-        {/* Logout button — show whenever there is an active session */}
-        {app.session && (
-          <button onClick={app.signOut} title="ออกจากระบบ"
-            style={{
-              background:'none', border:'none', cursor:'pointer', padding:6, borderRadius:6,
-              color:'#6b7280', display:'flex', alignItems:'center', flexShrink:0,
-              transition:'color .15s',
-            }}
-            onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
-            onMouseLeave={e=>e.currentTarget.style.color='#6b7280'}>
-            <Icon name="logout" size={15} />
-          </button>
-        )}
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 window.Sidebar = Sidebar;
@@ -611,6 +621,11 @@ function Topbar({ title, sub }) {
 
   return (
     <div className="topbar">
+      {/* Hamburger — แสดงเฉพาะ tablet/mobile (hidden บน desktop ด้วย CSS) */}
+      <button className="topbar-hamburger" onClick={() => app.setSidebarOpen(true)} title="เมนู">
+        <Icon name="menu" size={20} stroke={1.75} />
+      </button>
+
       <div>
         <div className="topbar-title">{title}</div>
         {sub && <div className="topbar-crumb">{sub}</div>}

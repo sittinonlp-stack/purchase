@@ -274,9 +274,10 @@ window.AppProvider = function AppProvider({ children }) {
   const [userProfile,  setUserProfile]  = useState(null);
 
   // ── Data state ──────────────────────────────────────
-  const [dbReady,    setDbReady]    = useState(false);
-  const [dbOnline,   setDbOnline]   = useState(false);
-  const [view, setView] = useState('dashboard');
+  const [dbReady,      setDbReady]      = useState(false);
+  const [dbOnline,     setDbOnline]     = useState(false);
+  const [view,         setView]         = useState('dashboard');
+  const [sidebarOpen,  setSidebarOpen]  = useState(false);
 
   const [projects,    setProjects]    = useState(SEED_PROJECTS);
   const [matCats,     setMatCats]     = useState(SEED_MAT_CATEGORIES);
@@ -622,6 +623,7 @@ window.AppProvider = function AppProvider({ children }) {
   // ── Context value ────────────────────────────────────
   const value = useMemo(() => ({
     view, setView,
+    sidebarOpen, setSidebarOpen,
     session, userProfile, isAdmin, signOut, dbOnline, updateMyProfile,
     projects, addProject, deleteProject,
     matCats, addMatCat, updateMatCat, deleteMatCat,
@@ -634,7 +636,7 @@ window.AppProvider = function AppProvider({ children }) {
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
-  }), [view, session, userProfile, isAdmin, signOut, dbOnline,
+  }), [view, sidebarOpen, session, userProfile, isAdmin, signOut, dbOnline,
        projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, records, toasts, detailId, editingId,
        addRecord, updateRecord, deleteRecord, addProject, deleteProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
