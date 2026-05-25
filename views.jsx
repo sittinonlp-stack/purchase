@@ -2209,6 +2209,8 @@ function ExportReportModal({ open, onClose }) {
   const firstOfLastMon = () => { const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); };
   const lastOfLastMon  = () => { const d=new Date(); d.setDate(0); return d.toISOString().slice(0,10); };
   const minus3Mon      = () => { const d=new Date(); d.setMonth(d.getMonth()-3); return d.toISOString().slice(0,10); };
+  // วันจันทร์ต้นสัปดาห์ (ISO week starts Monday)
+  const firstOfWeek    = () => { const d=new Date(); const day=d.getDay(); const diff=day===0?-6:1-day; d.setDate(d.getDate()+diff); return d.toISOString().slice(0,10); };
 
   const [fromDate,        setFromDate]        = useState(firstOfMonth);
   const [toDate,          setToDate]          = useState(todayStr);
@@ -2217,6 +2219,8 @@ function ExportReportModal({ open, onClose }) {
   const [busy,            setBusy]            = useState(false);
 
   const PRESETS = [
+    { label:'วันนี้',          from:()=>todayStr(), to:()=>todayStr() },
+    { label:'สัปดาห์นี้',     from:firstOfWeek,    to:()=>todayStr() },
     { label:'เดือนนี้',       from:firstOfMonth,   to:()=>todayStr() },
     { label:'เดือนที่แล้ว',  from:firstOfLastMon, to:lastOfLastMon  },
     { label:'3 เดือนล่าสุด', from:minus3Mon,      to:()=>todayStr() },
