@@ -200,26 +200,7 @@ function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand" style={{ justifyContent: 'center', padding: '10px 12px 16px' }}>
-        <div style={{ background: '#fff', borderRadius: 12, padding: '8px 14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-          {/* FOR HOUSE inline SVG logo */}
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 170" width="130" height="111">
-            {/* Roof — green strokes */}
-            <line x1="100" y1="8" x2="12" y2="58" stroke="#1a5c2a" strokeWidth="14" strokeLinecap="square"/>
-            <line x1="100" y1="8" x2="188" y2="58" stroke="#1a5c2a" strokeWidth="14" strokeLinecap="square"/>
-            {/* F letter — green */}
-            <rect x="12"  y="58"  width="15" height="74" fill="#1a5c2a"/>
-            <rect x="12"  y="58"  width="58" height="13" fill="#1a5c2a"/>
-            <rect x="12"  y="106" width="43" height="12" fill="#1a5c2a"/>
-            {/* H letter — black */}
-            <rect x="106" y="58"  width="15" height="74" fill="#111111"/>
-            <rect x="173" y="58"  width="15" height="74" fill="#111111"/>
-            <rect x="106" y="106" width="82" height="12" fill="#111111"/>
-            {/* Text */}
-            <text x="100" y="156" fontFamily="'Arial Black',Arial,sans-serif" fontWeight="900" fontSize="21" textAnchor="middle">
-              <tspan fill="#1a5c2a">FOR </tspan><tspan fill="#111111">HOUSE</tspan>
-            </text>
-          </svg>
-        </div>
+        <img src="logo.png" alt="FOR HOUSE" style={{ width: 148, objectFit: 'contain' }} />
       </div>
 
       <div className="sidebar-scroll">
