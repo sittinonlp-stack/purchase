@@ -73,6 +73,7 @@ function Shell() {
   if (view === 'new-lump-labor') { title = 'ค่าแรงเหมาจ่าย'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-other')     { title = 'ค่าใช้จ่ายอื่นๆ'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'quick-receipt') { title = 'ถ่ายรูปใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
+  if (view === 'receipts')     { title = 'รูปถ่ายใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'history')      { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
   if (view === 'projects')     { title = 'โครงการ'; sub = 'จัดการโครงการ'; }
   if (view === 'categories')   { title = 'หมวดหมู่'; sub = 'จัดการหมวดหมู่'; }
@@ -129,6 +130,7 @@ function Shell() {
             />
           )}
           {view === 'quick-receipt' && <window.QuickReceiptView key={'qr-' + (app.editingId || 'new')} />}
+          {view === 'receipts'   && <window.ReceiptsView />}
           {view === 'history'    && <window.HistoryView />}
           {view === 'projects'   && <window.ProjectsView />}
           {view === 'categories' && <window.CategoriesView />}

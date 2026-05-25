@@ -587,7 +587,8 @@ window.HistoryView = function HistoryView() {
   const [sortKey, setSortKey] = useState('date-desc');
 
   const filtered = useMemo(() => {
-    let arr = app.records.slice();
+    // ไม่แสดง quick-receipt ที่นี่ — มี view ของตัวเองแล้ว
+    let arr = app.records.filter(r => r.type !== 'quick-receipt');
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
     if (q.trim()) {
@@ -628,13 +629,12 @@ window.HistoryView = function HistoryView() {
       <div className="card">
         <div className="filter-bar">
           <div className="tabs">
-            <button className={"tab" + (typeFilter === 'all' ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.length}</span></button>
+            <button className={"tab" + (typeFilter === 'all' ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type !== 'quick-receipt').length}</span></button>
             <button className={"tab" + (typeFilter === 'material' ? ' active' : '')} onClick={() => setTypeFilter('material')}><Icon name="cart" size={13} /> วัสดุ</button>
             <button className={"tab" + (typeFilter === 'machine' ? ' active' : '')} onClick={() => setTypeFilter('machine')}><Icon name="truck" size={13} /> เครื่องจักร</button>
             <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
             <button className={"tab" + (typeFilter === 'lump-labor' ? ' active' : '')} onClick={() => setTypeFilter('lump-labor')}><Icon name="clipboard" size={13} /> เหมาจ่าย</button>
             <button className={"tab" + (typeFilter === 'other' ? ' active' : '')} onClick={() => setTypeFilter('other')}><Icon name="sparkle" size={13} /> อื่นๆ</button>
-            <button className={"tab" + (typeFilter === 'quick-receipt' ? ' active' : '')} onClick={() => setTypeFilter('quick-receipt')}><Icon name="camera" size={13} /> บิลด่วน</button>
           </div>
           <div className="topbar-search" style={{ width: 280, margin: 0 }}>
             <Icon name="search" size={14} />
@@ -2529,6 +2529,7 @@ window.QuickReceiptView = function QuickReceiptView() {
 
   const [projectId, setProjectId] = useState(editRec?.projectId || app.projects[0]?.id || '');
   const [date,      setDate]      = useState(editRec?.date || todayStr());
+  const [amount,    setAmount]    = useState(editRec?.items?.[0]?.price || 0);
   const [note,      setNote]      = useState(editRec?.note || '');
   const [images,    setImages]    = useState(editRec?.images || []);
 
@@ -2550,7 +2551,7 @@ window.QuickReceiptView = function QuickReceiptView() {
 
   const handleCancel = () => {
     if (app.editingId) app.setEditingId(null);
-    app.setView('history');
+    app.setView('receipts');
   };
 
   const handleSave = () => {
@@ -2558,10 +2559,15 @@ window.QuickReceiptView = function QuickReceiptView() {
     if (images.length === 0) return app.pushToast('กรุณาถ่ายรูปหรือเลือกรูปอย่างน้อย 1 รูป', 'warn');
 
     const ts = Date.now().toString(36).toUpperCase();
+    // เก็บจำนวนเงินเป็น item เดียว เพื่อให้ computeTotals คำนวณถูก
+    const amountNum = Number(amount) || 0;
     const patch = {
       type: 'quick-receipt',
       date, projectId, note, images,
-      items: [], docs: [], vendor: 'บิลด่วน',
+      items: amountNum > 0
+        ? [{ id: newId(), name: 'ยอดค่าใช้จ่าย', qty: 1, unit: 'รายการ', price: amountNum, categoryId: '' }]
+        : [],
+      docs: [], vendor: 'บิลด่วน',
       vatMode: 'exclusive', vatRate: 0,
       whtEnabled: false, whtRate: 0,
       advanceDeduction: 0, retentionDeduction: 0,
@@ -2577,7 +2583,7 @@ window.QuickReceiptView = function QuickReceiptView() {
       app.addRecord({ ...patch, docNo: `QR-${date.replace(/-/g, '')}-${ts}` });
       app.pushToast('บันทึกบิลด่วนแล้ว 📸');
     }
-    app.setView('history');
+    app.setView('receipts');
   };
 
   const isEditing = !!app.editingId;
@@ -2617,6 +2623,32 @@ window.QuickReceiptView = function QuickReceiptView() {
             <label className="field-label">วันที่</label>
             <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} />
           </div>
+        </div>
+
+        {/* Amount field */}
+        <div className="field">
+          <label className="field-label">จำนวนเงิน (ไม่บังคับ)</label>
+          <div style={{ position: 'relative' }}>
+            <span style={{
+              position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+              fontSize: 14, fontWeight: 600, color: 'var(--ink-3)', pointerEvents: 'none',
+            }}>฿</span>
+            <input
+              className="input mono"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={amount || ''}
+              onChange={e => setAmount(e.target.value)}
+              style={{ paddingLeft: 30 }}
+            />
+          </div>
+          {Number(amount) > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>
+              ยอด: <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(Number(amount))}</strong>
+            </div>
+          )}
         </div>
 
         {/* Camera zone */}
@@ -2733,5 +2765,141 @@ window.QuickReceiptView = function QuickReceiptView() {
         onChange={e => { if (e.target.files?.length) fromFiles(e.target.files); e.target.value = ''; }}
       />
     </div>
+  );
+};
+
+// ---- Receipts View (รูปถ่ายใบเสร็จ — แยกจาก History) ----
+window.ReceiptsView = function ReceiptsView() {
+  const app = window.useApp();
+  const [projFilter, setProjFilter] = useState('all');
+  const [sortKey,    setSortKey]    = useState('date-desc');
+
+  const receipts = useMemo(() => {
+    let arr = app.records.filter(r => r.type === 'quick-receipt');
+    if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    arr.sort((a, b) => {
+      if (sortKey === 'date-desc') return (b.date || '').localeCompare(a.date || '');
+      if (sortKey === 'date-asc')  return (a.date || '').localeCompare(b.date || '');
+      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
+      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
+      return 0;
+    });
+    return arr;
+  }, [app.records, projFilter, sortKey]);
+
+  const totalAmount  = receipts.reduce((s, r) => s + computeTotals(r).total, 0);
+  const totalPhotos  = receipts.reduce((s, r) => s + (r.images || []).length, 0);
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">รูปถ่ายใบเสร็จ</h1>
+          <div className="page-sub">บิลด่วนจากมือถือ — {receipts.length} รายการ · {totalPhotos} รูป</div>
+        </div>
+        <button className="btn btn-accent" onClick={() => app.setView('quick-receipt')}>
+          <Icon name="camera" size={14} stroke={1.75} /> ถ่ายรูปใหม่
+        </button>
+      </div>
+
+      {/* Stats */}
+      {receipts.length > 0 && (
+        <div className="stat-grid" style={{ marginBottom: 20 }}>
+          <div className="stat">
+            <div className="stat-label">รายการทั้งหมด</div>
+            <div className="stat-value mono">{fmtInt(receipts.length)}</div>
+            <div className="stat-icon" style={{ background:'rgba(14,165,233,0.1)', color:'#0ea5e9' }}>
+              <Icon name="receipt" size={18} />
+            </div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">ยอดรวมทั้งหมด</div>
+            <div className="stat-value mono">฿{fmt(totalAmount)}</div>
+            <div className="stat-icon" style={{ background:'rgba(14,165,233,0.1)', color:'#0ea5e9' }}>
+              <Icon name="money" size={18} />
+            </div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">รูปถ่ายทั้งหมด</div>
+            <div className="stat-value mono">{fmtInt(totalPhotos)}</div>
+            <div className="stat-icon" style={{ background:'rgba(14,165,233,0.1)', color:'#0ea5e9' }}>
+              <Icon name="image" size={18} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter bar */}
+      <div className="filter-bar" style={{ marginBottom: 16 }}>
+        <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
+          <option value="all">ทุกโครงการ</option>
+          {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select className="select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
+          <option value="date-desc">วันที่ ใหม่ → เก่า</option>
+          <option value="date-asc">วันที่ เก่า → ใหม่</option>
+          <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
+          <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
+        </select>
+        <div className="spacer" />
+        <div className="text-small text-muted">
+          พบ <strong className="mono" style={{ color:'var(--ink-1)' }}>{receipts.length}</strong> รายการ
+          {totalAmount > 0 && <> · ฿<strong className="mono" style={{ color:'var(--ink-1)' }}>{fmt(totalAmount)}</strong></>}
+        </div>
+      </div>
+
+      {/* Empty state */}
+      {receipts.length === 0 ? (
+        <div className="empty">
+          <div className="empty-illust" style={{ color:'#0ea5e9' }}><Icon name="camera" size={32} /></div>
+          <div className="empty-title">ยังไม่มีรูปถ่ายใบเสร็จ</div>
+          <div className="empty-sub">กดปุ่มกล้องด้านล่างขวา หรือกด "ถ่ายรูปใหม่" เพื่อบันทึกบิลด่วน</div>
+          <button className="btn btn-accent" style={{ marginTop:16 }} onClick={() => app.setView('quick-receipt')}>
+            <Icon name="camera" size={14} /> ถ่ายรูปใหม่
+          </button>
+        </div>
+      ) : (
+        /* Card grid */
+        <div className="receipts-grid">
+          {receipts.map(r => {
+            const proj  = app.projects.find(p => p.id === r.projectId);
+            const total = computeTotals(r).total;
+            const imgs  = r.images || [];
+            const thumb = imgs[0];
+
+            return (
+              <div key={r.id} className="receipt-card" onClick={() => app.setDetailId(r.id)}>
+                {/* Thumbnail */}
+                <div className="rc-photo">
+                  {thumb
+                    ? <img src={thumb.dataUrl || thumb} alt="ใบเสร็จ" />
+                    : <div className="rc-no-photo"><Icon name="camera" size={26} stroke={1.25} /></div>}
+                  {imgs.length > 1 && (
+                    <span className="rc-count">+{imgs.length - 1}</span>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="rc-info">
+                  <div className="rc-date">{fmtDate(r.date)}</div>
+                  {proj && (
+                    <div className="rc-proj">
+                      <span style={{ width:7, height:7, borderRadius:'50%', background:proj.color, display:'inline-block', flexShrink:0 }} />
+                      <span className="rc-proj-name">{proj.name}</span>
+                    </div>
+                  )}
+                  {total > 0 ? (
+                    <div className="rc-amount">฿{fmt(total)}</div>
+                  ) : (
+                    <div className="rc-amount-none">ไม่ระบุยอด</div>
+                  )}
+                  {r.note && <div className="rc-note">{r.note}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 };

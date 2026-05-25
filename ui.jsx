@@ -249,7 +249,15 @@ function Sidebar() {
           <div className="nav-section-label">เรียกดู</div>
           <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => go('history')}>
             <Icon name="history" /> ประวัติทั้งหมด
-            <span className="badge">{records.length}</span>
+            <span className="badge">{records.filter(r => r.type !== 'quick-receipt').length}</span>
+          </button>
+          <button className={"nav-item nav-item--quick" + (view === 'receipts' ? " active" : "")} onClick={() => go('receipts')}>
+            <Icon name="camera" /> รูปถ่ายใบเสร็จ
+            {records.filter(r => r.type === 'quick-receipt').length > 0 && (
+              <span className="badge" style={{ background:'rgba(14,165,233,0.15)', color:'#0ea5e9', border:'1px solid rgba(14,165,233,0.3)' }}>
+                {records.filter(r => r.type === 'quick-receipt').length}
+              </span>
+            )}
           </button>
           <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => go('deposits')}
             style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>
