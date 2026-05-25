@@ -60,6 +60,75 @@ window.DashboardView = function DashboardView() {
   ), [app.records]);
   const pendingDepositTotal = pendingDeposits.reduce((s, r) => s + Number(r.depositAmount), 0);
 
+  // ── Daily / Weekly summary ────────────────────────────
+  const [periodTab, setPeriodTab] = useState('weekly');
+
+  const daily = useMemo(() => {
+    const DAY = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+    const todayKey = todayStr();
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      days.push({ key, label: key === todayKey ? 'วันนี้' : DAY[d.getDay()],
+        isToday: key === todayKey, mat: 0, mach: 0, labor: 0, count: 0 });
+    }
+    app.records.forEach(r => {
+      const d = days.find(x => x.key === r.date); if (!d) return;
+      const total = computeTotals(r).total;
+      if (r.type === 'material') d.mat += total;
+      else if (r.type === 'machine') d.mach += total;
+      else if (r.type === 'labor' || r.type === 'lump-labor') d.labor += total;
+      d.count++;
+    });
+    return days;
+  }, [app.records]);
+
+  const weekly = useMemo(() => {
+    const today = new Date();
+    const weeks = [];
+    for (let i = 3; i >= 0; i--) {
+      const ref = new Date(today); ref.setDate(today.getDate() - i * 7);
+      const dow = ref.getDay();
+      const mon = new Date(ref); mon.setDate(ref.getDate() - (dow === 0 ? 6 : dow - 1));
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      const start = mon.toISOString().slice(0, 10);
+      const end   = sun.toISOString().slice(0, 10);
+      weeks.push({ start, end, isCurrentWeek: i === 0, mat: 0, mach: 0, labor: 0, count: 0,
+        label: i === 0 ? 'สัปดาห์นี้'
+          : `${mon.getDate()} ${mon.toLocaleDateString('th-TH', { month: 'short' })}` });
+    }
+    app.records.forEach(r => {
+      if (!r.date) return;
+      const w = weeks.find(x => r.date >= x.start && r.date <= x.end); if (!w) return;
+      const total = computeTotals(r).total;
+      if (r.type === 'material') w.mat += total;
+      else if (r.type === 'machine') w.mach += total;
+      else if (r.type === 'labor' || r.type === 'lump-labor') w.labor += total;
+      w.count++;
+    });
+    return weeks;
+  }, [app.records]);
+
+  const periodData = periodTab === 'daily' ? daily : weekly;
+  const periodMax  = Math.max(1, ...periodData.map(d => d.mat + d.mach + d.labor));
+  const periodSum  = periodData.reduce(
+    (a, d) => ({ total: a.total + d.mat + d.mach + d.labor,
+      mat: a.mat + d.mat, mach: a.mach + d.mach,
+      labor: a.labor + d.labor, count: a.count + d.count }),
+    { total: 0, mat: 0, mach: 0, labor: 0, count: 0 }
+  );
+
+  // Records inside the highlighted period (today / this week)
+  const focusRecords = useMemo(() => {
+    if (periodTab === 'daily') {
+      const today = todayStr();
+      return app.records.filter(r => r.date === today);
+    }
+    const cur = weekly[weekly.length - 1];
+    return app.records.filter(r => r.date >= cur.start && r.date <= cur.end);
+  }, [periodTab, app.records, weekly]);
+
   return (
     <>
       <div className="page-header">
@@ -149,6 +218,186 @@ window.DashboardView = function DashboardView() {
         </div>
       </div>
 
+      {/* ── Daily / Weekly Summary Card ── */}
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">สรุปยอดจัดซื้อ</div>
+            <div className="card-sub">{periodTab === 'daily' ? '7 วันล่าสุด' : '4 สัปดาห์ล่าสุด'}</div>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:20 }}>
+            {/* Legend */}
+            <div className="row gap-14" style={{ fontSize:11.5, color:'var(--ink-3)' }}>
+              <span className="row gap-5"><span style={{ width:10,height:10,borderRadius:2,background:'var(--accent)',display:'inline-block' }}></span>วัสดุ</span>
+              <span className="row gap-5"><span style={{ width:10,height:10,borderRadius:2,background:'oklch(0.55 0.16 235)',display:'inline-block' }}></span>เครื่องจักร</span>
+              <span className="row gap-5"><span style={{ width:10,height:10,borderRadius:2,background:'oklch(0.55 0.14 290)',display:'inline-block' }}></span>ค่าแรง</span>
+            </div>
+            {/* Period toggle */}
+            <div style={{ display:'flex', background:'var(--bg-2)', borderRadius:8, padding:3, gap:2 }}>
+              {[['daily','รายวัน'],['weekly','รายสัปดาห์']].map(([tab,lbl]) => (
+                <button key={tab} onClick={() => setPeriodTab(tab)} style={{
+                  padding:'5px 14px', border:'none', cursor:'pointer', borderRadius:6,
+                  fontSize:12, fontWeight:600, fontFamily:'inherit',
+                  background: periodTab===tab ? 'var(--surface)' : 'transparent',
+                  color:       periodTab===tab ? 'var(--ink-1)'   : 'var(--ink-3)',
+                  boxShadow:   periodTab===tab ? '0 1px 3px rgba(0,0,0,0.10)' : 'none',
+                  transition:'all .15s',
+                }}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="card-body">
+          {/* Mini stat pills */}
+          <div className="period-stats" style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:22 }}>
+            {[
+              { label:'ยอดรวม',      value:`฿${fmt(periodSum.total)}`,         color:'var(--accent)' },
+              { label:'จำนวนรายการ', value:`${fmtInt(periodSum.count)} บิล`,   color:'#64748b' },
+              { label:'วัสดุ',       value:`฿${fmt(periodSum.mat)}`,            color:'var(--accent)' },
+              { label:'เครื่องจักร', value:`฿${fmt(periodSum.mach)}`,           color:'oklch(0.55 0.16 235)' },
+              { label:'ค่าแรง',      value:`฿${fmt(periodSum.labor)}`,          color:'oklch(0.55 0.14 290)' },
+            ].map(s => (
+              <div key={s.label} style={{ padding:'12px 14px', background:'var(--bg-2)',
+                borderRadius:10, border:'1px solid var(--line)' }}>
+                <div style={{ fontSize:11, color:'var(--ink-3)', marginBottom:4 }}>{s.label}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:s.color,
+                  fontFamily:'var(--mono)', letterSpacing:'-0.3px', whiteSpace:'nowrap',
+                  overflow:'hidden', textOverflow:'ellipsis' }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Stacked bar chart */}
+          <div className="bar-chart" style={{ height:148 }}>
+            {periodData.map(d => {
+              const total  = d.mat + d.mach + d.labor;
+              const totalH = (total / periodMax) * 100;
+              const matH   = total ? (d.mat   / total) * totalH : 0;
+              const machH  = total ? (d.mach  / total) * totalH : 0;
+              const laborH = total ? (d.labor / total) * totalH : 0;
+              const isCur  = periodTab === 'daily' ? d.isToday : d.isCurrentWeek;
+              const barKey = d.key || d.start;
+              return (
+                <div key={barKey} className="bar-wrap" style={{ opacity: isCur ? 1 : 0.6 }}>
+                  <div style={{ width:'100%', maxWidth:42, display:'flex', flexDirection:'column',
+                    height:'100%', justifyContent:'flex-end', position:'relative' }}>
+                    {total > 0 && (
+                      <span className="bar-value" style={{ fontSize:9.5 }}>
+                        {total >= 1000000 ? (total/1000000).toFixed(1)+'M' : Math.round(total/1000)+'k'}
+                      </span>
+                    )}
+                    {total === 0
+                      ? <div style={{ height:3, borderRadius:3, background:'var(--line)', marginBottom:1 }}></div>
+                      : <>
+                          <div className="bar labor" style={{ height:laborH+'%',
+                            background:'linear-gradient(180deg,oklch(0.72 0.14 290),oklch(0.55 0.14 290))',
+                            borderRadius:(matH+machH)>0?'0':'6px 6px 0 0' }} />
+                          <div className="bar alt" style={{ height:machH+'%',
+                            borderRadius:matH>0?'0':(laborH>0?'0':'6px 6px 0 0') }} />
+                          <div className="bar" style={{ height:matH+'%', borderRadius:'6px 6px 0 0',
+                            filter:isCur?'brightness(1.12)':'' }} />
+                        </>
+                    }
+                  </div>
+                  <span className="bar-label" style={{
+                    fontWeight: isCur ? 700 : 400,
+                    color:      isCur ? 'var(--ink-1)' : 'var(--ink-3)',
+                    fontSize:   isCur ? 11.5 : 11,
+                  }}>{d.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Records for the focused period (today / this week) */}
+          <div style={{ marginTop:20, paddingTop:16, borderTop:'1px solid var(--line)' }}>
+            <div style={{ fontSize:12, fontWeight:600, color:'var(--ink-2)', marginBottom:10 }}>
+              {periodTab === 'daily' ? 'บิลวันนี้' : 'บิลสัปดาห์นี้'}
+              {focusRecords.length > 0 && (
+                <span style={{ marginLeft:8, fontWeight:400, color:'var(--ink-3)' }}>
+                  ({focusRecords.length} รายการ — ฿{fmt(focusRecords.reduce((s,r)=>s+computeTotals(r).total,0))})
+                </span>
+              )}
+            </div>
+
+            {focusRecords.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'18px 0', color:'var(--ink-4)', fontSize:13 }}>
+                ไม่มีรายการ{periodTab === 'daily' ? 'วันนี้' : 'สัปดาห์นี้'}
+              </div>
+            ) : (
+              <>
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {focusRecords.slice(0,6).map(r => {
+                    const proj  = app.projects.find(p => p.id === r.projectId);
+                    const total = computeTotals(r).total;
+                    const typeColor = r.type === 'material' ? 'var(--accent)' :
+                                      r.type === 'machine'  ? 'oklch(0.55 0.16 235)' :
+                                      'oklch(0.55 0.14 290)';
+                    const typeLabel = r.type === 'material' ? 'วัสดุ' :
+                                      r.type === 'machine'  ? 'เครื่องจักร' :
+                                      r.type === 'lump-labor' ? 'เหมาจ่าย' : 'ค่าแรง';
+                    return (
+                      <div key={r.id}
+                        onClick={() => app.setDetailId(r.id)}
+                        style={{ display:'flex', alignItems:'center', gap:12,
+                          padding:'10px 14px', borderRadius:9, border:'1px solid var(--line)',
+                          cursor:'pointer', transition:'background .12s' }}
+                        onMouseEnter={e => e.currentTarget.style.background='var(--bg-2)'}
+                        onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                        {/* Type dot */}
+                        <span style={{ width:8, height:8, borderRadius:'50%',
+                          background:typeColor, flexShrink:0 }}></span>
+                        {/* Doc no */}
+                        <span className="mono" style={{ fontSize:11.5, color:'var(--ink-3)',
+                          flexShrink:0, minWidth:100 }}>{r.docNo}</span>
+                        {/* Project + vendor */}
+                        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:1 }}>
+                          <span style={{ fontSize:13, fontWeight:500, overflow:'hidden',
+                            textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {r.vendor || '—'}
+                          </span>
+                          {proj && (
+                            <span style={{ fontSize:11, color:'var(--ink-3)', display:'flex',
+                              alignItems:'center', gap:4 }}>
+                              <span style={{ width:6, height:6, borderRadius:'50%',
+                                background:proj.color, display:'inline-block' }}></span>
+                              {proj.name}
+                            </span>
+                          )}
+                        </div>
+                        {/* Type badge */}
+                        <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px',
+                          borderRadius:20, flexShrink:0,
+                          background: r.type==='material' ? 'rgba(217,119,6,0.12)'
+                                    : r.type==='machine'  ? 'rgba(14,165,233,0.12)'
+                                    : 'rgba(124,58,237,0.12)',
+                          color:typeColor }}>
+                          {typeLabel}
+                        </span>
+                        {/* Amount */}
+                        <span className="mono" style={{ fontSize:13.5, fontWeight:700,
+                          color:'var(--ink-1)', flexShrink:0 }}>
+                          ฿{fmt(total)}
+                        </span>
+                        <Icon name="chevron" size={12} stroke={2} />
+                      </div>
+                    );
+                  })}
+                </div>
+                {focusRecords.length > 6 && (
+                  <button className="btn btn-ghost btn-sm"
+                    style={{ alignSelf:'center', margin:'10px auto 0', display:'flex' }}
+                    onClick={() => app.setView('history')}>
+                    ดูทั้งหมด {focusRecords.length} รายการ <Icon name="chevron" size={11} />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, marginTop: 18 }} className="dash-row">
         <div className="card">
           <div className="card-header">
@@ -228,6 +477,12 @@ window.DashboardView = function DashboardView() {
       <style>{`
         @media (max-width: 1100px) {
           .dash-row { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 860px) {
+          .period-stats { grid-template-columns: repeat(3,1fr) !important; }
+        }
+        @media (max-width: 600px) {
+          .period-stats { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
     </>
