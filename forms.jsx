@@ -7,10 +7,26 @@
 
 function ProjectPicker({ value, onChange, projects, onAdd }) {
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 300 });
+  const btnRef = useRef(null);
   const cur = projects.find((p) => p.id === value);
+
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom;
+      const dropH = Math.min(projects.length * 46 + 52, 340);
+      const top = spaceBelow < dropH && r.top > dropH ? r.top - dropH - 2 : r.bottom + 4;
+      setDropPos({ top, left: r.left, width: r.width });
+    }
+    setOpen(v => !v);
+  };
+
   return (
     <div style={{ position: 'relative' }}>
-      <button type="button" className="input" style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => setOpen(!open)}>
+      <button ref={btnRef} type="button" className="input"
+        style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+        onClick={handleToggle}>
         {cur ? (
           <>
             <span className="proj-chip-dot" style={{ background: cur.color }}></span>
@@ -25,38 +41,47 @@ function ProjectPicker({ value, onChange, projects, onAdd }) {
         <Icon name="chevron" size={14} stroke={2} />
       </button>
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 30,
-          background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10,
-          boxShadow: 'var(--shadow-lg)', overflow: 'hidden', maxHeight: 320, overflowY: 'auto'
-        }}>
-          {projects.map((p) => (
-            <button key={p.id} type="button"
-              onClick={() => { onChange(p.id); setOpen(false); }}
+        <>
+          {/* Transparent overlay — catches outside clicks */}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9990 }} onClick={() => setOpen(false)} />
+          {/* Dropdown — always on top via fixed + high z-index */}
+          <div style={{
+            position: 'fixed',
+            top: dropPos.top,
+            left: dropPos.left,
+            width: dropPos.width,
+            zIndex: 9999,
+            background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.22)', overflow: 'hidden', maxHeight: 340, overflowY: 'auto'
+          }}>
+            {projects.map((p) => (
+              <button key={p.id} type="button"
+                onClick={() => { onChange(p.id); setOpen(false); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                  padding: '10px 14px', border: 'none', background: 'transparent', cursor: 'pointer',
+                  fontSize: 13, textAlign: 'left', fontFamily: 'inherit'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-2)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <span className="proj-chip-dot" style={{ background: p.color }}></span>
+                <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 11 }}>{p.code}</span>
+                <span style={{ flex: 1 }}>{p.name}</span>
+                <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>{p.client}</span>
+              </button>
+            ))}
+            <button type="button" onClick={() => { setOpen(false); onAdd && onAdd(); }}
               style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                padding: '10px 14px', border: 'none', background: 'transparent', cursor: 'pointer',
-                fontSize: 13, textAlign: 'left', fontFamily: 'inherit'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-2)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-            >
-              <span className="proj-chip-dot" style={{ background: p.color }}></span>
-              <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 11 }}>{p.code}</span>
-              <span style={{ flex: 1 }}>{p.name}</span>
-              <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>{p.client}</span>
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                padding: '12px 14px', border: 'none', cursor: 'pointer',
+                background: 'var(--bg-2)', borderTop: '1px solid var(--line)', fontFamily: 'inherit',
+                fontSize: 13, color: 'var(--accent-ink)', fontWeight: 500
+              }}>
+              <Icon name="plus" size={14} /> เพิ่มโครงการใหม่
             </button>
-          ))}
-          <button type="button" onClick={() => { setOpen(false); onAdd && onAdd(); }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-              padding: '12px 14px', border: 'none', cursor: 'pointer',
-              background: 'var(--bg-2)', borderTop: '1px solid var(--line)', fontFamily: 'inherit',
-              fontSize: 13, color: 'var(--accent-ink)', fontWeight: 500
-            }}>
-            <Icon name="plus" size={14} /> เพิ่มโครงการใหม่
-          </button>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
