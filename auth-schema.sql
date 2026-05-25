@@ -125,6 +125,18 @@ CREATE POLICY "auth_update"  ON labor_categories FOR UPDATE TO authenticated USI
 CREATE POLICY "admin_delete" ON labor_categories FOR DELETE TO authenticated
   USING (public.get_user_role() = 'admin');
 
+-- LUMP LABOR CATEGORIES
+DROP POLICY IF EXISTS "anon_all"     ON lump_labor_categories;
+DROP POLICY IF EXISTS "auth_select"  ON lump_labor_categories;
+DROP POLICY IF EXISTS "auth_insert"  ON lump_labor_categories;
+DROP POLICY IF EXISTS "auth_update"  ON lump_labor_categories;
+DROP POLICY IF EXISTS "admin_delete" ON lump_labor_categories;
+CREATE POLICY "auth_select"  ON lump_labor_categories FOR SELECT TO authenticated USING (true);
+CREATE POLICY "auth_insert"  ON lump_labor_categories FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update"  ON lump_labor_categories FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "admin_delete" ON lump_labor_categories FOR DELETE TO authenticated
+  USING (public.get_user_role() = 'admin');
+
 -- WORKER TEAMS
 DROP POLICY IF EXISTS "anon_all"     ON worker_teams;
 DROP POLICY IF EXISTS "auth_select"  ON worker_teams;
