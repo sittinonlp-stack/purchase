@@ -153,7 +153,7 @@ window.DashboardView = function DashboardView() {
           <h1 className="page-title">แดชบอร์ด</h1>
           <div className="page-sub">ภาพรวมการจัดซื้อและการเช่าเครื่องจักรของทุกโครงการ</div>
         </div>
-        <div className="row gap-8">
+        <div className="row gap-8 dash-actions">
           <button className="btn btn-ghost" onClick={() => setExportOpen(true)}
             title="ส่งออกรายงาน Excel สำหรับผู้บริหาร">
             <Icon name="download" size={14} /> ส่งออกรายงาน
@@ -164,7 +164,7 @@ window.DashboardView = function DashboardView() {
           <button className="btn btn-ghost" onClick={() => app.setView('new-machine')}>
             <Icon name="truck" size={14} /> เช่าเครื่องจักร
           </button>
-          <button className="btn btn-accent" onClick={() => app.setView('new-material')}>
+          <button className="btn btn-accent dash-accent" onClick={() => app.setView('new-material')}>
             <Icon name="plus" size={14} stroke={2.5} /> จัดซื้อวัสดุ
           </button>
         </div>
