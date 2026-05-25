@@ -561,6 +561,215 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
   );
 };
 
+// ---- OtherExpenseForm ----
+window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCancel }) {
+  const app = window.useApp();
+  const cats = app.otherCats || [];
+  const addCat = app.addOtherCat;
+
+  const blank = () => ({
+    type: 'other',
+    docNo: 'EX-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
+    date: todayStr(),
+    projectId: '',
+    vendor: '',
+    items: [{ id: newId(), name: '', categoryId: '', qty: 1, unit: 'รายการ', price: 0 }],
+    vatMode: 'exclusive',
+    vatRate: 7,
+    whtEnabled: false,
+    whtRate: 3,
+    docs: [],
+    note: '',
+    images: [],
+  });
+
+  const [form, setForm] = useState(() => initial ? { ...initial } : blank());
+  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [projModalOpen, setProjModalOpen] = useState(false);
+
+  const totals = useMemo(() => computeTotals(form), [form]);
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const toggleDoc = (id) => set({ docs: form.docs.includes(id) ? form.docs.filter(d => d !== id) : [...form.docs, id] });
+
+  const handleSubmit = () => {
+    if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
+    if (!form.vendor.trim()) return app.pushToast('โปรดระบุชื่อผู้รับเงิน / ผู้ให้บริการ', 'error');
+    if (!form.items.some(it => it.name.trim() && Number(it.qty) > 0)) return app.pushToast('โปรดเพิ่มรายการอย่างน้อย 1 รายการ', 'error');
+    onSubmit(form);
+  };
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">บันทึกค่าใช้จ่ายอื่นๆ</h1>
+          <div className="page-sub">ค่าออกแบบ ค่าเดินทาง ค่าสาธารณูปโภค หรือรายจ่ายอื่นๆ ที่ไม่ใช่วัสดุ/เครื่องจักร/ค่าแรง</div>
+        </div>
+        <div className="row gap-8">
+          <button className="btn btn-ghost" onClick={onCancel}><Icon name="x" size={14} /> ยกเลิก</button>
+          <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึกรายการ</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }} className="form-layout">
+        {/* Left column */}
+        <div className="col gap-16">
+          {/* Card 1: header */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">ข้อมูลเอกสาร</div>
+                <div className="card-sub">เลขที่เอกสาร โครงการ และผู้รับเงิน</div>
+              </div>
+              <span className="badge" style={{ background:'rgba(99,102,241,0.15)', color:'#6366f1', border:'1px solid rgba(99,102,241,0.3)' }}>ค่าใช้จ่ายอื่นๆ</span>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label">เลขที่เอกสาร <span className="req">*</span></label>
+                  <input className="input mono" value={form.docNo} onChange={(e) => set({ docNo: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">วันที่ <span className="req">*</span></label>
+                  <input className="input" type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">โครงการ <span className="req">*</span></label>
+                  <ProjectPicker value={form.projectId} onChange={(v) => set({ projectId: v })} projects={app.projects} onAdd={() => setProjModalOpen(true)} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">ผู้รับเงิน / ผู้ให้บริการ <span className="req">*</span></label>
+                  <input className="input" placeholder="เช่น บจก. ออกแบบสถาปัตย์, ค่าน้ำ-ไฟ, ค่าเดินทาง" value={form.vendor} onChange={(e) => set({ vendor: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: items */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รายการค่าใช้จ่าย</div>
+                <div className="card-sub">ระบุรายการ หมวดหมู่ จำนวน และราคา</div>
+              </div>
+              <span className="badge gray mono">{form.items.length} รายการ</span>
+            </div>
+            <div className="card-body">
+              <ItemsTable items={form.items} setItems={(items) => set({ items })} cats={cats} onAddCat={() => setCatModalOpen(true)} type="other" />
+            </div>
+          </div>
+
+          {/* Card 3: docs + tax */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">เอกสาร และภาษี</div>
+                <div className="card-sub">เลือกเอกสารที่ต้องออก พร้อมเงื่อนไข Vat และหัก ณ ที่จ่าย</div>
+              </div>
+            </div>
+            <div className="card-body col gap-20">
+              <div className="field">
+                <label className="field-label"><Icon name="receipt" size={14} /> เอกสารที่ต้องออก (เลือกได้หลายรายการ)</label>
+                <DocTypeRow selected={form.docs} onToggle={toggleDoc} />
+              </div>
+              <div className="field">
+                <label className="field-label"><Icon name="money" size={14} /> เงื่อนไข Vat</label>
+                <VatModeRow value={form.vatMode} onChange={(v) => set({ vatMode: v })} />
+                <div className="row gap-8 mt-12">
+                  <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา Vat</span>
+                  <div className="input-affix" style={{ width: 110 }}>
+                    <input className="input mono" type="number" step="0.5" value={form.vatRate} onChange={(e) => set({ vatRate: e.target.value })} />
+                    <div className="input-affix-suffix">%</div>
+                  </div>
+                </div>
+              </div>
+              <div className="field">
+                <label className="field-label"><Icon name="percent" size={14} /> หัก ณ ที่จ่าย</label>
+                <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <Switch on={form.whtEnabled} onChange={(v) => set({ whtEnabled: v })}
+                      label={form.whtEnabled ? 'เปิดใช้งานหัก ณ ที่จ่าย' : 'ไม่หัก ณ ที่จ่าย'}
+                      sub={form.whtEnabled ? 'คำนวณจากยอดก่อน Vat โดยอัตโนมัติ' : 'แตะเพื่อเปิดใช้งาน'} />
+                  </div>
+                  {form.whtEnabled && (
+                    <div className="col" style={{ minWidth: 220 }}>
+                      <div className="field-label" style={{ fontSize: 11.5 }}>อัตราหัก ณ ที่จ่าย</div>
+                      <div className="option-row">
+                        {[1, 2, 3, 5].map((r) => (
+                          <OptionPill key={r} mode="radio" selected={Number(form.whtRate) === r} onClick={() => set({ whtRate: r })}>
+                            <span className="mono">{r}%</span>
+                          </OptionPill>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: images + note */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รูปภาพและหมายเหตุ</div>
+                <div className="card-sub">แนบใบเสร็จ / ใบแจ้งหนี้ / รูปภาพประกอบ (สูงสุด 10 รูป)</div>
+              </div>
+            </div>
+            <div className="card-body col gap-16">
+              <ImageUploader images={form.images} onChange={(imgs) => set({ images: imgs })} max={10} />
+              <div className="field">
+                <label className="field-label">หมายเหตุ</label>
+                <textarea className="textarea" placeholder="เช่น ค่าออกแบบงวด 1, ค่าน้ำ-ไฟเดือน พ.ค." value={form.note} onChange={(e) => set({ note: e.target.value })} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: summary */}
+        <div style={{ position: 'sticky', top: 84 }}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">สรุปยอด</div>
+              <span className="badge amber dot">{form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
+            </div>
+            <div className="card-body">
+              <div className="summary-rows">
+                <div className="summary-row"><span className="label">ยอดก่อนภาษี</span><span className="value">{fmt(totals.subTotal)}</span></div>
+                <div className="summary-row"><span className="label">Vat {form.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>
+                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
+                  <span className="label">รวมก่อนหัก ณ ที่จ่าย</span><span className="value">{fmt(totals.beforeWht)}</span>
+                </div>
+                {form.whtEnabled && (
+                  <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>
+                )}
+                <div className="summary-row total"><span className="label">ยอดสุทธิ</span><span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span></div>
+              </div>
+              <div className="mt-20" style={{ padding: 14, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="sparkle" size={13} /> เคล็ดลับ
+                </div>
+                ใช้หมวด "ค่าสำรองจ่ายทั่วไป" สำหรับรายจ่ายเบ็ดเตล็ดที่ยังไม่มีหมวดชัดเจน — เพิ่มหมวดใหม่ได้ตลอดเวลา
+              </div>
+              <div className="row gap-8 mt-16">
+                <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
+                <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AddCategoryModal open={catModalOpen} onClose={() => setCatModalOpen(false)} onAdd={(c) => { addCat(c); app.pushToast('เพิ่มหมวดหมู่แล้ว'); setCatModalOpen(false); }} title="เพิ่มหมวดหมู่ค่าใช้จ่าย" />
+      <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
+
+      <style>{`
+        @media (max-width: 1100px) { .form-layout { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </>
+  );
+};
+
 // ---- Add category modal ----
 function AddCategoryModal({ open, onClose, onAdd, title }) {
   const [name, setName] = useState('');

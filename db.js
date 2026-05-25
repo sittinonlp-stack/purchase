@@ -144,6 +144,7 @@
         { data: machCats,    error: e3 },
         { data: labCats,     error: e4 },
         { data: lumpLabCats, error: e7 },
+        { data: otherCats,   error: e8 },
         { data: teams,       error: e5 },
         { data: recs,        error: e6 },
       ] = await Promise.all([
@@ -152,11 +153,12 @@
         client.from('machinery_categories').select('*').order('created_at'),
         client.from('labor_categories').select('*').order('created_at'),
         client.from('lump_labor_categories').select('*').order('created_at'),
+        client.from('other_categories').select('*').order('created_at'),
         client.from('worker_teams').select('*').order('created_at'),
         client.from('records').select('*, record_items(*), work_logs(*)').order('created_at', { ascending: false }),
       ]);
 
-      const firstErr = e1 || e2 || e3 || e4 || e7 || e5 || e6;
+      const firstErr = e1 || e2 || e3 || e4 || e7 || e8 || e5 || e6;
       if (firstErr) throw firstErr;
 
       return {
@@ -165,6 +167,7 @@
         machCats:        (machCats    || []).map(dbCat),
         laborCats:       (labCats     || []).map(dbCat),
         lumpLaborCats:   (lumpLabCats || []).map(dbCat),
+        otherCats:       (otherCats   || []).map(dbCat),
         workerTeams:     (teams       || []).map(dbTeam),
         records:         (recs        || []).map(dbRecord),
       };
@@ -230,6 +233,16 @@
     },
     async deleteLumpLaborCat(id) {
       const { error } = await window.supabaseClient.from('lump_labor_categories').delete().eq('id', id);
+      if (error) throw error;
+    },
+
+    // ── Other-expense categories ──────────────────
+    async insertOtherCat(c) {
+      const { error } = await window.supabaseClient.from('other_categories').insert(jsCat(c));
+      if (error) throw error;
+    },
+    async deleteOtherCat(id) {
+      const { error } = await window.supabaseClient.from('other_categories').delete().eq('id', id);
       if (error) throw error;
     },
 

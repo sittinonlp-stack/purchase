@@ -226,6 +226,9 @@ function Sidebar() {
         <button className={"nav-item" + (view === 'new-lump-labor' ? " active" : "")} onClick={() => setView('new-lump-labor')}>
           <Icon name="clipboard" /> ค่าแรงเหมาจ่าย
         </button>
+        <button className={"nav-item" + (view === 'new-other' ? " active" : "")} onClick={() => setView('new-other')}>
+          <Icon name="sparkle" /> ค่าใช้จ่ายอื่นๆ
+        </button>
 
         <div className="nav-section-label">เรียกดู</div>
         <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => setView('history')}>
@@ -523,8 +526,8 @@ function ProfileSettingsModal({ open, onClose }) {
 window.ProfileSettingsModal = ProfileSettingsModal;
 
 // ---- Global search helpers ----
-const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย' };
-const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a' };
+const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย', other: 'อื่นๆ' };
+const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a', other: '#6366f1' };
 
 // ---- Topbar ----
 function Topbar({ title, sub }) {

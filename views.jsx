@@ -14,9 +14,10 @@ window.DashboardView = function DashboardView() {
     const matCount = app.records.filter(r => r.type === 'material').length;
     const machCount = app.records.filter(r => r.type === 'machine').length;
     const laborCount = app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor').length;
+    const otherCount = app.records.filter(r => r.type === 'other').length;
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
     const retentionTotal = app.records.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
-    return { totalAmount, matCount, machCount, laborCount, whtTotal, retentionTotal };
+    return { totalAmount, matCount, machCount, laborCount, otherCount, whtTotal, retentionTotal };
   }, [app.records]);
 
   // by-project chart
@@ -46,10 +47,11 @@ window.DashboardView = function DashboardView() {
       if (r.type === 'material') m.mat += total;
       else if (r.type === 'machine') m.mach += total;
       else if (r.type === 'labor' || r.type === 'lump-labor') m.labor += total;
+      else if (r.type === 'other') m.other = (m.other || 0) + total;
     });
     return months;
   }, [app.records]);
-  const maxMonth = Math.max(1, ...monthly.map(m => m.mat + m.mach + m.labor));
+  const maxMonth = Math.max(1, ...monthly.map(m => m.mat + m.mach + m.labor + (m.other || 0)));
 
   const recent = app.records.slice(0, 5);
 
@@ -550,6 +552,8 @@ function RecordsTable({ records, onOpen }) {
                     ? <span className="badge blue dot">เครื่องจักร</span>
                     : r.type === 'lump-labor'
                     ? <span className="badge green dot">เหมาจ่าย</span>
+                    : r.type === 'other'
+                    ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>อื่นๆ</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
                 <td>
@@ -627,6 +631,7 @@ window.HistoryView = function HistoryView() {
             <button className={"tab" + (typeFilter === 'machine' ? ' active' : '')} onClick={() => setTypeFilter('machine')}><Icon name="truck" size={13} /> เครื่องจักร</button>
             <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
             <button className={"tab" + (typeFilter === 'lump-labor' ? ' active' : '')} onClick={() => setTypeFilter('lump-labor')}><Icon name="clipboard" size={13} /> เหมาจ่าย</button>
+            <button className={"tab" + (typeFilter === 'other' ? ' active' : '')} onClick={() => setTypeFilter('other')}><Icon name="sparkle" size={13} /> อื่นๆ</button>
           </div>
           <div className="topbar-search" style={{ width: 280, margin: 0 }}>
             <Icon name="search" size={14} />
@@ -812,6 +817,7 @@ window.CategoriesView = function CategoriesView() {
   const [machOpen, setMachOpen] = useState(false);
   const [laborOpen, setLaborOpen] = useState(false);
   const [lumpOpen, setLumpOpen] = useState(false);
+  const [otherOpen, setOtherOpen] = useState(false);
 
   const countByCat = useMemo(() => {
     const m = {};
@@ -836,7 +842,7 @@ window.CategoriesView = function CategoriesView() {
             <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="ลบ"
               onClick={() => {
                 if (countByCat[c.id]) { app.pushToast('ลบไม่ได้ — มีรายการใช้หมวดนี้อยู่', 'error'); return; }
-                const fn = which === 'mach' ? app.deleteMachCat : which === 'labor' ? app.deleteLaborCat : which === 'lump-labor' ? app.deleteLumpLaborCat : app.deleteMatCat;
+                const fn = which === 'mach' ? app.deleteMachCat : which === 'labor' ? app.deleteLaborCat : which === 'lump-labor' ? app.deleteLumpLaborCat : which === 'other' ? app.deleteOtherCat : app.deleteMatCat;
                 fn(c.id);
                 app.pushToast('ลบหมวดหมู่แล้ว');
               }}>
@@ -906,12 +912,25 @@ window.CategoriesView = function CategoriesView() {
           </div>
           <div className="card-body">{renderList(app.lumpLaborCats || [], 'lump-labor')}</div>
         </div>
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title"><Icon name="sparkle" size={14} /> หมวดค่าใช้จ่ายอื่นๆ</div>
+              <div className="card-sub">{(app.otherCats || []).length} หมวด</div>
+            </div>
+            <button className="btn btn-accent btn-sm" onClick={() => setOtherOpen(true)}>
+              <Icon name="plus" size={12} stroke={2.5} /> เพิ่ม
+            </button>
+          </div>
+          <div className="card-body">{renderList(app.otherCats || [], 'other')}</div>
+        </div>
       </div>
 
       <AddCategoryModal open={matOpen} onClose={() => setMatOpen(false)} onAdd={(c) => { app.addMatCat(c); app.pushToast('เพิ่มหมวดหมู่วัสดุแล้ว'); setMatOpen(false); }} title="เพิ่มหมวดหมู่วัสดุ" />
       <AddCategoryModal open={machOpen} onClose={() => setMachOpen(false)} onAdd={(c) => { app.addMachCat(c); app.pushToast('เพิ่มหมวดหมู่เครื่องจักรแล้ว'); setMachOpen(false); }} title="เพิ่มหมวดหมู่เครื่องจักร" />
       <AddCategoryModal open={laborOpen} onClose={() => setLaborOpen(false)} onAdd={(c) => { app.addLaborCat(c); app.pushToast('เพิ่มหมวดงานแล้ว'); setLaborOpen(false); }} title="เพิ่มหมวดงาน" />
       <AddCategoryModal open={lumpOpen} onClose={() => setLumpOpen(false)} onAdd={(c) => { app.addLumpLaborCat(c); app.pushToast('เพิ่มหมวดงานเหมาจ่ายแล้ว'); setLumpOpen(false); }} title="เพิ่มหมวดงานเหมาจ่าย" />
+      <AddCategoryModal open={otherOpen} onClose={() => setOtherOpen(false)} onAdd={(c) => { app.addOtherCat(c); app.pushToast('เพิ่มหมวดค่าใช้จ่ายแล้ว'); setOtherOpen(false); }} title="เพิ่มหมวดค่าใช้จ่ายอื่นๆ" />
 
       <style>{`
         @media (max-width: 1100px) {
@@ -1160,7 +1179,11 @@ window.DetailDrawer = function DetailDrawer() {
   if (!rec) return null;
   const proj = app.projects.find(p => p.id === rec.projectId);
   const isLaborType = rec.type === 'labor' || rec.type === 'lump-labor';
-  const cats = rec.type === 'machine' ? app.machCats : rec.type === 'lump-labor' ? (app.lumpLaborCats || []) : rec.type === 'labor' ? app.laborCats : app.matCats;
+  const cats = rec.type === 'machine' ? app.machCats
+    : rec.type === 'lump-labor' ? (app.lumpLaborCats || [])
+    : rec.type === 'labor' ? app.laborCats
+    : rec.type === 'other' ? (app.otherCats || [])
+    : app.matCats;
   const team = isLaborType ? app.workerTeams.find(t => t.id === rec.workerTeamId) : null;
   const totals = computeTotals(rec);
   const close = () => app.setDetailId(null);
@@ -1171,6 +1194,8 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge blue dot">เช่าเครื่องจักร</span>
     : rec.type === 'lump-labor'
     ? <span className="badge green dot">เหมาจ่าย</span>
+    : rec.type === 'other'
+    ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>ค่าใช้จ่ายอื่นๆ</span>
     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>บันทึกค่าแรง</span>;
 
   // Editable work logs inline (saves immediately via updateRecord)
@@ -1198,7 +1223,7 @@ window.DetailDrawer = function DetailDrawer() {
             )}
             <button className="btn btn-accent btn-sm" onClick={() => {
               app.setEditingId(rec.id);
-              const v = rec.type === 'machine' ? 'new-machine' : rec.type === 'labor' ? 'new-labor' : rec.type === 'lump-labor' ? 'new-lump-labor' : 'new-material';
+              const v = rec.type === 'machine' ? 'new-machine' : rec.type === 'labor' ? 'new-labor' : rec.type === 'lump-labor' ? 'new-lump-labor' : rec.type === 'other' ? 'new-other' : 'new-material';
               app.setView(v);
               close();
             }}><Icon name="edit" size={13} /> แก้ไข</button>
