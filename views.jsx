@@ -810,6 +810,47 @@ window.ProjectsView = function ProjectsView() {
   );
 };
 
+// ---- Edit category modal ----
+function EditCategoryModal({ open, onClose, cat, onSave }) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState('#d97706');
+  useEffect(() => {
+    if (open && cat) { setName(cat.name || ''); setColor(cat.color || '#d97706'); }
+  }, [open, cat]);
+  const colors = ['#d97706', '#dc2626', '#a855f7', '#0ea5e9', '#16a34a', '#eab308', '#64748b', '#a16207', '#ec4899', '#14b8a6'];
+  return (
+    <Modal open={open} onClose={onClose} title="แก้ไขหมวดหมู่"
+      footer={<>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={() => name.trim() && onSave({ name: name.trim(), color })}>
+          <Icon name="save" size={14} /> บันทึก
+        </button>
+      </>}>
+      <div className="col gap-16">
+        <div className="field">
+          <label className="field-label">ชื่อหมวดหมู่</label>
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && name.trim() && onSave({ name: name.trim(), color })} />
+        </div>
+        <div className="field">
+          <label className="field-label">สีประจำหมวด</label>
+          <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+            {colors.map((c) => (
+              <button key={c} type="button" onClick={() => setColor(c)} style={{
+                width: 32, height: 32, borderRadius: 8, background: c,
+                border: color === c ? '3px solid var(--ink-1)' : '2px solid transparent',
+                cursor: 'pointer', position: 'relative', display: 'grid', placeItems: 'center',
+              }}>
+                {color === c && <Icon name="check" size={14} stroke={2.5} />}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ---- Categories view ----
 window.CategoriesView = function CategoriesView() {
   const app = window.useApp();
@@ -818,12 +859,27 @@ window.CategoriesView = function CategoriesView() {
   const [laborOpen, setLaborOpen] = useState(false);
   const [lumpOpen, setLumpOpen] = useState(false);
   const [otherOpen, setOtherOpen] = useState(false);
+  // editCat: { cat, which } | null
+  const [editCat, setEditCat] = useState(null);
 
   const countByCat = useMemo(() => {
     const m = {};
     app.records.forEach(r => r.items.forEach(it => { if (it.categoryId) m[it.categoryId] = (m[it.categoryId] || 0) + 1; }));
     return m;
   }, [app.records]);
+
+  const handleSaveEdit = (patch) => {
+    if (!editCat) return;
+    const { cat, which } = editCat;
+    const fn = which === 'mach' ? app.updateMachCat
+      : which === 'labor' ? app.updateLaborCat
+      : which === 'lump-labor' ? app.updateLumpLaborCat
+      : which === 'other' ? app.updateOtherCat
+      : app.updateMatCat;
+    fn(cat.id, patch);
+    app.pushToast('แก้ไขหมวดหมู่แล้ว');
+    setEditCat(null);
+  };
 
   const renderList = (cats, which) => (
     <div className="col gap-8">
@@ -838,6 +894,11 @@ window.CategoriesView = function CategoriesView() {
           <span style={{ width: 14, height: 14, borderRadius: 4, background: c.color, flexShrink: 0 }}></span>
           <span style={{ flex: 1, fontWeight: 500, fontSize: 13.5 }}>{c.name}</span>
           <span className="badge gray mono">ใช้ {countByCat[c.id] || 0} ครั้ง</span>
+          {/* ปุ่มแก้ไข — ทุกคนกดได้ */}
+          <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="แก้ไข"
+            onClick={() => setEditCat({ cat: c, which })}>
+            <Icon name="edit" size={13} />
+          </button>
           {app.isAdmin && (
             <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="ลบ"
               onClick={() => {
@@ -931,6 +992,14 @@ window.CategoriesView = function CategoriesView() {
       <AddCategoryModal open={laborOpen} onClose={() => setLaborOpen(false)} onAdd={(c) => { app.addLaborCat(c); app.pushToast('เพิ่มหมวดงานแล้ว'); setLaborOpen(false); }} title="เพิ่มหมวดงาน" />
       <AddCategoryModal open={lumpOpen} onClose={() => setLumpOpen(false)} onAdd={(c) => { app.addLumpLaborCat(c); app.pushToast('เพิ่มหมวดงานเหมาจ่ายแล้ว'); setLumpOpen(false); }} title="เพิ่มหมวดงานเหมาจ่าย" />
       <AddCategoryModal open={otherOpen} onClose={() => setOtherOpen(false)} onAdd={(c) => { app.addOtherCat(c); app.pushToast('เพิ่มหมวดค่าใช้จ่ายแล้ว'); setOtherOpen(false); }} title="เพิ่มหมวดค่าใช้จ่ายอื่นๆ" />
+
+      {/* Edit category modal — shared across all category types */}
+      <EditCategoryModal
+        open={!!editCat}
+        onClose={() => setEditCat(null)}
+        cat={editCat?.cat}
+        onSave={handleSaveEdit}
+      />
 
       <style>{`
         @media (max-width: 1100px) {

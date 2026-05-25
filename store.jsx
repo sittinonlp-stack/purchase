@@ -516,6 +516,11 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.insertMatCat(nc), 'insertMatCat');
   }, [dbOnline, dbSync]);
 
+  const updateMatCat = useCallback((id, patch) => {
+    setMatCats((cs) => cs.map((c) => c.id === id ? { ...c, ...patch } : c));
+    if (dbOnline) dbSync(window.db.updateMatCat(id, patch), 'updateMatCat');
+  }, [dbOnline, dbSync]);
+
   const deleteMatCat = useCallback((id) => {
     setMatCats((cs) => cs.filter((c) => c.id !== id));
     if (dbOnline) dbSync(window.db.deleteMatCat(id), 'deleteMatCat');
@@ -526,6 +531,11 @@ window.AppProvider = function AppProvider({ children }) {
     const nc = { ...c, id: newId() };
     setMachCats((cs) => [...cs, nc]);
     if (dbOnline) dbSync(window.db.insertMachCat(nc), 'insertMachCat');
+  }, [dbOnline, dbSync]);
+
+  const updateMachCat = useCallback((id, patch) => {
+    setMachCats((cs) => cs.map((c) => c.id === id ? { ...c, ...patch } : c));
+    if (dbOnline) dbSync(window.db.updateMachCat(id, patch), 'updateMachCat');
   }, [dbOnline, dbSync]);
 
   const deleteMachCat = useCallback((id) => {
@@ -540,6 +550,11 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.insertLaborCat(nc), 'insertLaborCat');
   }, [dbOnline, dbSync]);
 
+  const updateLaborCat = useCallback((id, patch) => {
+    setLaborCats((cs) => cs.map((c) => c.id === id ? { ...c, ...patch } : c));
+    if (dbOnline) dbSync(window.db.updateLaborCat(id, patch), 'updateLaborCat');
+  }, [dbOnline, dbSync]);
+
   const deleteLaborCat = useCallback((id) => {
     setLaborCats((cs) => cs.filter((c) => c.id !== id));
     if (dbOnline) dbSync(window.db.deleteLaborCat(id), 'deleteLaborCat');
@@ -552,6 +567,11 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.insertLumpLaborCat(nc), 'insertLumpLaborCat');
   }, [dbOnline, dbSync]);
 
+  const updateLumpLaborCat = useCallback((id, patch) => {
+    setLumpLaborCats((cs) => cs.map((c) => c.id === id ? { ...c, ...patch } : c));
+    if (dbOnline) dbSync(window.db.updateLumpLaborCat(id, patch), 'updateLumpLaborCat');
+  }, [dbOnline, dbSync]);
+
   const deleteLumpLaborCat = useCallback((id) => {
     setLumpLaborCats((cs) => cs.filter((c) => c.id !== id));
     if (dbOnline) dbSync(window.db.deleteLumpLaborCat(id), 'deleteLumpLaborCat');
@@ -562,6 +582,11 @@ window.AppProvider = function AppProvider({ children }) {
     const nc = { ...c, id: newId() };
     setOtherCats((cs) => [...cs, nc]);
     if (dbOnline) dbSync(window.db.insertOtherCat(nc), 'insertOtherCat');
+  }, [dbOnline, dbSync]);
+
+  const updateOtherCat = useCallback((id, patch) => {
+    setOtherCats((cs) => cs.map((c) => c.id === id ? { ...c, ...patch } : c));
+    if (dbOnline) dbSync(window.db.updateOtherCat(id, patch), 'updateOtherCat');
   }, [dbOnline, dbSync]);
 
   const deleteOtherCat = useCallback((id) => {
@@ -599,11 +624,11 @@ window.AppProvider = function AppProvider({ children }) {
     view, setView,
     session, userProfile, isAdmin, signOut, dbOnline, updateMyProfile,
     projects, addProject, deleteProject,
-    matCats, addMatCat, deleteMatCat,
-    machCats, addMachCat, deleteMachCat,
-    laborCats, addLaborCat, deleteLaborCat,
-    lumpLaborCats, addLumpLaborCat, deleteLumpLaborCat,
-    otherCats, addOtherCat, deleteOtherCat,
+    matCats, addMatCat, updateMatCat, deleteMatCat,
+    machCats, addMachCat, updateMachCat, deleteMachCat,
+    laborCats, addLaborCat, updateLaborCat, deleteLaborCat,
+    lumpLaborCats, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
+    otherCats, addOtherCat, updateOtherCat, deleteOtherCat,
     workerTeams, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
     records, addRecord, updateRecord, deleteRecord,
     toasts, pushToast,
@@ -612,9 +637,9 @@ window.AppProvider = function AppProvider({ children }) {
   }), [view, session, userProfile, isAdmin, signOut, dbOnline,
        projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, records, toasts, detailId, editingId,
        addRecord, updateRecord, deleteRecord, addProject, deleteProject,
-       addMatCat, deleteMatCat, addMachCat, deleteMachCat,
-       addLaborCat, deleteLaborCat, addLumpLaborCat, deleteLumpLaborCat,
-       addOtherCat, deleteOtherCat,
+       addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
+       addLaborCat, updateLaborCat, deleteLaborCat, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
+       addOtherCat, updateOtherCat, deleteOtherCat,
        addWorkerTeam, updateWorkerTeam, deleteWorkerTeam, pushToast, updateMyProfile]);
 
   // ── Render guards ─────────────────────────────────────

@@ -201,6 +201,10 @@
       const { error } = await window.supabaseClient.from('material_categories').insert(jsCat(c));
       if (error) throw error;
     },
+    async updateMatCat(id, patch) {
+      const { error } = await window.supabaseClient.from('material_categories').update(jsCat({ ...patch, id })).eq('id', id);
+      if (error) throw error;
+    },
     async deleteMatCat(id) {
       const { error } = await window.supabaseClient.from('material_categories').delete().eq('id', id);
       if (error) throw error;
@@ -209,6 +213,10 @@
     // ── Machinery categories ──────────────────────
     async insertMachCat(c) {
       const { error } = await window.supabaseClient.from('machinery_categories').insert(jsCat(c));
+      if (error) throw error;
+    },
+    async updateMachCat(id, patch) {
+      const { error } = await window.supabaseClient.from('machinery_categories').update(jsCat({ ...patch, id })).eq('id', id);
       if (error) throw error;
     },
     async deleteMachCat(id) {
@@ -221,6 +229,10 @@
       const { error } = await window.supabaseClient.from('labor_categories').insert(jsCat(c));
       if (error) throw error;
     },
+    async updateLaborCat(id, patch) {
+      const { error } = await window.supabaseClient.from('labor_categories').update(jsCat({ ...patch, id })).eq('id', id);
+      if (error) throw error;
+    },
     async deleteLaborCat(id) {
       const { error } = await window.supabaseClient.from('labor_categories').delete().eq('id', id);
       if (error) throw error;
@@ -231,6 +243,10 @@
       const { error } = await window.supabaseClient.from('lump_labor_categories').insert(jsCat(c));
       if (error) throw error;
     },
+    async updateLumpLaborCat(id, patch) {
+      const { error } = await window.supabaseClient.from('lump_labor_categories').update(jsCat({ ...patch, id })).eq('id', id);
+      if (error) throw error;
+    },
     async deleteLumpLaborCat(id) {
       const { error } = await window.supabaseClient.from('lump_labor_categories').delete().eq('id', id);
       if (error) throw error;
@@ -239,6 +255,10 @@
     // ── Other-expense categories ──────────────────
     async insertOtherCat(c) {
       const { error } = await window.supabaseClient.from('other_categories').insert(jsCat(c));
+      if (error) throw error;
+    },
+    async updateOtherCat(id, patch) {
+      const { error } = await window.supabaseClient.from('other_categories').update(jsCat({ ...patch, id })).eq('id', id);
       if (error) throw error;
     },
     async deleteOtherCat(id) {
