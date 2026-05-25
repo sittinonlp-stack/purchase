@@ -60,6 +60,8 @@ window.DashboardView = function DashboardView() {
   ), [app.records]);
   const pendingDepositTotal = pendingDeposits.reduce((s, r) => s + Number(r.depositAmount), 0);
 
+  const [exportOpen, setExportOpen] = useState(false);
+
   // ── Daily / Weekly summary ────────────────────────────
   const [periodTab, setPeriodTab] = useState('weekly');
 
@@ -137,6 +139,10 @@ window.DashboardView = function DashboardView() {
           <div className="page-sub">ภาพรวมการจัดซื้อและการเช่าเครื่องจักรของทุกโครงการ</div>
         </div>
         <div className="row gap-8">
+          <button className="btn btn-ghost" onClick={() => setExportOpen(true)}
+            title="ส่งออกรายงาน Excel สำหรับผู้บริหาร">
+            <Icon name="download" size={14} /> ส่งออกรายงาน
+          </button>
           <button className="btn btn-ghost" onClick={() => app.setView('new-labor')}>
             <Icon name="hammer" size={14} /> บันทึกค่าแรง
           </button>
@@ -473,6 +479,13 @@ window.DashboardView = function DashboardView() {
         </div>
         <RecordsTable records={recent} onOpen={(id) => app.setDetailId(id)} />
       </div>
+
+      {exportOpen && (
+        <ExportReportModal
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
 
       <style>{`
         @media (max-width: 1100px) {
@@ -1648,3 +1661,314 @@ window.UsersView = function UsersView() {
     </>
   );
 };
+
+// ============================================================
+// Export Report — Excel (SheetJS)
+// ============================================================
+
+function doExportExcel(records, projects, fromDate, toDate, projId) {
+  const XLSX = window.XLSX;
+  if (!XLSX) { alert('ไม่พบ SheetJS library — รีโหลดหน้าแล้วลองใหม่'); return; }
+
+  // Filter by date range + optional project
+  const filtered = records
+    .filter(r => {
+      if (!r.date || r.date < fromDate || r.date > toDate) return false;
+      if (projId && projId !== 'all' && r.projectId !== projId) return false;
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const getProj  = id => projects.find(p => p.id === id);
+  const typeLabel = t => t === 'material' ? 'วัสดุ/อุปกรณ์'
+    : t === 'machine' ? 'เช่าเครื่องจักร'
+    : t === 'lump-labor' ? 'ค่าแรงเหมาจ่าย' : 'ค่าแรงรายวัน';
+  const n = v => Number(v || 0);
+  const now = new Date().toLocaleString('th-TH', { dateStyle:'short', timeStyle:'short' });
+  const projName = projId && projId !== 'all'
+    ? (getProj(projId)?.name || 'ไม่ระบุ') : 'ทุกโครงการ';
+
+  const wb = XLSX.utils.book_new();
+
+  // ──────────────────────────────────────────
+  // Sheet 1: สรุปภาพรวม
+  // ──────────────────────────────────────────
+  const typeKeys = ['material', 'machine', 'labor', 'lump-labor'];
+  let grandNet = 0, grandSub = 0, grandVat = 0, grandWht = 0, grandCount = 0;
+
+  const typeRows = [];
+  typeKeys.forEach(t => {
+    const recs = filtered.filter(r => r.type === t);
+    if (!recs.length) return;
+    const tots = recs.map(r => computeTotals(r));
+    const sub = tots.reduce((s, x) => s + x.subTotal, 0);
+    const vat = tots.reduce((s, x) => s + x.vat, 0);
+    const wht = tots.reduce((s, x) => s + x.wht, 0);
+    const net = tots.reduce((s, x) => s + x.total, 0);
+    grandSub += sub; grandVat += vat; grandWht += wht;
+    grandNet += net; grandCount += recs.length;
+    typeRows.push([typeLabel(t), recs.length, sub, vat, wht, net]);
+  });
+
+  // By-project block
+  const byP = {};
+  filtered.forEach(r => {
+    if (!byP[r.projectId]) byP[r.projectId] = { mat:0, mach:0, labor:0, count:0 };
+    const tot = computeTotals(r).total;
+    if (r.type === 'material') byP[r.projectId].mat += tot;
+    else if (r.type === 'machine') byP[r.projectId].mach += tot;
+    else byP[r.projectId].labor += tot;
+    byP[r.projectId].count++;
+  });
+  const projRows = Object.entries(byP)
+    .map(([pid, v]) => {
+      const p = getProj(pid);
+      return [p?.name || 'ไม่ระบุโครงการ', p?.code || '', v.mat, v.mach, v.labor,
+        v.mat + v.mach + v.labor, v.count];
+    })
+    .sort((a, b) => b[5] - a[5]);
+
+  const rows1 = [
+    ['รายงานสรุปการจัดซื้อและต้นทุนโครงการก่อสร้าง'],
+    [`ช่วงเวลา: ${fromDate}  ถึง  ${toDate}     โครงการ: ${projName}`],
+    [`จำนวนรายการในรายงาน: ${filtered.length} รายการ     สร้างรายงานเมื่อ: ${now}`],
+    [],
+    ['สรุปยอดแยกตามประเภท'],
+    ['ประเภทรายการ', 'จำนวน (บิล)', 'ยอดก่อน VAT (฿)', 'VAT (฿)', 'หัก ณ ที่จ่าย (฿)', 'ยอดสุทธิ (฿)'],
+    ...typeRows,
+    ['รวมทั้งหมด', grandCount, grandSub, grandVat, grandWht, grandNet],
+    [],
+    ['สรุปยอดแยกตามโครงการ'],
+    ['ชื่อโครงการ', 'รหัส', 'วัสดุ (฿)', 'เครื่องจักร (฿)', 'ค่าแรง (฿)', 'รวม (฿)', 'จำนวน (บิล)'],
+    ...projRows,
+  ];
+
+  const ws1 = XLSX.utils.aoa_to_sheet(rows1);
+  ws1['!cols'] = [{ wch:36 },{ wch:12 },{ wch:18 },{ wch:14 },{ wch:18 },{ wch:18 },{ wch:12 }];
+  // Merge title cell
+  ws1['!merges'] = [{ s:{ r:0, c:0 }, e:{ r:0, c:5 } }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'สรุปภาพรวม');
+
+  // ──────────────────────────────────────────
+  // Sheet 2: รายการทั้งหมด
+  // ──────────────────────────────────────────
+  const rows2 = [
+    ['เลขที่บิล','วันที่','ประเภท','โครงการ','รหัสโครงการ',
+     'ผู้ขาย / ทีมช่าง','ยอดก่อน VAT (฿)','VAT (฿)',
+     'หัก ณ ที่จ่าย (฿)','หักมัดจำ (฿)','หักงวดงาน (฿)','ยอดสุทธิ (฿)','หมายเหตุ'],
+    ...filtered.map(r => {
+      const t = computeTotals(r);
+      const p = getProj(r.projectId);
+      return [
+        r.docNo, r.date, typeLabel(r.type),
+        p?.name || '—', p?.code || '—',
+        r.vendor || '—',
+        t.subTotal, t.vat, t.wht,
+        n(r.advanceDeduction), n(r.retentionDeduction),
+        t.total, r.note || '',
+      ];
+    }),
+  ];
+
+  const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+  ws2['!cols'] = [
+    { wch:16 },{ wch:12 },{ wch:18 },{ wch:30 },{ wch:14 },
+    { wch:24 },{ wch:16 },{ wch:12 },{ wch:16 },{ wch:14 },{ wch:14 },{ wch:16 },{ wch:30 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws2, 'รายการทั้งหมด');
+
+  // ──────────────────────────────────────────
+  // Sheet 3: สรุปรายสัปดาห์
+  // ──────────────────────────────────────────
+  const byWeek = {};
+  filtered.forEach(r => {
+    const d = new Date(r.date);
+    const dow = d.getDay();
+    const mon = new Date(d); mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+    const wk = mon.toISOString().slice(0, 10);
+    if (!byWeek[wk]) byWeek[wk] = { mat:0, mach:0, labor:0, count:0 };
+    const tot = computeTotals(r).total;
+    if (r.type === 'material') byWeek[wk].mat += tot;
+    else if (r.type === 'machine') byWeek[wk].mach += tot;
+    else byWeek[wk].labor += tot;
+    byWeek[wk].count++;
+  });
+
+  const rows3 = [
+    ['สัปดาห์ (วันจันทร์)', 'วัสดุ (฿)', 'เครื่องจักร (฿)', 'ค่าแรง (฿)', 'รวม (฿)', 'จำนวน (บิล)'],
+    ...Object.entries(byWeek)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([wk, v]) => [wk, v.mat, v.mach, v.labor, v.mat + v.mach + v.labor, v.count]),
+  ];
+
+  const ws3 = XLSX.utils.aoa_to_sheet(rows3);
+  ws3['!cols'] = [{ wch:20 },{ wch:16 },{ wch:16 },{ wch:16 },{ wch:16 },{ wch:12 }];
+  XLSX.utils.book_append_sheet(wb, ws3, 'สรุปรายสัปดาห์');
+
+  // Write file
+  XLSX.writeFile(wb, `รายงานจัดซื้อ_${fromDate}_${toDate}.xlsx`);
+}
+
+// ---- Export Report Modal ----
+function ExportReportModal({ open, onClose }) {
+  const app = window.useApp();
+
+  const firstOfMonth = () => {
+    const d = new Date(); d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  };
+  const firstOfYear = () => {
+    const d = new Date(); d.setMonth(0); d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  };
+  const firstOfLastMonth = () => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  };
+  const lastOfLastMonth = () => {
+    const d = new Date(); d.setDate(0);
+    return d.toISOString().slice(0, 10);
+  };
+  const minus3Months = () => {
+    const d = new Date(); d.setMonth(d.getMonth() - 3);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate,   setToDate]   = useState(todayStr);
+  const [projId,   setProjId]   = useState('all');
+  const [busy,     setBusy]     = useState(false);
+
+  const PRESETS = [
+    { label: 'เดือนนี้',       from: firstOfMonth,    to: () => todayStr() },
+    { label: 'เดือนที่แล้ว',  from: firstOfLastMonth, to: lastOfLastMonth },
+    { label: '3 เดือนล่าสุด', from: minus3Months,     to: () => todayStr() },
+    { label: 'ปีนี้',          from: firstOfYear,      to: () => todayStr() },
+  ];
+
+  // Preview: filtered count + total
+  const preview = useMemo(() => {
+    const recs = app.records.filter(r => {
+      if (!r.date || r.date < fromDate || r.date > toDate) return false;
+      if (projId !== 'all' && r.projectId !== projId) return false;
+      return true;
+    });
+    const total = recs.reduce((s, r) => s + computeTotals(r).total, 0);
+    return { count: recs.length, total };
+  }, [app.records, fromDate, toDate, projId]);
+
+  const handleExport = () => {
+    setBusy(true);
+    setTimeout(() => {
+      try {
+        doExportExcel(app.records, app.projects, fromDate, toDate, projId);
+        app.pushToast('ส่งออกรายงาน Excel สำเร็จ');
+        onClose();
+      } catch (e) {
+        console.error('[Export]', e);
+        app.pushToast('ส่งออกไม่สำเร็จ: ' + e.message, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }, 80); // give UI a tick to show busy state
+  };
+
+  const inputStyle = {
+    background: 'var(--bg-2)', border: '1px solid var(--line)',
+    borderRadius: 8, padding: '8px 12px', fontSize: 13,
+    color: 'var(--ink-1)', fontFamily: 'inherit', width: '100%',
+    outline: 'none', boxSizing: 'border-box',
+  };
+  const labelStyle = { fontSize: 12, color: 'var(--ink-3)', marginBottom: 5, display: 'block' };
+
+  return (
+    <window.Modal
+      open={open}
+      onClose={onClose}
+      title="ส่งออกรายงาน Excel"
+      width={520}
+      footer={
+        <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>ยกเลิก</button>
+          <button className="btn btn-accent" onClick={handleExport} disabled={busy || preview.count === 0}
+            style={{ gap:8 }}>
+            <Icon name="download" size={14} />
+            {busy ? 'กำลังสร้างไฟล์…' : `ส่งออก ${preview.count} รายการ`}
+          </button>
+        </div>
+      }>
+      <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+        {/* Preset pills */}
+        <div>
+          <div style={labelStyle}>ช่วงเวลาสำเร็จรูป</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {PRESETS.map(p => (
+              <button key={p.label}
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setFromDate(p.from()); setToDate(p.to()); }}
+                style={{ fontSize:12 }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Date range */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div>
+            <label style={labelStyle}>ตั้งแต่วันที่</label>
+            <input type="date" style={inputStyle} value={fromDate}
+              onChange={e => setFromDate(e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>ถึงวันที่</label>
+            <input type="date" style={inputStyle} value={toDate}
+              onChange={e => setToDate(e.target.value)} />
+          </div>
+        </div>
+
+        {/* Project filter */}
+        <div>
+          <label style={labelStyle}>โครงการ</label>
+          <select style={{ ...inputStyle, cursor:'pointer' }}
+            value={projId} onChange={e => setProjId(e.target.value)}>
+            <option value="all">ทุกโครงการ</option>
+            {app.projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Preview */}
+        <div style={{
+          padding:'14px 16px', borderRadius:10,
+          background: preview.count > 0 ? 'rgba(22,163,74,0.07)' : 'var(--bg-2)',
+          border: `1px solid ${preview.count > 0 ? 'rgba(22,163,74,0.25)' : 'var(--line)'}`,
+          display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
+        }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <Icon name="receipt" size={18} />
+            <div>
+              <div style={{ fontSize:13, fontWeight:600 }}>
+                {preview.count > 0 ? `${fmtInt(preview.count)} รายการที่จะส่งออก` : 'ไม่มีรายการในช่วงนี้'}
+              </div>
+              {preview.count > 0 && (
+                <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:2 }}>
+                  ยอดรวมสุทธิ ฿{fmt(preview.total)}
+                </div>
+              )}
+            </div>
+          </div>
+          {preview.count > 0 && (
+            <div style={{ fontSize:11, color:'var(--ink-3)', textAlign:'right', lineHeight:1.7 }}>
+              <div>📊 3 sheets:</div>
+              <div>สรุปภาพรวม · รายการทั้งหมด · รายสัปดาห์</div>
+            </div>
+          )}
+        </div>
+
+      </div>
+    </window.Modal>
+  );
+}
