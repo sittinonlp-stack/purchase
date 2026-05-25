@@ -793,19 +793,23 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
 // LumpLaborForm — ค่าแรงเหมาจ่าย (ตกลงราคาเป็นยอดรวม)
 // ============================================================
 
-// ---- Items table for lump-labor (no qty/unit — just lump price) ----
+// ---- Items table for lump-labor (with qty/unit like labor) ----
 function LumpLaborItemsTable({ items, setItems, cats, onAddCat }) {
   const updateItem = (id, patch) => setItems(items.map((i) => i.id === id ? { ...i, ...patch } : i));
   const removeItem = (id) => setItems(items.filter((i) => i.id !== id));
   const addItem = () => setItems([...items, { id: newId(), name: '', categoryId: '', qty: 1, unit: 'เหมา', price: 0 }]);
+  const units = ['เหมา', 'ตร.ม.', 'ตร.ว.', 'ม.', 'จุด', 'งวด', 'วัน', 'ชุด'];
   return (
     <div className="col gap-8" style={{ overflowX: 'auto' }}>
-      <table className="items-table" style={{ minWidth: 580 }}>
+      <table className="items-table" style={{ minWidth: 780 }}>
         <thead>
           <tr>
-            <th style={{ width: '50%' }}>รายการงานเหมา</th>
-            <th style={{ width: '24%' }}>หมวดงาน</th>
-            <th style={{ width: '22%' }} className="num">ราคาเหมา (฿)</th>
+            <th style={{ width: '36%' }}>รายการงานเหมา</th>
+            <th style={{ width: '17%' }}>หมวดงาน</th>
+            <th style={{ width: '8%' }} className="num">ปริมาณ</th>
+            <th style={{ width: '12%' }}>หน่วย</th>
+            <th style={{ width: '13%' }} className="num">ราคา/หน่วย (฿)</th>
+            <th style={{ width: '14%' }} className="num">รวม</th>
             <th style={{ width: 36 }}></th>
           </tr>
         </thead>
@@ -820,8 +824,19 @@ function LumpLaborItemsTable({ items, setItems, cats, onAddCat }) {
                 <window.CategorySelect value={it.categoryId} onChange={(v) => updateItem(it.id, { categoryId: v })} cats={cats} onAdd={onAddCat} placeholder="—" />
               </td>
               <td>
+                <input className="cell-input num" type="number" min="0" step="any" value={it.qty}
+                  onChange={(e) => updateItem(it.id, { qty: e.target.value })} />
+              </td>
+              <td>
+                <input className="cell-input" list="lump-labor-units" value={it.unit}
+                  onChange={(e) => updateItem(it.id, { unit: e.target.value })} />
+              </td>
+              <td>
                 <input className="cell-input num" type="number" min="0" step="any" value={it.price}
                   onChange={(e) => updateItem(it.id, { price: e.target.value })} />
+              </td>
+              <td className="num mono" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
+                {fmt(Number(it.qty || 0) * Number(it.price || 0))}
               </td>
               <td>
                 <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบ">
@@ -832,6 +847,7 @@ function LumpLaborItemsTable({ items, setItems, cats, onAddCat }) {
           ))}
         </tbody>
       </table>
+      <datalist id="lump-labor-units">{units.map(u => <option key={u} value={u} />)}</datalist>
       <button type="button" className="btn btn-ghost btn-sm" onClick={addItem} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
         <Icon name="plus" size={13} /> เพิ่มรายการเหมา
       </button>
@@ -892,7 +908,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
       <div className="page-header">
         <div>
           <h1 className="page-title">{isEditing ? 'แก้ไขรายการเหมาจ่าย' : 'บันทึกค่าแรงเหมาจ่าย'}</h1>
-          <div className="page-sub">ตกลงราคาเป็นยอดรวมต่องาน — ไม่ต้องแยกปริมาณหรือหน่วย</div>
+          <div className="page-sub">ตกลงราคาเป็นยอดรวมต่องาน — ระบุปริมาณ หน่วย และราคาต่อหน่วยได้</div>
         </div>
         <div className="row gap-8">
           <button className="btn btn-ghost" onClick={onCancel}><Icon name="x" size={14} /> ยกเลิก</button>
