@@ -1809,107 +1809,412 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
   XLSX.writeFile(wb, `รายงานจัดซื้อ_${fromDate}_${toDate}.xlsx`);
 }
 
+// ---- PDF export (print window) ----
+function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails) {
+  const filtered = records
+    .filter(r => {
+      if (!r.date || r.date < fromDate || r.date > toDate) return false;
+      if (projId && projId !== 'all' && r.projectId !== projId) return false;
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const getProj   = id => projects.find(p => p.id === id);
+  const typeLbl   = t => t==='material'?'วัสดุ/อุปกรณ์':t==='machine'?'เช่าเครื่องจักร':t==='lump-labor'?'ค่าแรงเหมาจ่าย':'ค่าแรงรายวัน';
+  const typeClr   = t => t==='material'?'#d97706':t==='machine'?'#0ea5e9':'#8b5cf6';
+  const typeBg    = t => t==='material'?'#fef3c7':t==='machine'?'#e0f2fe':'#ede9fe';
+  const fmtN      = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtI      = v => Number(v||0).toLocaleString('th-TH');
+  const fmtD      = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  const n         = v => Number(v||0);
+  const now       = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
+  const projName  = projId&&projId!=='all'?(getProj(projId)?.name||'ไม่ระบุ'):'ทุกโครงการ';
+
+  // ── Compute summaries ──
+  const typeKeys = ['material','machine','labor','lump-labor'];
+  let gSub=0, gVat=0, gWht=0, gNet=0;
+
+  const typeSummary = typeKeys.map(t => {
+    const recs = filtered.filter(r=>r.type===t);
+    if(!recs.length) return null;
+    const tots = recs.map(r=>computeTotals(r));
+    const sub=tots.reduce((s,x)=>s+x.subTotal,0);
+    const vat=tots.reduce((s,x)=>s+x.vat,0);
+    const wht=tots.reduce((s,x)=>s+x.wht,0);
+    const net=tots.reduce((s,x)=>s+x.total,0);
+    gSub+=sub; gVat+=vat; gWht+=wht; gNet+=net;
+    return {t,label:typeLbl(t),count:recs.length,sub,vat,wht,net};
+  }).filter(Boolean);
+
+  const byP = {};
+  filtered.forEach(r=>{
+    if(!byP[r.projectId]) byP[r.projectId]={mat:0,mach:0,labor:0,count:0};
+    const tot=computeTotals(r).total;
+    if(r.type==='material') byP[r.projectId].mat+=tot;
+    else if(r.type==='machine') byP[r.projectId].mach+=tot;
+    else byP[r.projectId].labor+=tot;
+    byP[r.projectId].count++;
+  });
+
+  const byWeek = {};
+  filtered.forEach(r=>{
+    const d=new Date(r.date+'T00:00:00');
+    const dow=d.getDay();
+    const mon=new Date(d); mon.setDate(d.getDate()-(dow===0?6:dow-1));
+    const wk=mon.toISOString().slice(0,10);
+    if(!byWeek[wk]) byWeek[wk]={mat:0,mach:0,labor:0,count:0,label:fmtD(wk)};
+    const tot=computeTotals(r).total;
+    if(r.type==='material') byWeek[wk].mat+=tot;
+    else if(r.type==='machine') byWeek[wk].mach+=tot;
+    else byWeek[wk].labor+=tot;
+    byWeek[wk].count++;
+  });
+
+  // ── HTML ──
+  const typeRows = typeSummary.map(s=>`
+    <tr>
+      <td><span class="badge" style="background:${typeBg(s.t)};color:${typeClr(s.t)}">${s.label}</span></td>
+      <td class="r">${fmtI(s.count)}</td>
+      <td class="r">฿${fmtN(s.sub)}</td>
+      <td class="r">฿${fmtN(s.vat)}</td>
+      <td class="r">฿${fmtN(s.wht)}</td>
+      <td class="r bold">฿${fmtN(s.net)}</td>
+    </tr>`).join('');
+
+  const projRows = Object.entries(byP)
+    .sort((a,b)=>(b[1].mat+b[1].mach+b[1].labor)-(a[1].mat+a[1].mach+a[1].labor))
+    .map(([pid,v])=>{
+      const p=getProj(pid);
+      const tot=v.mat+v.mach+v.labor;
+      const barW = gNet>0?Math.round((tot/gNet)*100):0;
+      return `<tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p?.color||'#999'};margin-right:7px"></span>${p?.name||'ไม่ระบุ'}</td>
+        <td class="mono">${p?.code||'—'}</td>
+        <td class="r">฿${fmtN(v.mat)}</td>
+        <td class="r">฿${fmtN(v.mach)}</td>
+        <td class="r">฿${fmtN(v.labor)}</td>
+        <td class="r bold">฿${fmtN(tot)}</td>
+        <td class="r">${fmtI(v.count)}</td>
+        <td style="padding:10px 14px;width:120px">
+          <div style="background:#f0ede8;border-radius:99px;height:6px">
+            <div style="height:6px;border-radius:99px;background:${p?.color||'#d97706'};width:${barW}%"></div>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+  const weekRows = Object.entries(byWeek)
+    .sort((a,b)=>a[0].localeCompare(b[0]))
+    .map(([,v],i)=>`
+      <tr class="${i%2===0?'alt':''}">
+        <td>${v.label}</td>
+        <td class="r">฿${fmtN(v.mat)}</td>
+        <td class="r">฿${fmtN(v.mach)}</td>
+        <td class="r">฿${fmtN(v.labor)}</td>
+        <td class="r bold">฿${fmtN(v.mat+v.mach+v.labor)}</td>
+        <td class="r">${fmtI(v.count)}</td>
+      </tr>`).join('');
+
+  const detailRows = !includeDetails ? '' : filtered.map((r,i)=>{
+    const p=getProj(r.projectId);
+    const tot=computeTotals(r).total;
+    return `<tr class="${i%2===0?'alt':''}">
+      <td class="mono" style="font-size:10px">${r.docNo}</td>
+      <td style="white-space:nowrap">${fmtD(r.date)}</td>
+      <td><span class="badge" style="background:${typeBg(r.type)};color:${typeClr(r.type)};font-size:9px">${typeLbl(r.type)}</span></td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p?.name||'—'}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.vendor||'—'}</td>
+      <td class="r bold">฿${fmtN(tot)}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="th"><head>
+<meta charset="UTF-8">
+<title>รายงานจัดซื้อ ${fromDate} – ${toDate}</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',sans-serif;font-size:12px;color:#1c1917;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4;margin:16mm 14mm}
+@media print{.no-print{display:none!important}.page-break{page-break-before:always}}
+
+/* Header */
+.report-header{background:#1c1917;color:#fff;padding:22px 28px;display:flex;justify-content:space-between;align-items:flex-start;border-radius:0}
+.logo{width:46px;height:46px;background:#d97706;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0}
+.header-left{display:flex;gap:16px;align-items:center}
+.header-title{font-size:18px;font-weight:700;letter-spacing:-0.3px;line-height:1.3}
+.header-sub{font-size:11px;color:#a8a29e;margin-top:3px}
+.header-right{text-align:right;font-size:11px;color:#a8a29e;line-height:2}
+.header-right strong{color:#fff;font-weight:600}
+
+/* KPI cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+.kpi{background:#fafaf9;border:1px solid #e7e5e4;border-radius:10px;padding:14px 16px}
+.kpi.accent{background:#d97706;border-color:#d97706;color:#fff}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.65;margin-bottom:6px}
+.kpi-value{font-size:17px;font-weight:700;letter-spacing:-0.5px;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:10px;margin-top:4px;opacity:.7}
+
+/* Sections */
+.section{margin:20px 0}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;border-left:4px solid #d97706;padding-left:10px}
+.section-title{font-size:13px;font-weight:700;letter-spacing:-.2px}
+.section-num{width:22px;height:22px;border-radius:6px;background:#d97706;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+thead tr{background:#292524;color:#fff}
+thead th{padding:9px 14px;text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.3px;white-space:nowrap}
+tbody td{padding:8.5px 14px;border-bottom:1px solid #f5f5f4;vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr.alt td{background:#fafaf9}
+tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-size:11.5px;border:none}
+.r{text-align:right;font-variant-numeric:tabular-nums}
+.bold{font-weight:700}
+.mono{font-family:'JetBrains Mono','Courier New',monospace;font-size:10.5px}
+.accent-text{color:#d97706}
+
+/* Badge */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+
+/* Footer */
+.report-footer{margin-top:28px;padding-top:14px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#78716c}
+
+/* Print button */
+.print-btn{background:#d97706;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-family:'Prompt',sans-serif;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
+.print-wrap{text-align:center;padding:24px;border-bottom:2px dashed #e7e5e4;margin-bottom:20px}
+</style></head><body>
+
+<div class="no-print print-wrap">
+  <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+  <p style="margin-top:10px;font-size:11px;color:#78716c">เลือก "บันทึกเป็น PDF" ในกล่องโต้ตอบการพิมพ์</p>
+</div>
+
+<!-- HEADER -->
+<div class="report-header">
+  <div class="header-left">
+    <div class="logo">จ</div>
+    <div>
+      <div class="header-title">รายงานสรุปการจัดซื้อโครงการก่อสร้าง</div>
+      <div class="header-sub">ระบบบันทึกการจัดซื้องานรับเหมา</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div>📅 ช่วงเวลา: <strong>${fmtD(fromDate)} – ${fmtD(toDate)}</strong></div>
+    <div>🏗 โครงการ: <strong>${projName}</strong></div>
+    <div>จำนวนรายการ: <strong>${filtered.length} บิล</strong></div>
+    <div>สร้างเมื่อ: <strong>${now}</strong></div>
+  </div>
+</div>
+
+<!-- KPI -->
+<div class="kpi-grid">
+  <div class="kpi accent">
+    <div class="kpi-label">ยอดจ่ายสุทธิรวม</div>
+    <div class="kpi-value">฿${fmtN(gNet)}</div>
+    <div class="kpi-sub">${filtered.length} รายการทั้งหมด</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">ยอดก่อน VAT</div>
+    <div class="kpi-value">฿${fmtN(gSub)}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">ภาษีมูลค่าเพิ่ม (VAT)</div>
+    <div class="kpi-value">฿${fmtN(gVat)}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">หัก ณ ที่จ่าย (WHT)</div>
+    <div class="kpi-value">฿${fmtN(gWht)}</div>
+  </div>
+</div>
+
+<!-- SECTION 1: By type -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <div class="section-title">สรุปยอดแยกตามประเภทรายการ</div>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:180px">ประเภทรายการ</th>
+      <th class="r" style="width:80px">จำนวน (บิล)</th>
+      <th class="r">ยอดก่อน VAT</th>
+      <th class="r">VAT</th>
+      <th class="r">หัก ณ ที่จ่าย</th>
+      <th class="r">ยอดสุทธิ</th>
+    </tr></thead>
+    <tbody>${typeRows}</tbody>
+    <tfoot><tr>
+      <td>รวมทั้งหมด</td>
+      <td class="r">${fmtI(filtered.length)}</td>
+      <td class="r">฿${fmtN(gSub)}</td>
+      <td class="r">฿${fmtN(gVat)}</td>
+      <td class="r">฿${fmtN(gWht)}</td>
+      <td class="r">฿${fmtN(gNet)}</td>
+    </tr></tfoot>
+  </table>
+</div>
+
+<!-- SECTION 2: By project -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <div class="section-title">สรุปยอดแยกตามโครงการ (เรียงจากสูงไปต่ำ)</div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>ชื่อโครงการ</th><th style="width:100px">รหัส</th>
+      <th class="r">วัสดุ</th><th class="r">เครื่องจักร</th>
+      <th class="r">ค่าแรง</th><th class="r">รวม</th>
+      <th class="r" style="width:50px">บิล</th>
+      <th style="width:130px">สัดส่วน</th>
+    </tr></thead>
+    <tbody>${projRows||'<tr><td colspan="8" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีข้อมูลโครงการ</td></tr>'}</tbody>
+  </table>
+</div>
+
+<!-- SECTION 3: By week -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <div class="section-title">แนวโน้มการจัดซื้อรายสัปดาห์</div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>สัปดาห์ (วันจันทร์)</th>
+      <th class="r">วัสดุ</th><th class="r">เครื่องจักร</th>
+      <th class="r">ค่าแรง</th><th class="r">รวม</th><th class="r">บิล</th>
+    </tr></thead>
+    <tbody>${weekRows||'<tr><td colspan="6" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีข้อมูล</td></tr>'}</tbody>
+  </table>
+</div>
+
+${includeDetails && filtered.length > 0 ? `
+<div class="page-break"></div>
+
+<!-- SECTION 4: All records -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <div class="section-title">รายการทั้งหมด (${filtered.length} รายการ)</div>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:110px">เลขที่บิล</th>
+      <th style="width:80px">วันที่</th>
+      <th style="width:120px">ประเภท</th>
+      <th>โครงการ</th><th>ผู้ขาย / ทีมช่าง</th>
+      <th class="r" style="width:120px">ยอดสุทธิ</th>
+    </tr></thead>
+    <tbody>${detailRows}</tbody>
+  </table>
+</div>` : ''}
+
+<!-- FOOTER -->
+<div class="report-footer">
+  <span>ระบบจัดซื้องานรับเหมาก่อสร้าง &nbsp;❖&nbsp; รายงานนี้สร้างโดยระบบอัตโนมัติ &nbsp;❖&nbsp; ${now}</span>
+  <span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span>
+</div>
+
+<script>
+  document.fonts && document.fonts.ready
+    ? document.fonts.ready.then(()=>setTimeout(()=>window.print(),400))
+    : setTimeout(()=>window.print(),1200);
+</script>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=960,height=750');
+  if (!win) { alert('กรุณาอนุญาต Popup ในเบราว์เซอร์เพื่อดูรายงาน PDF'); return; }
+  win.document.write(html);
+  win.document.close();
+}
+
 // ---- Export Report Modal ----
 function ExportReportModal({ open, onClose }) {
   const app = window.useApp();
 
-  const firstOfMonth = () => {
-    const d = new Date(); d.setDate(1);
-    return d.toISOString().slice(0, 10);
-  };
-  const firstOfYear = () => {
-    const d = new Date(); d.setMonth(0); d.setDate(1);
-    return d.toISOString().slice(0, 10);
-  };
-  const firstOfLastMonth = () => {
-    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
-    return d.toISOString().slice(0, 10);
-  };
-  const lastOfLastMonth = () => {
-    const d = new Date(); d.setDate(0);
-    return d.toISOString().slice(0, 10);
-  };
-  const minus3Months = () => {
-    const d = new Date(); d.setMonth(d.getMonth() - 3);
-    return d.toISOString().slice(0, 10);
-  };
+  const firstOfMonth   = () => { const d=new Date(); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfYear    = () => { const d=new Date(); d.setMonth(0); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfLastMon = () => { const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); };
+  const lastOfLastMon  = () => { const d=new Date(); d.setDate(0); return d.toISOString().slice(0,10); };
+  const minus3Mon      = () => { const d=new Date(); d.setMonth(d.getMonth()-3); return d.toISOString().slice(0,10); };
 
-  const [fromDate, setFromDate] = useState(firstOfMonth);
-  const [toDate,   setToDate]   = useState(todayStr);
-  const [projId,   setProjId]   = useState('all');
-  const [busy,     setBusy]     = useState(false);
+  const [fromDate,        setFromDate]        = useState(firstOfMonth);
+  const [toDate,          setToDate]          = useState(todayStr);
+  const [projId,          setProjId]          = useState('all');
+  const [includeDetails,  setIncludeDetails]  = useState(true);
+  const [busy,            setBusy]            = useState(false);
 
   const PRESETS = [
-    { label: 'เดือนนี้',       from: firstOfMonth,    to: () => todayStr() },
-    { label: 'เดือนที่แล้ว',  from: firstOfLastMonth, to: lastOfLastMonth },
-    { label: '3 เดือนล่าสุด', from: minus3Months,     to: () => todayStr() },
-    { label: 'ปีนี้',          from: firstOfYear,      to: () => todayStr() },
+    { label:'เดือนนี้',       from:firstOfMonth,   to:()=>todayStr() },
+    { label:'เดือนที่แล้ว',  from:firstOfLastMon, to:lastOfLastMon  },
+    { label:'3 เดือนล่าสุด', from:minus3Mon,      to:()=>todayStr() },
+    { label:'ปีนี้',          from:firstOfYear,    to:()=>todayStr() },
   ];
 
-  // Preview: filtered count + total
   const preview = useMemo(() => {
     const recs = app.records.filter(r => {
       if (!r.date || r.date < fromDate || r.date > toDate) return false;
       if (projId !== 'all' && r.projectId !== projId) return false;
       return true;
     });
-    const total = recs.reduce((s, r) => s + computeTotals(r).total, 0);
-    return { count: recs.length, total };
+    return { count: recs.length, total: recs.reduce((s,r)=>s+computeTotals(r).total,0) };
   }, [app.records, fromDate, toDate, projId]);
 
-  const handleExport = () => {
-    setBusy(true);
+  const run = (type) => {
+    setBusy(type);
     setTimeout(() => {
       try {
-        doExportExcel(app.records, app.projects, fromDate, toDate, projId);
-        app.pushToast('ส่งออกรายงาน Excel สำเร็จ');
-        onClose();
-      } catch (e) {
+        if (type === 'excel') {
+          doExportExcel(app.records, app.projects, fromDate, toDate, projId);
+          app.pushToast('ส่งออก Excel สำเร็จ');
+          onClose();
+        } else {
+          doExportPDF(app.records, app.projects, fromDate, toDate, projId, includeDetails);
+          app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
+          onClose();
+        }
+      } catch(e) {
         console.error('[Export]', e);
         app.pushToast('ส่งออกไม่สำเร็จ: ' + e.message, 'error');
-      } finally {
-        setBusy(false);
-      }
-    }, 80); // give UI a tick to show busy state
+      } finally { setBusy(false); }
+    }, 80);
   };
 
-  const inputStyle = {
-    background: 'var(--bg-2)', border: '1px solid var(--line)',
-    borderRadius: 8, padding: '8px 12px', fontSize: 13,
-    color: 'var(--ink-1)', fontFamily: 'inherit', width: '100%',
-    outline: 'none', boxSizing: 'border-box',
+  const IS = {
+    background:'var(--bg-2)', border:'1px solid var(--line)',
+    borderRadius:8, padding:'8px 12px', fontSize:13,
+    color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box',
   };
-  const labelStyle = { fontSize: 12, color: 'var(--ink-3)', marginBottom: 5, display: 'block' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
 
   return (
-    <window.Modal
-      open={open}
-      onClose={onClose}
-      title="ส่งออกรายงาน Excel"
-      width={520}
+    <window.Modal open={open} onClose={onClose} title="ส่งออกรายงาน" width={540}
       footer={
-        <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>ยกเลิก</button>
-          <button className="btn btn-accent" onClick={handleExport} disabled={busy || preview.count === 0}
-            style={{ gap:8 }}>
-            <Icon name="download" size={14} />
-            {busy ? 'กำลังสร้างไฟล์…' : `ส่งออก ${preview.count} รายการ`}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', flexWrap:'wrap' }}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={!!busy}>ยกเลิก</button>
+          <button className="btn btn-ghost" onClick={()=>run('excel')}
+            disabled={!!busy || preview.count===0} style={{ gap:6 }}>
+            <Icon name="download" size={13} />
+            {busy==='excel' ? 'กำลังสร้าง…' : 'Excel (.xlsx)'}
+          </button>
+          <button className="btn btn-accent" onClick={()=>run('pdf')}
+            disabled={!!busy || preview.count===0} style={{ gap:6 }}>
+            <Icon name="receipt" size={13} />
+            {busy==='pdf' ? 'กำลังสร้าง…' : 'PDF รายงาน'}
           </button>
         </div>
       }>
       <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
 
-        {/* Preset pills */}
+        {/* Presets */}
         <div>
-          <div style={labelStyle}>ช่วงเวลาสำเร็จรูป</div>
+          <div style={LS}>ช่วงเวลาสำเร็จรูป</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-            {PRESETS.map(p => (
-              <button key={p.label}
-                className="btn btn-ghost btn-sm"
-                onClick={() => { setFromDate(p.from()); setToDate(p.to()); }}
-                style={{ fontSize:12 }}>
-                {p.label}
-              </button>
+            {PRESETS.map(p=>(
+              <button key={p.label} className="btn btn-ghost btn-sm"
+                onClick={()=>{ setFromDate(p.from()); setToDate(p.to()); }}
+                style={{ fontSize:12 }}>{p.label}</button>
             ))}
           </div>
         </div>
@@ -1917,53 +2222,70 @@ function ExportReportModal({ open, onClose }) {
         {/* Date range */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
           <div>
-            <label style={labelStyle}>ตั้งแต่วันที่</label>
-            <input type="date" style={inputStyle} value={fromDate}
-              onChange={e => setFromDate(e.target.value)} />
+            <label style={LS}>ตั้งแต่วันที่</label>
+            <input type="date" style={IS} value={fromDate} onChange={e=>setFromDate(e.target.value)} />
           </div>
           <div>
-            <label style={labelStyle}>ถึงวันที่</label>
-            <input type="date" style={inputStyle} value={toDate}
-              onChange={e => setToDate(e.target.value)} />
+            <label style={LS}>ถึงวันที่</label>
+            <input type="date" style={IS} value={toDate} onChange={e=>setToDate(e.target.value)} />
           </div>
         </div>
 
-        {/* Project filter */}
+        {/* Project */}
         <div>
-          <label style={labelStyle}>โครงการ</label>
-          <select style={{ ...inputStyle, cursor:'pointer' }}
-            value={projId} onChange={e => setProjId(e.target.value)}>
+          <label style={LS}>โครงการ</label>
+          <select style={{ ...IS, cursor:'pointer' }} value={projId} onChange={e=>setProjId(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
-            {app.projects.map(p => (
+            {app.projects.map(p=>(
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
         </div>
 
+        {/* PDF option */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
+          background:'var(--bg-2)', borderRadius:9, border:'1px solid var(--line)', cursor:'pointer' }}
+          onClick={()=>setIncludeDetails(v=>!v)}>
+          <div style={{
+            width:18, height:18, borderRadius:5, border:'2px solid',
+            borderColor: includeDetails ? '#d97706' : 'var(--ink-4)',
+            background: includeDetails ? '#d97706' : 'transparent',
+            display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+          }}>
+            {includeDetails && <Icon name="check" size={11} stroke={3} style={{ color:'#fff' }} />}
+          </div>
+          <div>
+            <div style={{ fontSize:13, fontWeight:500 }}>รวมรายการทั้งหมดใน PDF</div>
+            <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:1 }}>
+              แสดงตารางบิลทุกรายการ (หน้า 2) — เพิ่มจำนวนหน้าถ้ามีรายการมาก
+            </div>
+          </div>
+        </div>
+
         {/* Preview */}
         <div style={{
           padding:'14px 16px', borderRadius:10,
-          background: preview.count > 0 ? 'rgba(22,163,74,0.07)' : 'var(--bg-2)',
-          border: `1px solid ${preview.count > 0 ? 'rgba(22,163,74,0.25)' : 'var(--line)'}`,
+          background: preview.count>0 ? 'rgba(22,163,74,0.07)' : 'var(--bg-2)',
+          border:`1px solid ${preview.count>0 ? 'rgba(22,163,74,0.25)' : 'var(--line)'}`,
           display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
         }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <Icon name="receipt" size={18} />
             <div>
               <div style={{ fontSize:13, fontWeight:600 }}>
-                {preview.count > 0 ? `${fmtInt(preview.count)} รายการที่จะส่งออก` : 'ไม่มีรายการในช่วงนี้'}
+                {preview.count>0 ? `${fmtInt(preview.count)} รายการที่จะส่งออก` : 'ไม่มีรายการในช่วงนี้'}
               </div>
-              {preview.count > 0 && (
+              {preview.count>0 && (
                 <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:2 }}>
                   ยอดรวมสุทธิ ฿{fmt(preview.total)}
                 </div>
               )}
             </div>
           </div>
-          {preview.count > 0 && (
-            <div style={{ fontSize:11, color:'var(--ink-3)', textAlign:'right', lineHeight:1.7 }}>
-              <div>📊 3 sheets:</div>
-              <div>สรุปภาพรวม · รายการทั้งหมด · รายสัปดาห์</div>
+          {preview.count>0 && (
+            <div style={{ fontSize:10.5, color:'var(--ink-3)', textAlign:'right', lineHeight:1.8 }}>
+              <div><strong>PDF:</strong> หัวรายงาน + KPI + 3 ตาราง{includeDetails?' + รายการ':''}</div>
+              <div><strong>Excel:</strong> 3 sheets (ภาพรวม · รายการ · รายสัปดาห์)</div>
             </div>
           )}
         </div>
