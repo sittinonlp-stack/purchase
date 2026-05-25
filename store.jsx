@@ -314,10 +314,20 @@ window.AppProvider = function AppProvider({ children }) {
               lumpLaborCats: llc, workerTeams: teams, records: recs } = await window.db.loadAll();
 
       setProjects(ps);
-      setMatCats(mc.length    ? mc  : SEED_MAT_CATEGORIES);
-      setMachCats(kc.length   ? kc  : SEED_MACH_CATEGORIES);
-      setLaborCats(lc.length  ? lc  : SEED_LABOR_CATEGORIES);
-      setLumpLaborCats(llc && llc.length ? llc : SEED_LUMP_LABOR_CATEGORIES);
+      setMatCats(mc.length   ? mc  : SEED_MAT_CATEGORIES);
+      setMachCats(kc.length  ? kc  : SEED_MACH_CATEGORIES);
+      setLaborCats(lc.length ? lc  : SEED_LABOR_CATEGORIES);
+
+      // lump-labor: ถ้า DB ว่างให้ใช้ seed และ persist ลง DB ทันที
+      // (ป้องกัน seed กลับมาทุก refresh หลังลบ)
+      if (llc && llc.length) {
+        setLumpLaborCats(llc);
+      } else {
+        setLumpLaborCats(SEED_LUMP_LABOR_CATEGORIES);
+        Promise.all(SEED_LUMP_LABOR_CATEGORIES.map(c => window.db.insertLumpLaborCat(c)))
+          .catch(e => console.warn('[DB] auto-seed lump_labor_categories failed (non-fatal):', e));
+      }
+
       setWorkerTeams(teams);
       setRecords(recs);
       setDbOnline(true);
