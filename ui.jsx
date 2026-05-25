@@ -800,3 +800,32 @@ function Topbar({ title, sub }) {
   );
 }
 window.Topbar = Topbar;
+
+// ---- Quick Receipt FAB (Floating Action Button) ----
+function QuickReceiptFab() {
+  const app = window.useApp();
+  const [hovered, setHovered] = useState(false);
+
+  // ซ่อนเมื่ออยู่หน้า quick-receipt อยู่แล้ว
+  if (app.view === 'quick-receipt') return null;
+
+  return (
+    <button
+      className="fab"
+      onClick={() => app.setView('quick-receipt')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title="ถ่ายรูปใบเสร็จด่วน"
+      aria-label="ถ่ายรูปใบเสร็จด่วน"
+    >
+      {/* Label tooltip — แสดงเมื่อ hover บน desktop */}
+      <span className={'fab-label' + (hovered ? ' visible' : '')}>
+        ถ่ายรูปด่วน
+      </span>
+      <span className="fab-icon">
+        <Icon name="camera" size={24} stroke={1.75} />
+      </span>
+    </button>
+  );
+}
+window.QuickReceiptFab = QuickReceiptFab;
