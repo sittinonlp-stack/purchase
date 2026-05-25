@@ -1261,6 +1261,13 @@ window.TeamsView = function TeamsView() {
 window.DetailDrawer = function DetailDrawer() {
   const app = window.useApp();
   const rec = app.records.find(r => r.id === app.detailId);
+
+  // Lightbox state — รูปไหน + ชุดรูปไหน
+  const [lbImgs, setLbImgs] = useState([]);
+  const [lbIdx,  setLbIdx]  = useState(-1);
+  const openLb  = (images, idx) => { setLbImgs(images); setLbIdx(idx); };
+  const closeLb = () => setLbIdx(-1);
+
   if (!rec) return null;
   const proj = app.projects.find(p => p.id === rec.projectId);
   const isLaborType = rec.type === 'labor' || rec.type === 'lump-labor';
@@ -1375,10 +1382,12 @@ window.DetailDrawer = function DetailDrawer() {
               {rec.images.map((img, idx) => {
                 const src = imgSrc(img);
                 return (
-                  <a key={idx} href={src} target="_blank" rel="noreferrer"
-                    style={{ display:'block', aspectRatio:'3/4', borderRadius:8, overflow:'hidden', border:'1px solid var(--line)', background:'var(--bg-2)' }}>
-                    <img src={src} alt={imgAlt(img, `รูป ${idx + 1}`)} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                  </a>
+                  <button key={idx} type="button" onClick={() => openLb(rec.images, idx)}
+                    style={{ display:'block', aspectRatio:'3/4', borderRadius:8, overflow:'hidden',
+                      border:'1px solid var(--line)', background:'var(--bg-2)', padding:0, cursor:'zoom-in' }}>
+                    <img className="zoomable" src={src} alt={imgAlt(img, `รูป ${idx + 1}`)}
+                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  </button>
                 );
               })}
             </div>
@@ -1489,7 +1498,9 @@ window.DetailDrawer = function DetailDrawer() {
                     </div>
                     <div className="detail-images">
                       {rec.depositReturnImages.map((img, i) => (
-                        <img key={i} src={imgSrc(img)} alt="สลิป" style={{ borderRadius:8 }} />
+                        <img key={i} className="zoomable" src={imgSrc(img)} alt="สลิป"
+                          onClick={() => openLb(rec.depositReturnImages, i)}
+                          style={{ borderRadius:8 }} />
                       ))}
                     </div>
                   </div>
@@ -1508,12 +1519,21 @@ window.DetailDrawer = function DetailDrawer() {
             <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>รูปภาพแนบ ({rec.images.length})</h3>
             <div className="detail-images">
               {rec.images.map((img, i) => (
-                <img key={i} src={imgSrc(img)} alt={imgAlt(img)} />
+                <img key={i} className="zoomable" src={imgSrc(img)} alt={imgAlt(img)}
+                  onClick={() => openLb(rec.images, i)} />
               ))}
             </div>
           </div>
         )}
       </aside>
+
+      {/* Lightbox — เปิดเมื่อกดรูป */}
+      <window.ImageLightbox
+        images={lbImgs}
+        index={lbIdx}
+        onClose={closeLb}
+        onChange={setLbIdx}
+      />
     </>
   );
 };

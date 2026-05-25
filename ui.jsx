@@ -809,6 +809,114 @@ function Topbar({ title, sub }) {
 }
 window.Topbar = Topbar;
 
+// ---- Image Lightbox (fullscreen viewer) ----
+// ใช้ขยายดูรูปภาพแนบ — รองรับ string / object { dataUrl }
+function ImageLightbox({ images, index, onClose, onChange }) {
+  // ปิดด้วย Esc, prev/next ด้วยปุ่มลูกศร
+  useEffect(() => {
+    if (index < 0) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft'  && index > 0) onChange(index - 1);
+      else if (e.key === 'ArrowRight' && index < images.length - 1) onChange(index + 1);
+    };
+    window.addEventListener('keydown', onKey);
+    // กัน scroll background
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [index, images, onClose, onChange]);
+
+  if (index < 0 || !images || !images[index]) return null;
+
+  // normalize → src string (handle both string & { dataUrl/url })
+  const img = images[index];
+  const src = typeof img === 'string' ? img : (img?.dataUrl || img?.url || '');
+  const name = (typeof img === 'object' && img?.name) ? img.name : '';
+  const hasMulti = images.length > 1;
+  const isFirst  = index === 0;
+  const isLast   = index === images.length - 1;
+
+  // swipe state (mobile)
+  const touchStartX = useRef(0);
+  const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (!hasMulti) return;
+    const dx = (e.changedTouches[0].clientX) - touchStartX.current;
+    if (dx > 50 && !isFirst) onChange(index - 1);
+    else if (dx < -50 && !isLast) onChange(index + 1);
+  };
+
+  return (
+    <div className="lightbox-backdrop" onClick={onClose}>
+      {/* Top bar: filename + counter + close */}
+      <div className="lightbox-topbar" onClick={(e) => e.stopPropagation()}>
+        <div className="lightbox-meta">
+          {name && <span className="lightbox-name">{name}</span>}
+          {hasMulti && <span className="lightbox-counter mono">{index + 1} / {images.length}</span>}
+        </div>
+        <button className="lightbox-close" onClick={onClose} aria-label="ปิด">
+          <Icon name="x" size={22} stroke={2.25} />
+        </button>
+      </div>
+
+      {/* Image */}
+      <img
+        className="lightbox-img"
+        src={src}
+        alt={name || `รูป ${index + 1}`}
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      />
+
+      {/* Navigation arrows — desktop */}
+      {hasMulti && !isFirst && (
+        <button
+          className="lightbox-nav lightbox-prev"
+          onClick={(e) => { e.stopPropagation(); onChange(index - 1); }}
+          aria-label="รูปก่อนหน้า"
+        >
+          <span style={{ display:'inline-block', transform:'rotate(180deg)' }}>
+            <Icon name="chevron" size={26} stroke={2.25} />
+          </span>
+        </button>
+      )}
+      {hasMulti && !isLast && (
+        <button
+          className="lightbox-nav lightbox-next"
+          onClick={(e) => { e.stopPropagation(); onChange(index + 1); }}
+          aria-label="รูปถัดไป"
+        >
+          <Icon name="chevron" size={26} stroke={2.25} />
+        </button>
+      )}
+
+      {/* Thumbnail strip — แสดงเมื่อมีหลายรูป */}
+      {hasMulti && (
+        <div className="lightbox-thumbs" onClick={(e) => e.stopPropagation()}>
+          {images.map((thumb, i) => {
+            const tsrc = typeof thumb === 'string' ? thumb : (thumb?.dataUrl || thumb?.url || '');
+            return (
+              <button
+                key={i}
+                className={'lightbox-thumb' + (i === index ? ' active' : '')}
+                onClick={() => onChange(i)}
+              >
+                <img src={tsrc} alt="" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+window.ImageLightbox = ImageLightbox;
+
 // ---- Quick Receipt FAB (Floating Action Button) ----
 function QuickReceiptFab() {
   const app = window.useApp();
