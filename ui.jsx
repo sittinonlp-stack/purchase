@@ -522,21 +522,237 @@ function ProfileSettingsModal({ open, onClose }) {
 }
 window.ProfileSettingsModal = ProfileSettingsModal;
 
+// ---- Global search helpers ----
+const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย' };
+const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a' };
+
 // ---- Topbar ----
 function Topbar({ title, sub }) {
   const app = window.useApp();
   const online = app && app.dbOnline;
   const [profileOpen, setProfileOpen] = useState(false);
+
+  // Search state
+  const [q,       setQ]       = useState('');
+  const [open,    setOpen]    = useState(false);
+  const [focused, setFocused] = useState(-1);
+  const inputRef = useRef(null);
+
+  // ⌘K / Ctrl+K global shortcut
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Compute search results
+  const results = useMemo(() => {
+    const lq = q.trim().toLowerCase();
+    if (!lq) return [];
+
+    const recs = (app.records || [])
+      .filter(r =>
+        r.docNo?.toLowerCase().includes(lq) ||
+        r.vendor?.toLowerCase().includes(lq) ||
+        r.note?.toLowerCase().includes(lq) ||
+        r.period?.toLowerCase().includes(lq) ||
+        (r.items || []).some(it => it.name?.toLowerCase().includes(lq))
+      )
+      .slice(0, 7)
+      .map(r => ({ kind: 'record', id: r.id, docNo: r.docNo, vendor: r.vendor, type: r.type, date: r.date, total: computeTotals(r).total }));
+
+    const projs = (app.projects || [])
+      .filter(p =>
+        p.name?.toLowerCase().includes(lq) ||
+        p.code?.toLowerCase().includes(lq) ||
+        p.client?.toLowerCase().includes(lq)
+      )
+      .slice(0, 3)
+      .map(p => ({ kind: 'project', id: p.id, code: p.code, name: p.name, client: p.client, color: p.color }));
+
+    const teams = (app.workerTeams || [])
+      .filter(t =>
+        t.name?.toLowerCase().includes(lq) ||
+        t.leader?.toLowerCase().includes(lq) ||
+        t.specialty?.toLowerCase().includes(lq)
+      )
+      .slice(0, 2)
+      .map(t => ({ kind: 'team', id: t.id, name: t.name, leader: t.leader, size: t.size }));
+
+    return [...projs, ...recs, ...teams];
+  }, [q, app.records, app.projects, app.workerTeams]);
+
+  const handleSelect = (item) => {
+    setQ(''); setOpen(false); setFocused(-1);
+    inputRef.current?.blur();
+    if (item.kind === 'record')  { app.setDetailId(item.id); }
+    else if (item.kind === 'project') { app.setView('projects'); }
+    else if (item.kind === 'team')    { app.setView('teams'); }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') { setQ(''); setOpen(false); setFocused(-1); inputRef.current?.blur(); return; }
+    if (!open || results.length === 0) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setFocused(f => Math.min(f + 1, results.length - 1)); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setFocused(f => Math.max(f - 1, 0)); }
+    if (e.key === 'Enter' && focused >= 0) { e.preventDefault(); handleSelect(results[focused]); }
+  };
+
+  const clear = () => { setQ(''); setOpen(false); setFocused(-1); inputRef.current?.focus(); };
+
   return (
     <div className="topbar">
       <div>
         <div className="topbar-title">{title}</div>
         {sub && <div className="topbar-crumb">{sub}</div>}
       </div>
-      <div className="topbar-search">
+
+      {/* Search box */}
+      <div className="topbar-search" style={{ position: 'relative', width: 320 }}>
         <Icon name="search" size={14} />
-        <input placeholder="ค้นหารายการ บิล โครงการ ผู้ขาย..." />
-        <span className="badge gray mono">⌘K</span>
+        <input
+          ref={inputRef}
+          placeholder="ค้นหารายการ บิล โครงการ ผู้ขาย..."
+          value={q}
+          onChange={e => { setQ(e.target.value); setOpen(true); setFocused(-1); }}
+          onFocus={() => { if (q) setOpen(true); }}
+          onBlur={() => setTimeout(() => { setOpen(false); setFocused(-1); }, 160)}
+          onKeyDown={handleKeyDown}
+        />
+        {q
+          ? <button onClick={clear} style={{ background:'none', border:'none', cursor:'pointer', padding:2, color:'var(--ink-3)', display:'flex', lineHeight:1 }}>
+              <Icon name="x" size={13} />
+            </button>
+          : <span className="badge gray mono">⌘K</span>
+        }
+
+        {/* Dropdown results */}
+        {open && q.trim() && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+            background: 'var(--surface)', border: '1px solid var(--line-strong)',
+            borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+            zIndex: 9999, overflow: 'hidden', maxHeight: 460, overflowY: 'auto',
+          }}>
+            {results.length === 0 ? (
+              <div style={{ padding: '16px 16px', fontSize: 13, color: 'var(--ink-3)', textAlign: 'center' }}>
+                ไม่พบผลลัพธ์สำหรับ "<strong style={{ color: 'var(--ink-1)' }}>{q}</strong>"
+              </div>
+            ) : (() => {
+              // Group by kind for section headers
+              const groups = [
+                { key: 'project', label: 'โครงการ' },
+                { key: 'record',  label: 'รายการจัดซื้อ' },
+                { key: 'team',    label: 'ทีมช่าง' },
+              ];
+              let globalIdx = 0;
+              return groups.map(({ key, label }) => {
+                const items = results.filter(r => r.kind === key);
+                if (!items.length) return null;
+                return (
+                  <div key={key}>
+                    {/* Section header */}
+                    <div style={{
+                      padding: '8px 14px 4px', fontSize: 10.5, fontWeight: 700,
+                      color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.07em',
+                      borderTop: globalIdx > 0 ? '1px solid var(--line)' : 'none',
+                    }}>{label}</div>
+                    {items.map(item => {
+                      const idx = globalIdx++;
+                      const isFocused = focused === results.indexOf(item);
+                      return (
+                        <div key={item.id}
+                          onMouseDown={() => handleSelect(item)}
+                          onMouseEnter={() => setFocused(results.indexOf(item))}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '9px 14px', cursor: 'pointer',
+                            background: isFocused ? 'var(--bg-2)' : 'transparent',
+                            transition: 'background 80ms',
+                          }}>
+                          {/* Icon / avatar */}
+                          {item.kind === 'project' && (
+                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                          )}
+                          {item.kind === 'record' && (
+                            <span style={{
+                              padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 700,
+                              background: TYPE_COLOR[item.type] + '22', color: TYPE_COLOR[item.type],
+                              flexShrink: 0, whiteSpace: 'nowrap',
+                            }}>{TYPE_LABEL[item.type] || item.type}</span>
+                          )}
+                          {item.kind === 'team' && (
+                            <span style={{
+                              width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                              background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))',
+                              display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 700, fontSize: 11,
+                            }}>{item.name.charAt(0)}</span>
+                          )}
+
+                          {/* Main text */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {item.kind === 'project' && (
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                <span style={{ fontWeight: 500, fontSize: 13 }}>{item.name}</span>
+                                <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono, monospace' }}>{item.code}</span>
+                              </div>
+                            )}
+                            {item.kind === 'record' && (
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                <span style={{ fontWeight: 500, fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>{item.docNo}</span>
+                                <span style={{ fontSize: 12, color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.vendor}</span>
+                              </div>
+                            )}
+                            {item.kind === 'team' && (
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                <span style={{ fontWeight: 500, fontSize: 13 }}>{item.name}</span>
+                                <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{item.leader}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Right meta */}
+                          <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                            {item.kind === 'record' && (
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ink-1)' }}>฿{fmt(item.total)}</div>
+                                <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{fmtDate(item.date)}</div>
+                              </div>
+                            )}
+                            {item.kind === 'project' && item.client && (
+                              <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{item.client}</span>
+                            )}
+                            {item.kind === 'team' && (
+                              <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{item.size} คน</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              });
+            })()}
+
+            {/* Footer hint */}
+            {results.length > 0 && (
+              <div style={{
+                padding: '8px 14px', borderTop: '1px solid var(--line)',
+                display: 'flex', gap: 14, fontSize: 11, color: 'var(--ink-4)',
+              }}>
+                <span>↑↓ เลื่อน</span>
+                <span>Enter เลือก</span>
+                <span>Esc ปิด</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div title={online ? 'เชื่อมต่อ Supabase แล้ว' : 'Offline — ใช้ข้อมูลตัวอย่าง'}
         style={{ display:'flex', alignItems:'center', gap:5, fontSize:11,
