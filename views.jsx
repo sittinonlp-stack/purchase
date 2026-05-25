@@ -554,6 +554,8 @@ function RecordsTable({ records, onOpen }) {
                     ? <span className="badge green dot">เหมาจ่าย</span>
                     : r.type === 'other'
                     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>อื่นๆ</span>
+                    : r.type === 'quick-receipt'
+                    ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
                 <td>
@@ -632,6 +634,7 @@ window.HistoryView = function HistoryView() {
             <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
             <button className={"tab" + (typeFilter === 'lump-labor' ? ' active' : '')} onClick={() => setTypeFilter('lump-labor')}><Icon name="clipboard" size={13} /> เหมาจ่าย</button>
             <button className={"tab" + (typeFilter === 'other' ? ' active' : '')} onClick={() => setTypeFilter('other')}><Icon name="sparkle" size={13} /> อื่นๆ</button>
+            <button className={"tab" + (typeFilter === 'quick-receipt' ? ' active' : '')} onClick={() => setTypeFilter('quick-receipt')}><Icon name="camera" size={13} /> บิลด่วน</button>
           </div>
           <div className="topbar-search" style={{ width: 280, margin: 0 }}>
             <Icon name="search" size={14} />
@@ -1257,6 +1260,7 @@ window.DetailDrawer = function DetailDrawer() {
   const totals = computeTotals(rec);
   const close = () => app.setDetailId(null);
 
+  const isQuickReceipt = rec.type === 'quick-receipt';
   const typeBadge = rec.type === 'material'
     ? <span className="badge amber dot">จัดซื้อวัสดุ</span>
     : rec.type === 'machine'
@@ -1265,6 +1269,8 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge green dot">เหมาจ่าย</span>
     : rec.type === 'other'
     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>ค่าใช้จ่ายอื่นๆ</span>
+    : rec.type === 'quick-receipt'
+    ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>บันทึกค่าแรง</span>;
 
   // Editable work logs inline (saves immediately via updateRecord)
@@ -1292,7 +1298,12 @@ window.DetailDrawer = function DetailDrawer() {
             )}
             <button className="btn btn-accent btn-sm" onClick={() => {
               app.setEditingId(rec.id);
-              const v = rec.type === 'machine' ? 'new-machine' : rec.type === 'labor' ? 'new-labor' : rec.type === 'lump-labor' ? 'new-lump-labor' : rec.type === 'other' ? 'new-other' : 'new-material';
+              const v = rec.type === 'machine' ? 'new-machine'
+                : rec.type === 'labor' ? 'new-labor'
+                : rec.type === 'lump-labor' ? 'new-lump-labor'
+                : rec.type === 'other' ? 'new-other'
+                : rec.type === 'quick-receipt' ? 'quick-receipt'
+                : 'new-material';
               app.setView(v);
               close();
             }}><Icon name="edit" size={13} /> แก้ไข</button>
@@ -1341,7 +1352,25 @@ window.DetailDrawer = function DetailDrawer() {
           </div>
         )}
 
-        <div className="detail-section">
+        {/* Quick-receipt: แสดงรูปใบเสร็จแทน items table */}
+        {isQuickReceipt && (rec.images || []).length > 0 && (
+          <div className="detail-section">
+            <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+              รูปใบเสร็จ <span style={{ textTransform:'none', letterSpacing:0, fontWeight:400, fontSize:11, color:'var(--ink-4)', marginLeft:6 }}>({rec.images.length} รูป)</span>
+            </h3>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(100px, 1fr))', gap:8 }}>
+              {rec.images.map((img, idx) => (
+                <a key={img.id || idx} href={img.dataUrl} target="_blank" rel="noreferrer"
+                  style={{ display:'block', aspectRatio:'3/4', borderRadius:8, overflow:'hidden', border:'1px solid var(--line)', background:'var(--bg-2)' }}>
+                  <img src={img.dataUrl} alt={img.name || `รูป ${idx+1}`} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Items table — ซ่อนสำหรับ quick-receipt */}
+        {!isQuickReceipt && <div className="detail-section">
           <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{isLaborType ? `รายการงาน (${rec.items.length})` : `รายการ (${rec.items.length})`}</h3>
           <table className="items-table">
             <thead>
@@ -1370,9 +1399,10 @@ window.DetailDrawer = function DetailDrawer() {
               })}
             </tbody>
           </table>
-        </div>
+        </div>}
 
-        <div className="detail-section">
+        {/* Docs & Tax — ซ่อนสำหรับ quick-receipt */}
+        {!isQuickReceipt && <div className="detail-section">
           <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>เอกสารและภาษี</h3>
           <div className="row gap-8 wrap mb-16">
             {rec.docs.length === 0 && <span className="text-small text-muted">ไม่มีเอกสารกำกับ</span>}
@@ -1391,7 +1421,7 @@ window.DetailDrawer = function DetailDrawer() {
             {Number(rec.retentionDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--info)' }}>หักเงินประกัน</span><span className="value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span></div>}
             <div className="summary-row total"><span className="label">ยอดสุทธิ</span><span className="value">{fmt(totals.total)} บาท</span></div>
           </div>
-        </div>
+        </div>}
 
         {/* Editable work logs — labor types only */}
         {isLaborType && (
@@ -2491,3 +2521,217 @@ function ExportReportModal({ open, onClose }) {
     </window.Modal>
   );
 }
+
+// ---- Quick Receipt View (ถ่ายรูปใบเสร็จด่วน) ----
+window.QuickReceiptView = function QuickReceiptView() {
+  const app = window.useApp();
+  const editRec = app.editingId ? app.records.find(r => r.id === app.editingId) : null;
+
+  const [projectId, setProjectId] = useState(editRec?.projectId || app.projects[0]?.id || '');
+  const [date,      setDate]      = useState(editRec?.date || todayStr());
+  const [note,      setNote]      = useState(editRec?.note || '');
+  const [images,    setImages]    = useState(editRec?.images || []);
+
+  const cameraRef  = useRef(null);
+  const galleryRef = useRef(null);
+
+  // โหลดรูปจาก FileList → base64
+  const fromFiles = (fileList) => {
+    const files = Array.from(fileList).slice(0, 20 - images.length);
+    if (!files.length) return;
+    Promise.all(files.map(f => new Promise(res => {
+      const reader = new FileReader();
+      reader.onload = () => res({ id: newId(), name: f.name, dataUrl: reader.result });
+      reader.readAsDataURL(f);
+    }))).then(arr => setImages(prev => [...prev, ...arr]));
+  };
+
+  const removeImage = (id) => setImages(prev => prev.filter(img => img.id !== id));
+
+  const handleCancel = () => {
+    if (app.editingId) app.setEditingId(null);
+    app.setView('history');
+  };
+
+  const handleSave = () => {
+    if (!projectId) return app.pushToast('กรุณาเลือกโครงการ', 'warn');
+    if (images.length === 0) return app.pushToast('กรุณาถ่ายรูปหรือเลือกรูปอย่างน้อย 1 รูป', 'warn');
+
+    const ts = Date.now().toString(36).toUpperCase();
+    const patch = {
+      type: 'quick-receipt',
+      date, projectId, note, images,
+      items: [], docs: [], vendor: 'บิลด่วน',
+      vatMode: 'exclusive', vatRate: 0,
+      whtEnabled: false, whtRate: 0,
+      advanceDeduction: 0, retentionDeduction: 0,
+      depositAmount: 0, depositStatus: 'none',
+      workLogs: [], workerTeamId: null,
+    };
+
+    if (app.editingId) {
+      app.updateRecord(app.editingId, patch);
+      app.pushToast('แก้ไขบิลด่วนแล้ว');
+      app.setEditingId(null);
+    } else {
+      app.addRecord({ ...patch, docNo: `QR-${date.replace(/-/g, '')}-${ts}` });
+      app.pushToast('บันทึกบิลด่วนแล้ว 📸');
+    }
+    app.setView('history');
+  };
+
+  const isEditing = !!app.editingId;
+  const proj = app.projects.find(p => p.id === projectId);
+
+  return (
+    <div className="qr-page">
+      {/* Header */}
+      <div className="page-header" style={{ marginBottom: 24 }}>
+        <div>
+          <h1 className="page-title">{isEditing ? 'แก้ไขบิลด่วน' : 'ถ่ายรูปใบเสร็จ'}</h1>
+          <div className="page-sub">บันทึกบิลด่วนจากมือถือ — เลือกโครงการ วันที่ แล้วถ่ายรูปใบเสร็จ</div>
+        </div>
+      </div>
+
+      <div className="qr-body">
+        {/* Project + Date */}
+        <div className="form-grid">
+          <div className="field">
+            <label className="field-label">
+              โครงการ <span style={{ color: 'var(--danger)' }}>*</span>
+            </label>
+            <select className="input" value={projectId} onChange={e => setProjectId(e.target.value)}>
+              <option value="">— เลือกโครงการ —</option>
+              {app.projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {proj && (
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6, fontSize:12, color:'var(--ink-3)' }}>
+                <span style={{ width:8, height:8, borderRadius:'50%', background:proj.color, flexShrink:0 }}></span>
+                {proj.code}
+              </div>
+            )}
+          </div>
+          <div className="field">
+            <label className="field-label">วันที่</label>
+            <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} />
+          </div>
+        </div>
+
+        {/* Camera zone */}
+        <div className="qr-zone">
+          <div className="qr-zone-header">
+            <Icon name="camera" size={15} stroke={1.75} />
+            <span>รูปใบเสร็จ / หลักฐาน</span>
+            <span className="badge gray mono" style={{ marginLeft:'auto' }}>{images.length}/20</span>
+          </div>
+
+          {images.length === 0 ? (
+            /* Empty — ปุ่มใหญ่ชัดเจนสำหรับมือถือ */
+            <div className="qr-empty">
+              <div className="qr-empty-icon">
+                <Icon name="camera" size={52} stroke={1} />
+              </div>
+              <div className="qr-empty-label">ยังไม่มีรูป</div>
+              <div className="qr-empty-sub">ถ่ายรูปใบเสร็จ หรือเลือกจากแกลเลอรี</div>
+              <div className="qr-btn-group">
+                <button className="btn qr-cam-btn" type="button" onClick={() => cameraRef.current?.click()}>
+                  <Icon name="camera" size={18} stroke={1.75} /> ถ่ายรูป
+                </button>
+                <button className="btn btn-ghost" type="button" onClick={() => galleryRef.current?.click()}>
+                  <Icon name="image" size={16} /> เลือกจากแกลเลอรี
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* รูปที่เพิ่มแล้ว */
+            <div className="qr-photos-wrap">
+              <div className="qr-photo-grid">
+                {images.map(img => (
+                  <div key={img.id} className="qr-photo-tile">
+                    <img src={img.dataUrl} alt={img.name} />
+                    <button className="qr-remove-btn" type="button" onClick={() => removeImage(img.id)} title="ลบรูปนี้">
+                      <Icon name="x" size={11} stroke={2.5} />
+                    </button>
+                  </div>
+                ))}
+                {images.length < 20 && (
+                  <button className="qr-add-tile" type="button" onClick={() => cameraRef.current?.click()}>
+                    <Icon name="camera" size={22} stroke={1.5} />
+                    <span>ถ่ายเพิ่ม</span>
+                  </button>
+                )}
+              </div>
+              <button className="btn btn-ghost btn-sm" type="button"
+                style={{ alignSelf:'flex-start', marginTop:10 }}
+                onClick={() => galleryRef.current?.click()}>
+                <Icon name="image" size={13} /> เพิ่มจากแกลเลอรี
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Note */}
+        <div className="field">
+          <label className="field-label">หมายเหตุ (ไม่บังคับ)</label>
+          <input className="input"
+            placeholder="เช่น ปูน 50 ถุง, ค่าส่งของ, วัสดุสำหรับห้อง 3..."
+            value={note}
+            onChange={e => setNote(e.target.value)}
+          />
+        </div>
+
+        {/* Validation hint */}
+        {images.length === 0 && (
+          <div style={{
+            display:'flex', alignItems:'center', gap:8, padding:'10px 14px',
+            background:'rgba(245,158,11,0.07)', border:'1px solid rgba(245,158,11,0.25)',
+            borderRadius:10, fontSize:12.5, color:'#b45309',
+          }}>
+            <Icon name="bell" size={13} />
+            ต้องมีรูปอย่างน้อย 1 รูปจึงจะบันทึกได้
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="row gap-10" style={{ marginTop: 8 }}>
+          <button className="btn btn-ghost" type="button" onClick={handleCancel}>
+            ยกเลิก
+          </button>
+          <button
+            className="btn btn-accent"
+            type="button"
+            style={{ flex:1, justifyContent:'center', padding:'12px 24px', fontSize:15, gap:8 }}
+            onClick={handleSave}
+            disabled={!projectId || images.length === 0}
+          >
+            <Icon name="save" size={18} stroke={1.75} />
+            {isEditing
+              ? 'บันทึกการแก้ไข'
+              : `บันทึกบิลด่วน${images.length > 0 ? ` (${images.length} รูป)` : ''}`}
+          </button>
+        </div>
+      </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        style={{ display:'none' }}
+        onChange={e => { if (e.target.files?.length) fromFiles(e.target.files); e.target.value = ''; }}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display:'none' }}
+        onChange={e => { if (e.target.files?.length) fromFiles(e.target.files); e.target.value = ''; }}
+      />
+    </div>
+  );
+};

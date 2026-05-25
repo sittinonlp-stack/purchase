@@ -46,6 +46,7 @@ const Icon = ({ name, size = 16, stroke = 1.75 }) => {
     safe: <><rect x="3" y="2" width="15" height="19" rx="2"/><circle cx="10.5" cy="12" r="3.5"/><path d="M10.5 8.5V10M10.5 14v1.5M7 12h1.5M12.5 12H14"/><rect x="18" y="9" width="2.5" height="6" rx="1.2"/></>,
     clipboard: <><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10h6M9 14h6M9 18h4"/></>,
     menu: <><path d="M3 12h18M3 6h18M3 18h18"/></>,
+    camera: <><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" className="icon">
@@ -240,6 +241,9 @@ function Sidebar() {
           </button>
           <button className={"nav-item" + (view === 'new-other' ? " active" : "")} onClick={() => go('new-other')}>
             <Icon name="sparkle" /> ค่าใช้จ่ายอื่นๆ
+          </button>
+          <button className={"nav-item nav-item--quick" + (view === 'quick-receipt' ? " active" : "")} onClick={() => go('quick-receipt')}>
+            <Icon name="camera" /> ถ่ายรูปใบเสร็จ
           </button>
 
           <div className="nav-section-label">เรียกดู</div>
@@ -536,8 +540,8 @@ function ProfileSettingsModal({ open, onClose }) {
 window.ProfileSettingsModal = ProfileSettingsModal;
 
 // ---- Global search helpers ----
-const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย', other: 'อื่นๆ' };
-const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a', other: '#6366f1' };
+const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย', other: 'อื่นๆ', 'quick-receipt': 'บิลด่วน' };
+const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a', other: '#6366f1', 'quick-receipt': '#0ea5e9' };
 
 // ---- Topbar ----
 function Topbar({ title, sub }) {
