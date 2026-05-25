@@ -199,8 +199,12 @@ function Sidebar() {
   ).length;
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand" style={{ justifyContent: 'center', padding: '10px 12px 16px' }}>
-        <img src="logo.png" alt="FOR HOUSE" style={{ width: 148, objectFit: 'contain' }} />
+      <div className="sidebar-brand">
+        <div className="sidebar-logo">จ</div>
+        <div>
+          <div className="sidebar-brand-name">จัดซื้อ</div>
+          <div className="sidebar-brand-sub">งานรับเหมาก่อสร้าง</div>
+        </div>
       </div>
 
       <div className="sidebar-scroll">
