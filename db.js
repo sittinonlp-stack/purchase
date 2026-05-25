@@ -362,6 +362,13 @@
         .from('profiles').update({ role }).eq('id', userId);
       if (error) throw error;
     },
+
+    // Admin only: delete a user profile (removes app access; auth.users row remains)
+    async deleteUserProfile(userId) {
+      const { error } = await window.supabaseClient
+        .from('profiles').delete().eq('id', userId);
+      if (error) throw error;
+    },
   };
 
   window.db = db;

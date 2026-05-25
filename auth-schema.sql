@@ -18,11 +18,15 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "profiles_read"   ON profiles;
 DROP POLICY IF EXISTS "profiles_insert" ON profiles;
 DROP POLICY IF EXISTS "profiles_update" ON profiles;
+DROP POLICY IF EXISTS "profiles_delete" ON profiles;
 
 CREATE POLICY "profiles_read"   ON profiles FOR SELECT TO authenticated USING (true);
 CREATE POLICY "profiles_insert" ON profiles FOR INSERT TO authenticated WITH CHECK (id = auth.uid());
 CREATE POLICY "profiles_update" ON profiles FOR UPDATE TO authenticated
   USING (id = auth.uid() OR (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
+-- Admin only: delete another user's profile (removes app access; auth.users row stays)
+CREATE POLICY "profiles_delete" ON profiles FOR DELETE TO authenticated
+  USING (id <> auth.uid() AND public.get_user_role() = 'admin');
 
 -- 2. AUTO-CREATE PROFILE ON SIGNUP -------------------------
 -- First user → admin, all others → user

@@ -1176,8 +1176,10 @@ window.DepositsView = function DepositsView() {
 // ---- Users Management view (admin only) ----
 window.UsersView = function UsersView() {
   const app = window.useApp();
-  const [profiles, setProfiles] = React.useState([]);
-  const [loading, setLoading]   = React.useState(true);
+  const [profiles, setProfiles]         = React.useState([]);
+  const [loading, setLoading]           = React.useState(true);
+  const [confirmDelete, setConfirmDelete] = React.useState(null); // profile object | null
+  const [deleting, setDeleting]         = React.useState(false);
 
   const load = React.useCallback(() => {
     if (!window.db) return;
@@ -1200,6 +1202,21 @@ window.UsersView = function UsersView() {
       load();
     } catch (e) {
       app.pushToast('เปลี่ยนสิทธิ์ไม่สำเร็จ', 'error');
+    }
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await window.db.deleteUserProfile(confirmDelete.id);
+      app.pushToast(`ลบผู้ใช้ ${confirmDelete.full_name || confirmDelete.email} แล้ว`);
+      setConfirmDelete(null);
+      load();
+    } catch (e) {
+      app.pushToast('ลบผู้ใช้ไม่สำเร็จ: ' + (e.message || 'unknown error'), 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1279,22 +1296,100 @@ window.UsersView = function UsersView() {
                   {p.role === 'admin' ? 'Admin' : 'User'}
                 </span>
 
-                {/* Toggle button (can't change own role) */}
+                {/* Actions (can't touch own account) */}
                 {!isSelf(p) && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => toggleRole(p)}
-                    title={`เปลี่ยนเป็น ${p.role === 'admin' ? 'User' : 'Admin'}`}
-                    style={{ whiteSpace:'nowrap', fontSize:12 }}>
-                    <Icon name="shield" size={12} />
-                    {p.role === 'admin' ? 'ลด → User' : 'เลื่อน → Admin'}
-                  </button>
+                  <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => toggleRole(p)}
+                      title={`เปลี่ยนเป็น ${p.role === 'admin' ? 'User' : 'Admin'}`}
+                      style={{ whiteSpace:'nowrap', fontSize:12 }}>
+                      <Icon name="shield" size={12} />
+                      {p.role === 'admin' ? 'ลด → User' : 'เลื่อน → Admin'}
+                    </button>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => setConfirmDelete(p)}
+                      title="ลบผู้ใช้งาน"
+                      style={{
+                        background:'rgba(239,68,68,0.10)', color:'#ef4444',
+                        border:'1px solid rgba(239,68,68,0.25)', whiteSpace:'nowrap', fontSize:12,
+                      }}>
+                      <Icon name="trash" size={12} />
+                      ลบ
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* ── Delete-user confirm modal ── */}
+      <window.Modal
+        open={!!confirmDelete}
+        onClose={() => !deleting && setConfirmDelete(null)}
+        title="ยืนยันการลบผู้ใช้งาน"
+        width={420}
+        footer={
+          <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)} disabled={deleting}>
+              ยกเลิก
+            </button>
+            <button
+              className="btn"
+              onClick={handleDeleteConfirmed}
+              disabled={deleting}
+              style={{ background:'#ef4444', color:'#fff', border:'none' }}>
+              {deleting ? 'กำลังลบ…' : 'ลบผู้ใช้งาน'}
+            </button>
+          </div>
+        }>
+        {confirmDelete && (
+          <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+            {/* Warning banner */}
+            <div style={{
+              display:'flex', gap:12, padding:'12px 14px', borderRadius:10,
+              background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.22)',
+            }}>
+              <span style={{ fontSize:20, lineHeight:1 }}>⚠️</span>
+              <div style={{ fontSize:13, color:'#ef4444', lineHeight:1.55 }}>
+                การลบจะ<strong>ยกเลิกสิทธิ์การเข้าถึง</strong>ระบบของผู้ใช้นี้ทันที<br/>
+                ข้อมูลที่บันทึกไว้จะ<strong>ยังคงอยู่</strong>ในระบบ
+              </div>
+            </div>
+            {/* User card */}
+            <div style={{
+              display:'flex', alignItems:'center', gap:14, padding:'14px 16px',
+              borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)',
+            }}>
+              <div style={{
+                width:42, height:42, borderRadius:'50%', flexShrink:0,
+                background: confirmDelete.role === 'admin' ? '#d97706' : '#64748b',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                color:'#fff', fontWeight:700, fontSize:16,
+              }}>
+                {(confirmDelete.full_name || confirmDelete.email || 'U').slice(0,1).toUpperCase()}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:600, fontSize:14 }}>{confirmDelete.full_name || '(ไม่ระบุชื่อ)'}</div>
+                <div style={{ fontSize:12, color:'var(--ink-3)', marginTop:2 }}>{confirmDelete.email}</div>
+                <div style={{ fontSize:11, color:'var(--ink-4)', marginTop:2 }}>
+                  สมัครเมื่อ {fmtDate(confirmDelete.created_at)}
+                </div>
+              </div>
+              <span style={{
+                padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600,
+                background: confirmDelete.role === 'admin' ? 'rgba(217,119,6,0.15)' : 'rgba(100,116,139,0.12)',
+                color: confirmDelete.role === 'admin' ? '#d97706' : '#64748b',
+              }}>
+                {confirmDelete.role === 'admin' ? 'Admin' : 'User'}
+              </span>
+            </div>
+          </div>
+        )}
+      </window.Modal>
     </>
   );
 };
