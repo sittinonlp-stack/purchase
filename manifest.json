@@ -1,0 +1,28 @@
+{
+  "name": "ระบบจัดซื้องานก่อสร้าง",
+  "short_name": "จัดซื้อ",
+  "description": "ระบบบันทึกการจัดซื้อวัสดุ ค่าแรง และค่าใช้จ่ายงานรับเหมาก่อสร้าง",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8f7f4",
+  "theme_color": "#d97706",
+  "lang": "th",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": []
+}

@@ -4,6 +4,28 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>จัดซื้อ — ระบบบันทึกการจัดซื้องานรับเหมาก่อสร้าง</title>
+
+<!-- ── PWA Meta Tags ───────────────────────────────────────── -->
+<!-- Web App Manifest (Android / Desktop Chrome) -->
+<link rel="manifest" href="/manifest.json" />
+
+<!-- Theme color (address bar / status bar) -->
+<meta name="theme-color" content="#d97706" />
+
+<!-- iOS Safari — เพิ่มไอคอนบน Home Screen -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="จัดซื้อ" />
+<link rel="apple-touch-icon" href="/icon.svg" />
+
+<!-- Microsoft Tiles (Edge / Windows) -->
+<meta name="msapplication-TileColor" content="#d97706" />
+<meta name="msapplication-TileImage" content="/icon.svg" />
+
+<!-- Favicon -->
+<link rel="icon" type="image/svg+xml" href="/icon.svg" />
+<!-- ──────────────────────────────────────────────────────────── -->
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -36,5 +58,17 @@
 <script type="text/babel" data-presets="react" src="labor.jsx"></script>
 <script type="text/babel" data-presets="react" src="views.jsx"></script>
 <script type="text/babel" data-presets="react" src="app.jsx"></script>
+
+<!-- ── Service Worker Registration (PWA) ──────────────────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => console.log('[SW] Registered, scope:', reg.scope))
+      .catch((err) => console.warn('[SW] Registration failed:', err));
+  });
+}
+</script>
+<!-- ─────────────────────────────────────────────────────────── -->
 </body>
 </html>
