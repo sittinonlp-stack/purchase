@@ -1310,10 +1310,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .page-header { flex-direction: column; align-items: flex-start; }
   .page-header > .row, .page-header > div:last-child { align-self: flex-end; }
 
-  /* Dashboard action buttons: wrap accent button to its own row */
-  .dash-actions { flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-  .dash-actions .btn-ghost { flex-shrink: 0; }
-  .dash-actions .dash-accent { order: 10; width: 100%; justify-content: center; margin-top: 2px; }
+  /* Dashboard action buttons: stack vertically on mobile, custom order */
+  .dash-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+  .dash-actions .btn { justify-content: center; }
+  .dash-actions .dash-accent  { order: 1; }
+  .dash-actions .dash-labor   { order: 2; }
+  .dash-actions .dash-machine { order: 3; }
+  .dash-actions .dash-export  { order: 4; }
 }
 
 /* ============================
