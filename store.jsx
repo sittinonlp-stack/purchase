@@ -301,6 +301,7 @@ window.AppProvider = function AppProvider({ children }) {
   // ── Load profile + app data after login ─────────────
   const loadProfileAndData = useCallback(async (userId) => {
     try {
+      loadedUserIdRef.current = null; // mark as loading (clear previous)
       // Load profile separately — non-fatal if profiles table not set up yet
       try {
         const profile = await window.db.getProfile(userId);
@@ -331,6 +332,7 @@ window.AppProvider = function AppProvider({ children }) {
       setWorkerTeams(teams);
       setRecords(recs);
       setDbOnline(true);
+      loadedUserIdRef.current = userId; // ✓ data loaded — mark for skip on next SIGNED_IN
     } catch (err) {
       console.error('[DB] โหลดข้อมูลไม่สำเร็จ:', err);
       pushToast('โหลดข้อมูลไม่สำเร็จ — แสดงข้อมูลตัวอย่าง', 'error');
@@ -373,9 +375,15 @@ window.AppProvider = function AppProvider({ children }) {
         try {
           setSession(s);
           if (event === 'SIGNED_IN' && s) {
+            if (loadedUserIdRef.current === s.user.id) {
+              // Same user already loaded (token-refresh fires SIGNED_IN again) — skip
+              console.log('[Auth] SIGNED_IN skipped — same user already loaded');
+              return;
+            }
             setDbReady(false);
             await loadProfileAndData(s.user.id);
           } else if (event === 'SIGNED_OUT') {
+            loadedUserIdRef.current = null; // clear so next login loads fresh
             setUserProfile(null);
             setDbOnline(false);
             setView('dashboard');
@@ -384,12 +392,11 @@ window.AppProvider = function AppProvider({ children }) {
             setMatCats(SEED_MAT_CATEGORIES);
             setMachCats(SEED_MACH_CATEGORIES);
             setLaborCats(SEED_LABOR_CATEGORIES);
-        setLumpLaborCats(SEED_LUMP_LABOR_CATEGORIES);
+            setLumpLaborCats(SEED_LUMP_LABOR_CATEGORIES);
             setWorkerTeams(SEED_WORKER_TEAMS);
             setRecords(seedRecords());
           } else if (event === 'TOKEN_REFRESHED' && s) {
             // Token was refreshed silently — keep current data, just update session
-            // (no need to reload everything)
           }
         } catch (err) {
           console.error('[Auth] onAuthStateChange handler failed:', err);
@@ -400,6 +407,12 @@ window.AppProvider = function AppProvider({ children }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tab visibility recovery ─────────────────────────
+  // loadedUserIdRef — tracks which userId we've already fetched data for.
+  // Set to the userId after a successful loadProfileAndData; cleared on sign-out.
+  // Used by onAuthStateChange to skip re-loading when Supabase fires SIGNED_IN
+  // for a token-refresh (same user, data already in memory).
+  const loadedUserIdRef = useRef(null);
+
   // Keep a ref to the latest session so the handler below can read it
   // without being listed as a dependency (avoids re-registering on every login).
   const sessionRef = useRef(session);
