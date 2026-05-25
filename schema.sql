@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS worker_teams (
   phone       TEXT             DEFAULT '',
   size        INTEGER          DEFAULT 1,
   specialty   TEXT             DEFAULT '',
+  note        TEXT             DEFAULT '',
   created_at  TIMESTAMPTZ      DEFAULT NOW()
 );
 

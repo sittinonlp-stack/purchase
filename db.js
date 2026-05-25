@@ -22,10 +22,10 @@
   }
 
   function dbTeam(row) {
-    return { id: row.id, name: row.name, leader: row.leader || '', phone: row.phone || '', size: Number(row.size || 1), specialty: row.specialty || '' };
+    return { id: row.id, name: row.name, leader: row.leader || '', phone: row.phone || '', size: Number(row.size || 1), specialty: row.specialty || '', note: row.note || '' };
   }
   function jsTeam(t) {
-    return { id: t.id, name: t.name, leader: t.leader || '', phone: t.phone || '', size: Number(t.size || 1), specialty: t.specialty || '' };
+    return { id: t.id, name: t.name, leader: t.leader || '', phone: t.phone || '', size: Number(t.size || 1), specialty: t.specialty || '', note: t.note || '' };
   }
 
   function dbRecord(row) {

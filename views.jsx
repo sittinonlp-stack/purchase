@@ -1086,6 +1086,19 @@ window.TeamsView = function TeamsView() {
                   <span className="badge gray mono">{s.count} บิล</span>
                 </div>
 
+                {/* Note */}
+                {t.note && (
+                  <div style={{
+                    padding: '9px 12px', marginBottom: 14,
+                    background: 'var(--bg)', borderRadius: 8,
+                    fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.6,
+                    borderLeft: '3px solid var(--line-strong)',
+                  }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--ink-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>หมายเหตุ</div>
+                    {t.note}
+                  </div>
+                )}
+
                 {/* Extra images strip (images 2-5) */}
                 {extraImgs.length > 0 && (
                   <div className="row gap-6 mb-14" style={{ flexWrap: 'wrap' }}>

@@ -102,9 +102,10 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
   const [phone, setPhone] = useState('');
   const [size, setSize] = useState(1);
   const [specialty, setSpecialty] = useState('');
+  const [note, setNote] = useState('');
   const [images, setImages] = useState([]);
   useEffect(() => {
-    if (open) { setName(''); setLeader(''); setPhone(''); setSize(1); setSpecialty(''); setImages([]); }
+    if (open) { setName(''); setLeader(''); setPhone(''); setSize(1); setSpecialty(''); setNote(''); setImages([]); }
   }, [open]);
   return (
     <Modal open={open} onClose={onClose} title="เพิ่มทีมช่างใหม่" width={560}
@@ -112,7 +113,7 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
         <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
         <button className="btn btn-accent" onClick={() => name.trim() && onAdd({
           name: name.trim(), leader: leader.trim(), phone: phone.trim(),
-          size: Number(size) || 1, specialty: specialty.trim(), images,
+          size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
         })}>
           <Icon name="plus" size={14} /> เพิ่มทีม
         </button>
@@ -137,6 +138,12 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
         <div className="field">
           <label className="field-label">ความชำนาญ</label>
           <input className="input" placeholder="เช่น ก่อ-ฉาบ, ปูกระเบื้อง" value={specialty} onChange={(e) => setSpecialty(e.target.value)} />
+        </div>
+        <div className="field full">
+          <label className="field-label">หมายเหตุ / รายละเอียดเพิ่มเติม</label>
+          <textarea className="textarea" rows={3}
+            placeholder="เช่น ราคาต่อหน่วย, เงื่อนไขการจ้าง, ข้อตกลงพิเศษ"
+            value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         <div className="field full">
           <label className="field-label"><Icon name="image" size={13} /> รูปภาพทีมช่าง <span style={{ fontWeight:400, color:'var(--ink-3)', fontSize:11 }}>(สูงสุด 5 รูป)</span></label>
