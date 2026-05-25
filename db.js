@@ -105,23 +105,61 @@
     const urls = [];
     for (const img of images) {
       try {
-        // Already a remote URL → keep as-is
+        // ── กรณีที่ 1: URL สาธารณะอยู่แล้ว → เก็บไว้ตามเดิม
         if (typeof img === 'string' && img.startsWith('http')) {
           urls.push(img);
           continue;
         }
-        // Object with .file (from form input) or just a File
-        const file = (img && img.file instanceof File) ? img.file : (img instanceof File ? img : null);
+        if (img && typeof img.dataUrl === 'string' && img.dataUrl.startsWith('http')) {
+          urls.push(img.dataUrl);
+          continue;
+        }
+
+        let file = null;
+
+        // ── กรณีที่ 2: File object ตรง ๆ หรือ { file: File }
+        if (img instanceof File) {
+          file = img;
+        } else if (img && img.file instanceof File) {
+          file = img.file;
+        }
+        // ── กรณีที่ 3: base64 dataUrl จาก FileReader (เช่น quick-receipt)
+        //    แปลงเป็น Blob แล้ว upload ขึ้น Storage
+        else if (img && typeof img.dataUrl === 'string' && img.dataUrl.startsWith('data:')) {
+          try {
+            const res  = await fetch(img.dataUrl);
+            const blob = await res.blob();
+            const mime = blob.type || 'image/jpeg';
+            const ext  = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+            file = new File([blob], (img.name || `photo.${ext}`), { type: mime });
+          } catch (convErr) {
+            console.warn('[Image upload] base64→Blob failed:', convErr);
+            // Fallback: เก็บ dataUrl โดยตรงในกรณี Storage ไม่พร้อม
+            urls.push(img.dataUrl);
+            continue;
+          }
+        }
+
         if (!file) continue;
 
-        const ext = (file.name || 'image').split('.').pop().toLowerCase() || 'jpg';
-        const path = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}.${ext}`;
-        const { error } = await client.storage.from(bucket).upload(path, file, { cacheControl: '3600', upsert: false });
-        if (error) { console.warn('[Image upload]', error.message); continue; }
+        const ext  = (file.name || 'image').split('.').pop().toLowerCase() || 'jpg';
+        const path = `receipts/${Date.now()}-${Math.random().toString(36).slice(2, 9)}.${ext}`;
+        const { error } = await client.storage.from(bucket).upload(path, file, {
+          contentType: file.type,
+          cacheControl: '3600',
+          upsert: false,
+        });
+        if (error) {
+          console.warn('[Image upload] Storage error:', error.message, '→ falling back to dataUrl');
+          // Fallback: เก็บ dataUrl โดยตรงถ้า Storage ล้มเหลว
+          if (img && img.dataUrl) urls.push(img.dataUrl);
+          continue;
+        }
         const { data } = client.storage.from(bucket).getPublicUrl(path);
         if (data?.publicUrl) urls.push(data.publicUrl);
       } catch (e) {
-        console.warn('[Image upload] error:', e);
+        console.warn('[Image upload] unexpected error:', e);
+        if (img && img.dataUrl) urls.push(img.dataUrl); // fallback
       }
     }
     return urls;
