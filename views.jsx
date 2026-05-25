@@ -1018,6 +1018,7 @@ function DepositReturnForm({ rec }) {
 window.TeamsView = function TeamsView() {
   const app = window.useApp();
   const [open, setOpen] = useState(false);
+  const [editTeam, setEditTeam] = useState(null); // team obj | null
 
   // compute stats per team — only count and projects (no money shown here)
   const stats = useMemo(() => {
@@ -1116,6 +1117,9 @@ window.TeamsView = function TeamsView() {
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => app.setView('history')}>
                     <Icon name="history" size={12} /> ดูประวัติ
                   </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditTeam(t)} title="แก้ไขข้อมูลทีม">
+                    <Icon name="edit" size={12} />
+                  </button>
                   {app.isAdmin && (
                     <button className="btn btn-danger btn-sm" onClick={() => {
                       if (s.count) { app.pushToast('ลบไม่ได้ — มีรายการเบิกของทีมนี้อยู่', 'error'); return; }
@@ -1134,6 +1138,17 @@ window.TeamsView = function TeamsView() {
       <window.AddWorkerTeamModal open={open} onClose={() => setOpen(false)} onAdd={(t) => {
         app.addWorkerTeam(t); app.pushToast('เพิ่มทีมช่างแล้ว'); setOpen(false);
       }} />
+
+      <window.EditWorkerTeamModal
+        open={!!editTeam}
+        onClose={() => setEditTeam(null)}
+        team={editTeam}
+        onSave={(patch) => {
+          app.updateWorkerTeam(editTeam.id, patch);
+          app.pushToast('บันทึกข้อมูลทีมช่างแล้ว');
+          setEditTeam(null);
+        }}
+      />
     </>
   );
 };

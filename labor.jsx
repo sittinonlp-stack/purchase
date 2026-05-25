@@ -155,6 +155,85 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
 }
 window.AddWorkerTeamModal = AddWorkerTeamModal;
 
+// ---- Edit worker team modal ----
+function EditWorkerTeamModal({ open, onClose, team, onSave }) {
+  const [name,      setName]      = useState('');
+  const [leader,    setLeader]    = useState('');
+  const [phone,     setPhone]     = useState('');
+  const [size,      setSize]      = useState(1);
+  const [specialty, setSpecialty] = useState('');
+  const [note,      setNote]      = useState('');
+  const [images,    setImages]    = useState([]);
+
+  // Load existing team data whenever modal opens
+  useEffect(() => {
+    if (open && team) {
+      setName(team.name || '');
+      setLeader(team.leader || '');
+      setPhone(team.phone || '');
+      setSize(team.size || 1);
+      setSpecialty(team.specialty || '');
+      setNote(team.note || '');
+      setImages(team.images || []);
+    }
+  }, [open, team]);
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    onSave({
+      name: name.trim(), leader: leader.trim(), phone: phone.trim(),
+      size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
+    });
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="แก้ไขข้อมูลทีมช่าง" width={560}
+      footer={<>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={handleSave} disabled={!name.trim()}>
+          <Icon name="save" size={14} /> บันทึกการแก้ไข
+        </button>
+      </>}>
+      <div className="form-grid">
+        <div className="field full">
+          <label className="field-label">ชื่อทีม <span className="req">*</span></label>
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="field-label">หัวหน้าทีม</label>
+          <input className="input" placeholder="ชื่อ-นามสกุล" value={leader} onChange={(e) => setLeader(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="field-label">เบอร์ติดต่อ</label>
+          <input className="input mono" placeholder="08x-xxx-xxxx" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="field-label">จำนวนคน</label>
+          <input className="input mono" type="number" min="1" value={size} onChange={(e) => setSize(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="field-label">ความชำนาญ</label>
+          <input className="input" placeholder="เช่น ก่อ-ฉาบ, ปูกระเบื้อง" value={specialty} onChange={(e) => setSpecialty(e.target.value)} />
+        </div>
+        <div className="field full">
+          <label className="field-label">หมายเหตุ / รายละเอียดเพิ่มเติม</label>
+          <textarea className="textarea" rows={3}
+            placeholder="เช่น ราคาต่อหน่วย, เงื่อนไขการจ้าง, ข้อตกลงพิเศษ"
+            value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div className="field full">
+          <label className="field-label">
+            <Icon name="image" size={13} /> รูปภาพทีมช่าง
+            <span style={{ fontWeight: 400, color: 'var(--ink-3)', fontSize: 11, marginLeft: 6 }}>(สูงสุด 5 รูป)</span>
+          </label>
+          <window.ImageUploader images={images} onChange={setImages} max={5} />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+window.EditWorkerTeamModal = EditWorkerTeamModal;
+
 // ---- Items table for labor (reuses style but different placeholders) ----
 function LaborItemsTable({ items, setItems, cats, onAddCat }) {
   const updateItem = (id, patch) => setItems(items.map((i) => i.id === id ? { ...i, ...patch } : i));
