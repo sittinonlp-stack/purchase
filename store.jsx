@@ -490,8 +490,11 @@ window.AppProvider = function AppProvider({ children }) {
   }, [dbOnline, dbSync]);
 
   const deleteProject = useCallback((id) => {
+    // ลบรายการทั้งหมดในโครงการออกจาก state ก่อน
+    setRecords((rs) => rs.filter((r) => r.projectId !== id));
     setProjects((ps) => ps.filter((p) => p.id !== id));
-    if (dbOnline) dbSync(window.db.deleteProject(id), 'deleteProject');
+    // cascade ใน DB: ลบ records → record_items + work_logs → project
+    if (dbOnline) dbSync(window.db.deleteProjectCascade(id), 'deleteProjectCascade');
   }, [dbOnline, dbSync]);
 
   // ── Material categories ───────────────────────────────

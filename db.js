@@ -179,6 +179,15 @@
       const { error } = await window.supabaseClient.from('projects').delete().eq('id', id);
       if (error) throw error;
     },
+    // Cascade-delete: ลบรายการทั้งหมดในโครงการก่อน แล้วลบโครงการ
+    // (record_items + work_logs ถูกลบอัตโนมัติผ่าน ON DELETE CASCADE)
+    async deleteProjectCascade(projectId) {
+      const client = window.supabaseClient;
+      const { error: recErr } = await client.from('records').delete().eq('project_id', projectId);
+      if (recErr) throw recErr;
+      const { error: projErr } = await client.from('projects').delete().eq('id', projectId);
+      if (projErr) throw projErr;
+    },
     async updateProject(id, patch) {
       const { error } = await window.supabaseClient.from('projects').update(jsProject({ ...patch, id })).eq('id', id);
       if (error) throw error;

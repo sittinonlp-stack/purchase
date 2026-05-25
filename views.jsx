@@ -658,6 +658,7 @@ window.HistoryView = function HistoryView() {
 window.ProjectsView = function ProjectsView() {
   const app = window.useApp();
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // project obj | null
 
   // compute spend per project
   const stats = useMemo(() => {
@@ -715,10 +716,7 @@ window.ProjectsView = function ProjectsView() {
                     <Icon name="eye" size={12} /> ดูรายการ
                   </button>
                   {app.isAdmin && (
-                    <button className="btn btn-danger btn-sm" onClick={() => {
-                      if (stats[p.id]) { app.pushToast('ลบไม่ได้ — มีรายการอยู่ในโครงการนี้', 'error'); return; }
-                      app.deleteProject(p.id); app.pushToast('ลบโครงการแล้ว');
-                    }}>
+                    <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(p)}>
                       <Icon name="trash" size={12} />
                     </button>
                   )}
@@ -730,6 +728,79 @@ window.ProjectsView = function ProjectsView() {
       </div>
 
       <AddProjectModal open={open} onClose={() => setOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setOpen(false); }} />
+
+      {/* ── Confirm delete project modal ── */}
+      {confirmDelete && (() => {
+        const s = stats[confirmDelete.id] || { count: 0, total: 0 };
+        return (
+          <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+            <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2 className="modal-title">ยืนยันการลบโครงการ</h2>
+                <button className="btn-icon" onClick={() => setConfirmDelete(null)}>
+                  <Icon name="x" size={16} />
+                </button>
+              </div>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                {/* Warning banner */}
+                <div style={{ background: 'rgba(239,68,68,0.09)', border: '1px solid rgba(239,68,68,0.28)', borderRadius: 10, padding: '12px 16px' }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#ef4444', marginBottom: 4, fontSize: 13 }}>การดำเนินการนี้ไม่สามารถยกเลิกได้</div>
+                      <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                        ระบบจะลบโครงการ <strong>และประวัติ / ข้อมูลรายการจัดซื้อทั้งหมด</strong> ที่อยู่ในโครงการนี้ออกจากฐานข้อมูลอย่างถาวร
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project card */}
+                <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: confirmDelete.color, flexShrink: 0 }}></div>
+                    <span className="mono text-small text-muted">{confirmDelete.code}</span>
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>{confirmDelete.name}</div>
+                  {confirmDelete.client && <div className="text-small text-muted">{confirmDelete.client}</div>}
+                </div>
+
+                {/* Stats to be deleted */}
+                {s.count > 0 ? (
+                  <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', borderRadius: 10, padding: '12px 16px' }}>
+                    <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 700, letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>ข้อมูลที่จะถูกลบถาวร</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>รายการจัดซื้อ</span>
+                      <span className="mono" style={{ fontWeight: 700, color: '#ef4444' }}>{s.count} รายการ</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>ยอดรวมทั้งหมด</span>
+                      <span className="mono" style={{ fontWeight: 700, color: '#ef4444' }}>฿{fmt(s.total)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: 'var(--ink-3)', textAlign: 'center', padding: '8px 0' }}>
+                    โครงการนี้ยังไม่มีรายการจัดซื้อ
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>ยกเลิก</button>
+                <button className="btn btn-danger" onClick={() => {
+                  app.deleteProject(confirmDelete.id);
+                  app.pushToast(`ลบโครงการ "${confirmDelete.name}" และข้อมูลทั้งหมดแล้ว`);
+                  setConfirmDelete(null);
+                }}>
+                  <Icon name="trash" size={14} /> ยืนยันลบโครงการ
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 };
