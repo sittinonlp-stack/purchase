@@ -199,11 +199,26 @@ function Sidebar() {
   ).length;
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">
-        <div className="sidebar-logo">จ</div>
-        <div>
-          <div className="sidebar-brand-name">จัดซื้อ</div>
-          <div className="sidebar-brand-sub">งานรับเหมาก่อสร้าง</div>
+      <div className="sidebar-brand" style={{ justifyContent: 'center', padding: '10px 12px 16px' }}>
+        <div style={{ background: '#fff', borderRadius: 12, padding: '8px 14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* FOR HOUSE inline SVG logo */}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 170" width="130" height="111">
+            {/* Roof — green strokes */}
+            <line x1="100" y1="8" x2="12" y2="58" stroke="#1a5c2a" strokeWidth="14" strokeLinecap="square"/>
+            <line x1="100" y1="8" x2="188" y2="58" stroke="#1a5c2a" strokeWidth="14" strokeLinecap="square"/>
+            {/* F letter — green */}
+            <rect x="12"  y="58"  width="15" height="74" fill="#1a5c2a"/>
+            <rect x="12"  y="58"  width="58" height="13" fill="#1a5c2a"/>
+            <rect x="12"  y="106" width="43" height="12" fill="#1a5c2a"/>
+            {/* H letter — black */}
+            <rect x="106" y="58"  width="15" height="74" fill="#111111"/>
+            <rect x="173" y="58"  width="15" height="74" fill="#111111"/>
+            <rect x="106" y="106" width="82" height="12" fill="#111111"/>
+            {/* Text */}
+            <text x="100" y="156" fontFamily="'Arial Black',Arial,sans-serif" fontWeight="900" fontSize="21" textAnchor="middle">
+              <tspan fill="#1a5c2a">FOR </tspan><tspan fill="#111111">HOUSE</tspan>
+            </text>
+          </svg>
         </div>
       </div>
 
@@ -262,9 +277,12 @@ function Sidebar() {
       </div>
 
       <div className="sidebar-footer">
-        {/* Avatar with first letter of name */}
-        <div className="avatar" style={{ flexShrink: 0 }}>
-          {(app.userProfile?.full_name || app.userProfile?.email || 'U').slice(0,1).toUpperCase()}
+        {/* Avatar — photo if set, else initial letter */}
+        <div className="avatar" style={{ flexShrink: 0, overflow: 'hidden', padding: 0 }}>
+          {app.userProfile?.avatar_url
+            ? <img src={app.userProfile.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+            : (app.userProfile?.full_name || app.userProfile?.email || 'U').slice(0,1).toUpperCase()
+          }
         </div>
         <div className="avatar-meta" style={{ flex: 1, minWidth: 0 }}>
           <div className="avatar-name" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -299,10 +317,231 @@ function Sidebar() {
 }
 window.Sidebar = Sidebar;
 
+// ---- Profile Settings Modal ----
+function ProfileSettingsModal({ open, onClose }) {
+  const app = window.useApp();
+  const [tab,        setTab]        = useState('profile'); // 'profile' | 'password'
+  const [name,       setName]       = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);   // File obj
+  const [previewUrl, setPreviewUrl] = useState('');     // local preview
+  const [newPass,    setNewPass]    = useState('');
+  const [confPass,   setConfPass]   = useState('');
+  const [showPass,   setShowPass]   = useState(false);
+  const [busy,       setBusy]       = useState(false);
+  const fileRef = useRef(null);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (open) {
+      setTab('profile');
+      setName(app.userProfile?.full_name || '');
+      setAvatarFile(null);
+      setPreviewUrl(app.userProfile?.avatar_url || '');
+      setNewPass('');
+      setConfPass('');
+      setShowPass(false);
+      setBusy(false);
+    }
+  }, [open]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setPreviewUrl(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async () => {
+    setBusy(true);
+    try {
+      let avatarUrl = app.userProfile?.avatar_url || '';
+      if (avatarFile && app.userProfile?.id) {
+        try {
+          avatarUrl = await window.db.uploadAvatar(app.userProfile.id, avatarFile);
+        } catch (e) {
+          app.pushToast('อัปโหลดรูปไม่สำเร็จ: ' + e.message, 'error');
+          setBusy(false); return;
+        }
+      }
+      await app.updateMyProfile({ full_name: name.trim(), avatar_url: avatarUrl });
+      app.pushToast('บันทึกข้อมูลโปรไฟล์แล้ว');
+      onClose();
+    } catch(e) {
+      app.pushToast('บันทึกไม่สำเร็จ: ' + e.message, 'error');
+    } finally { setBusy(false); }
+  };
+
+  const savePassword = async () => {
+    if (newPass.length < 6) return app.pushToast('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร', 'error');
+    if (newPass !== confPass) return app.pushToast('รหัสผ่านไม่ตรงกัน', 'error');
+    setBusy(true);
+    try {
+      const { error } = await window.supabaseClient.auth.updateUser({ password: newPass });
+      if (error) throw error;
+      app.pushToast('เปลี่ยนรหัสผ่านสำเร็จ');
+      onClose();
+    } catch(e) {
+      app.pushToast('เปลี่ยนรหัสผ่านไม่สำเร็จ: ' + e.message, 'error');
+    } finally { setBusy(false); }
+  };
+
+  const initial = (app.userProfile?.full_name || app.userProfile?.email || 'U').slice(0,1).toUpperCase();
+  const tabBtn = (t, label) => (
+    <button onClick={() => setTab(t)} style={{
+      padding: '8px 18px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+      fontSize: 13, fontWeight: 500, borderRadius: 8, transition: 'all .15s',
+      background: tab === t ? 'var(--accent)' : 'transparent',
+      color: tab === t ? '#1f1d18' : 'var(--ink-3)',
+    }}>{label}</button>
+  );
+
+  if (!open) return null;
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">ตั้งค่าโปรไฟล์</h2>
+          <button className="btn-icon" onClick={onClose}><Icon name="x" size={16} /></button>
+        </div>
+
+        {/* Tab switcher */}
+        <div style={{ display: 'flex', gap: 4, padding: '0 20px 0', borderBottom: '1px solid var(--line)', paddingBottom: 12, marginBottom: 20 }}>
+          {tabBtn('profile', 'ข้อมูลส่วนตัว')}
+          {tabBtn('password', 'เปลี่ยนรหัสผ่าน')}
+        </div>
+
+        <div className="modal-body" style={{ paddingTop: 0 }}>
+          {tab === 'profile' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Avatar */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                <div onClick={() => fileRef.current?.click()} style={{
+                  width: 88, height: 88, borderRadius: '50%', cursor: 'pointer',
+                  overflow: 'hidden', border: '3px solid var(--line-strong)',
+                  background: 'var(--accent)', display: 'grid', placeItems: 'center',
+                  fontSize: 32, fontWeight: 700, color: '#1f1d18',
+                  transition: 'opacity .15s', position: 'relative',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                  {previewUrl
+                    ? <img src={previewUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : initial}
+                  <div style={{
+                    position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    opacity: 0, transition: 'opacity .15s',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                    <Icon name="image" size={22} style={{ color: '#fff' }} />
+                  </div>
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+                <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>
+                  <Icon name="image" size={13} /> เปลี่ยนรูปโปรไฟล์
+                </button>
+              </div>
+
+              {/* Name */}
+              <div className="field">
+                <label className="field-label">ชื่อ-นามสกุล</label>
+                <input className="input" placeholder="กรอกชื่อที่ต้องการแสดง" value={name} onChange={e => setName(e.target.value)} />
+              </div>
+
+              {/* Email (readonly) */}
+              <div className="field">
+                <label className="field-label">อีเมล</label>
+                <div style={{
+                  padding: '10px 14px', background: 'var(--bg-2)', border: '1px solid var(--line)',
+                  borderRadius: 8, fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono, monospace',
+                }}>
+                  {app.userProfile?.email || '—'}
+                </div>
+              </div>
+
+              {/* Role badge */}
+              <div className="field">
+                <label className="field-label">บทบาท</label>
+                <div>
+                  <span style={{
+                    display: 'inline-block', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                    background: app.isAdmin ? 'rgba(217,119,6,0.15)' : 'rgba(100,116,139,0.15)',
+                    color: app.isAdmin ? '#d97706' : '#64748b',
+                    border: `1px solid ${app.isAdmin ? 'rgba(217,119,6,0.3)' : 'rgba(100,116,139,0.3)'}`,
+                  }}>
+                    {app.isAdmin ? 'Admin' : 'User'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'password' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{
+                padding: '10px 14px', borderRadius: 10,
+                background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.2)',
+                fontSize: 12.5, color: '#3b82f6', lineHeight: 1.6,
+              }}>
+                <Icon name="shield" size={13} /> รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร
+              </div>
+              <div className="field">
+                <label className="field-label">รหัสผ่านใหม่</label>
+                <div style={{ position: 'relative' }}>
+                  <input className="input" type={showPass ? 'text' : 'password'}
+                    placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)"
+                    value={newPass} onChange={e => setNewPass(e.target.value)}
+                    style={{ paddingRight: 42 }} />
+                  <button type="button" onClick={() => setShowPass(v => !v)} style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 4,
+                  }}>
+                    <Icon name="eye" size={15} />
+                  </button>
+                </div>
+              </div>
+              <div className="field">
+                <label className="field-label">ยืนยันรหัสผ่านใหม่</label>
+                <input className="input" type={showPass ? 'text' : 'password'}
+                  placeholder="พิมพ์รหัสผ่านอีกครั้ง"
+                  value={confPass} onChange={e => setConfPass(e.target.value)} />
+                {confPass && newPass !== confPass && (
+                  <div style={{ fontSize: 12, color: '#ef4444', marginTop: 4 }}>รหัสผ่านไม่ตรงกัน</div>
+                )}
+                {confPass && newPass === confPass && newPass.length >= 6 && (
+                  <div style={{ fontSize: 12, color: '#16a34a', marginTop: 4 }}>รหัสผ่านตรงกัน ✓</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>ยกเลิก</button>
+          {tab === 'profile'
+            ? <button className="btn btn-accent" onClick={saveProfile} disabled={busy}>
+                <Icon name="save" size={14} /> {busy ? 'กำลังบันทึก…' : 'บันทึกข้อมูล'}
+              </button>
+            : <button className="btn btn-accent" onClick={savePassword}
+                disabled={busy || newPass.length < 6 || newPass !== confPass}>
+                <Icon name="shield" size={14} /> {busy ? 'กำลังเปลี่ยน…' : 'เปลี่ยนรหัสผ่าน'}
+              </button>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+window.ProfileSettingsModal = ProfileSettingsModal;
+
 // ---- Topbar ----
 function Topbar({ title, sub }) {
   const app = window.useApp();
   const online = app && app.dbOnline;
+  const [profileOpen, setProfileOpen] = useState(false);
   return (
     <div className="topbar">
       <div>
@@ -330,9 +569,10 @@ function Topbar({ title, sub }) {
         <Icon name="bell" />
         <span className="dot"></span>
       </button>
-      <button className="topbar-icon-btn" title="ตั้งค่า">
+      <button className="topbar-icon-btn" title="ตั้งค่าโปรไฟล์" onClick={() => setProfileOpen(true)}>
         <Icon name="settings" />
       </button>
+      <ProfileSettingsModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }

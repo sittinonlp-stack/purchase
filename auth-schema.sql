@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   email       TEXT NOT NULL DEFAULT '',
   full_name   TEXT          DEFAULT '',
   role        TEXT          DEFAULT 'user' CHECK (role IN ('admin','user')),
+  avatar_url  TEXT          DEFAULT '',
   created_at  TIMESTAMPTZ   DEFAULT NOW()
 );
 

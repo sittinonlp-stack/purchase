@@ -563,10 +563,17 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteWorkerTeam(id), 'deleteWorkerTeam');
   }, [dbOnline, dbSync]);
 
+  // ── Update own profile (name / avatar_url) ───────────
+  const updateMyProfile = useCallback(async (patch) => {
+    if (!userProfile?.id) return;
+    await window.db.updateProfile(userProfile.id, patch);
+    setUserProfile(p => ({ ...p, ...patch }));
+  }, [userProfile]);
+
   // ── Context value ────────────────────────────────────
   const value = useMemo(() => ({
     view, setView,
-    session, userProfile, isAdmin, signOut, dbOnline,
+    session, userProfile, isAdmin, signOut, dbOnline, updateMyProfile,
     projects, addProject, deleteProject,
     matCats, addMatCat, deleteMatCat,
     machCats, addMachCat, deleteMachCat,
@@ -582,7 +589,7 @@ window.AppProvider = function AppProvider({ children }) {
        addRecord, updateRecord, deleteRecord, addProject, deleteProject,
        addMatCat, deleteMatCat, addMachCat, deleteMachCat,
        addLaborCat, deleteLaborCat, addLumpLaborCat, deleteLumpLaborCat,
-       addWorkerTeam, updateWorkerTeam, deleteWorkerTeam, pushToast]);
+       addWorkerTeam, updateWorkerTeam, deleteWorkerTeam, pushToast, updateMyProfile]);
 
   // ── Render guards ─────────────────────────────────────
   if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;

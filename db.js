@@ -378,6 +378,25 @@
         .from('profiles').delete().eq('id', userId);
       if (error) throw error;
     },
+
+    // Update own profile (name, avatar_url, etc.)
+    async updateProfile(userId, patch) {
+      const { error } = await window.supabaseClient
+        .from('profiles').update(patch).eq('id', userId);
+      if (error) throw error;
+    },
+
+    // Upload avatar image → returns public URL
+    async uploadAvatar(userId, file) {
+      const client = window.supabaseClient;
+      const bucket = window.SUPABASE_STORAGE_BUCKET || 'procurement-images';
+      const ext = (file.name || 'avatar').split('.').pop().toLowerCase() || 'jpg';
+      const path = `avatars/${userId}-${Date.now()}.${ext}`;
+      const { error } = await client.storage.from(bucket).upload(path, file, { cacheControl: '3600', upsert: true });
+      if (error) throw error;
+      const { data } = client.storage.from(bucket).getPublicUrl(path);
+      return data?.publicUrl || '';
+    },
   };
 
   window.db = db;
