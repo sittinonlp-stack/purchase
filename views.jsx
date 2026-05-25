@@ -3,6 +3,19 @@
 // Views: Dashboard, History, Projects, Categories
 // ============================
 
+// ---- Image helpers ----
+// images อาจเป็น string (URL / base64 string จาก DB) หรือ object { dataUrl, name, id }
+// ขึ้นอยู่กับว่า record ถูก load จาก DB หรือยังอยู่ใน memory ก่อน save
+function imgSrc(img) {
+  if (!img) return '';
+  if (typeof img === 'string') return img;
+  return img.dataUrl || img.url || '';
+}
+function imgAlt(img, fallback) {
+  if (!img || typeof img === 'string') return fallback || '';
+  return img.name || fallback || '';
+}
+
 
 
 // ---- Dashboard ----
@@ -1195,7 +1208,7 @@ window.TeamsView = function TeamsView() {
                 {extraImgs.length > 0 && (
                   <div className="row gap-6 mb-14" style={{ flexWrap: 'wrap' }}>
                     {extraImgs.map((img, i) => (
-                      <img key={img.id || i} src={img.dataUrl} alt="" style={{
+                      <img key={i} src={imgSrc(img)} alt="" style={{
                         width: 52, height: 52, borderRadius: 8, objectFit: 'cover',
                         border: '1px solid var(--line)',
                       }} />
@@ -1359,12 +1372,15 @@ window.DetailDrawer = function DetailDrawer() {
               รูปใบเสร็จ <span style={{ textTransform:'none', letterSpacing:0, fontWeight:400, fontSize:11, color:'var(--ink-4)', marginLeft:6 }}>({rec.images.length} รูป)</span>
             </h3>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(100px, 1fr))', gap:8 }}>
-              {rec.images.map((img, idx) => (
-                <a key={img.id || idx} href={img.dataUrl} target="_blank" rel="noreferrer"
-                  style={{ display:'block', aspectRatio:'3/4', borderRadius:8, overflow:'hidden', border:'1px solid var(--line)', background:'var(--bg-2)' }}>
-                  <img src={img.dataUrl} alt={img.name || `รูป ${idx+1}`} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                </a>
-              ))}
+              {rec.images.map((img, idx) => {
+                const src = imgSrc(img);
+                return (
+                  <a key={idx} href={src} target="_blank" rel="noreferrer"
+                    style={{ display:'block', aspectRatio:'3/4', borderRadius:8, overflow:'hidden', border:'1px solid var(--line)', background:'var(--bg-2)' }}>
+                    <img src={src} alt={imgAlt(img, `รูป ${idx + 1}`)} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  </a>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1473,7 +1489,7 @@ window.DetailDrawer = function DetailDrawer() {
                     </div>
                     <div className="detail-images">
                       {rec.depositReturnImages.map((img, i) => (
-                        <img key={i} src={img.dataUrl} alt="สลิป" style={{ borderRadius:8 }} />
+                        <img key={i} src={imgSrc(img)} alt="สลิป" style={{ borderRadius:8 }} />
                       ))}
                     </div>
                   </div>
@@ -1486,12 +1502,13 @@ window.DetailDrawer = function DetailDrawer() {
           </div>
         )}
 
-        {rec.images && rec.images.length > 0 && (
+        {/* รูปภาพแนบทั่วไป — ซ่อนสำหรับ quick-receipt (มี section "รูปใบเสร็จ" แยกแล้ว) */}
+        {!isQuickReceipt && rec.images && rec.images.length > 0 && (
           <div className="detail-section">
             <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>รูปภาพแนบ ({rec.images.length})</h3>
             <div className="detail-images">
               {rec.images.map((img, i) => (
-                <img key={i} src={img.dataUrl} alt={img.name || ''} />
+                <img key={i} src={imgSrc(img)} alt={imgAlt(img)} />
               ))}
             </div>
           </div>
@@ -2872,7 +2889,7 @@ window.ReceiptsView = function ReceiptsView() {
                 {/* Thumbnail */}
                 <div className="rc-photo">
                   {thumb
-                    ? <img src={thumb.dataUrl || thumb} alt="ใบเสร็จ" />
+                    ? <img src={imgSrc(thumb)} alt="ใบเสร็จ" />
                     : <div className="rc-no-photo"><Icon name="camera" size={26} stroke={1.25} /></div>}
                   {imgs.length > 1 && (
                     <span className="rc-count">+{imgs.length - 1}</span>
