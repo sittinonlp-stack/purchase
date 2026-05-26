@@ -305,7 +305,22 @@ window.AppProvider = function AppProvider({ children }) {
   const dbSync = useCallback((promise, label) => {
     promise.catch((err) => {
       console.error(`[DB] ${label} failed:`, err);
-      pushToast(`ซิงค์ข้อมูลไม่สำเร็จ (${label})`, 'error');
+      // ดึงข้อความ error จริงออกมาแสดง — ช่วย user diagnose ได้เอง
+      let detail = err?.message || err?.hint || err?.details || err?.code || '';
+      // แปล error ที่พบบ่อยให้เป็นภาษาไทย
+      if (err?.code === '42703') {
+        detail = 'คอลัมน์ไม่มีใน DB — โปรดรัน migration SQL ที่ค้างอยู่';
+      } else if (err?.code === '23505') {
+        detail = 'ข้อมูลซ้ำ — มีรายการที่มี ID นี้อยู่แล้ว';
+      } else if (err?.code === '23503') {
+        detail = 'อ้างอิงข้อมูลไม่ถูกต้อง (เช่น โครงการ/ทีมถูกลบไปแล้ว)';
+      } else if (err?.code === '42P01') {
+        detail = 'ตารางไม่มีใน DB — โปรดรัน schema.sql';
+      } else if (err?.message?.toLowerCase().includes('row-level security')) {
+        detail = 'ไม่มีสิทธิ์ — RLS policy ไม่อนุญาต';
+      }
+      const shortLabel = { insertRecord: 'บันทึก', updateRecord: 'แก้ไข', deleteRecord: 'ลบ' }[label] || label;
+      pushToast(`${shortLabel}ไม่สำเร็จ: ${detail || 'ไม่ทราบสาเหตุ'}`, 'error');
     });
   }, [pushToast]);
 

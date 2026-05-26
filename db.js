@@ -108,6 +108,26 @@
   }
 
   // ──────────────────────────────────────────────────
+  // Error utilities — ตรวจจับและจัดการกับคอลัมน์ที่ยังไม่มีใน DB
+  // ──────────────────────────────────────────────────
+  function isMissingColumnError(err) {
+    if (!err) return false;
+    const msg = (err.message || err.hint || '').toLowerCase();
+    // Postgres code 42703 = undefined_column
+    return err.code === '42703' || msg.includes('column') && msg.includes('does not exist');
+  }
+
+  function stripDepositFields(obj) {
+    const out = { ...obj };
+    delete out.deposit_amount;
+    delete out.deposit_status;
+    delete out.deposit_return_date;
+    delete out.deposit_return_images;
+    delete out.deposit_return_note;
+    return out;
+  }
+
+  // ──────────────────────────────────────────────────
   // Image upload helper
   // ──────────────────────────────────────────────────
 
@@ -342,9 +362,14 @@
         uploadImages(rec.depositReturnImages || []),
       ]);
 
-      // 2. Insert record row
+      // 2. Insert record row — auto-fallback ถ้าคอลัมน์ deposit ยังไม่มีใน DB
       const dbRec = jsRecordToDb(rec, imageUrls, depositReturnImageUrls);
-      const { error: recErr } = await client.from('records').insert(dbRec);
+      let { error: recErr } = await client.from('records').insert(dbRec);
+      if (recErr && isMissingColumnError(recErr)) {
+        console.warn('[DB] missing deposit columns — retry without them (โปรดรัน migration-deposit-fields.sql)');
+        const fallback = stripDepositFields(dbRec);
+        ({ error: recErr } = await client.from('records').insert(fallback));
+      }
       if (recErr) throw recErr;
 
       // 3. Insert items
@@ -387,9 +412,14 @@
         uploadImages(patch.depositReturnImages || []),
       ]);
 
-      // 2. Update record row
+      // 2. Update record row — auto-fallback ถ้าคอลัมน์ deposit ยังไม่มีใน DB
       const dbPatch = jsRecordToDb({ ...patch, id }, imageUrls, depositReturnImageUrls);
-      const { error: recErr } = await client.from('records').update(dbPatch).eq('id', id);
+      let { error: recErr } = await client.from('records').update(dbPatch).eq('id', id);
+      if (recErr && isMissingColumnError(recErr)) {
+        console.warn('[DB] missing deposit columns — retry without them (โปรดรัน migration-deposit-fields.sql)');
+        const fallback = stripDepositFields(dbPatch);
+        ({ error: recErr } = await client.from('records').update(fallback).eq('id', id));
+      }
       if (recErr) throw recErr;
 
       // 3. Replace items (delete old → insert new)
