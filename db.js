@@ -68,10 +68,16 @@
       images: row.images || [],
       items,
       workLogs,
+      // ── เงินประกันสินค้า ──────────────────────────
+      depositAmount:        Number(row.deposit_amount || 0),
+      depositStatus:        row.deposit_status || 'none',
+      depositReturnDate:    row.deposit_return_date || '',
+      depositReturnImages:  row.deposit_return_images || [],
+      depositReturnNote:    row.deposit_return_note || '',
     };
   }
 
-  function jsRecordToDb(rec, imageUrls) {
+  function jsRecordToDb(rec, imageUrls, depositReturnImageUrls) {
     return {
       id: rec.id,
       type: rec.type,
@@ -90,6 +96,14 @@
       docs: rec.docs || [],
       note: rec.note || '',
       images: imageUrls || [],
+      // ── เงินประกันสินค้า ──────────────────────────
+      deposit_amount:        Number(rec.depositAmount || 0),
+      deposit_status:        rec.depositStatus || 'none',
+      deposit_return_date:   rec.depositReturnDate || null,
+      deposit_return_images: depositReturnImageUrls !== undefined
+                               ? depositReturnImageUrls
+                               : (rec.depositReturnImages || []),
+      deposit_return_note:   rec.depositReturnNote || '',
     };
   }
 
@@ -322,11 +336,14 @@
     async insertRecord(rec) {
       const client = window.supabaseClient;
 
-      // 1. Upload images
-      const imageUrls = await uploadImages(rec.images || []);
+      // 1. Upload images (รูปแนบหลัก + รูปสลิปคืนเงินประกัน)
+      const [imageUrls, depositReturnImageUrls] = await Promise.all([
+        uploadImages(rec.images || []),
+        uploadImages(rec.depositReturnImages || []),
+      ]);
 
       // 2. Insert record row
-      const dbRec = jsRecordToDb(rec, imageUrls);
+      const dbRec = jsRecordToDb(rec, imageUrls, depositReturnImageUrls);
       const { error: recErr } = await client.from('records').insert(dbRec);
       if (recErr) throw recErr;
 
@@ -364,11 +381,14 @@
     async updateRecord(id, patch) {
       const client = window.supabaseClient;
 
-      // 1. Upload any new images, keep existing URLs
-      const imageUrls = await uploadImages(patch.images || []);
+      // 1. Upload images (รูปแนบหลัก + รูปสลิปคืนเงินประกัน)
+      const [imageUrls, depositReturnImageUrls] = await Promise.all([
+        uploadImages(patch.images || []),
+        uploadImages(patch.depositReturnImages || []),
+      ]);
 
       // 2. Update record row
-      const dbPatch = jsRecordToDb({ ...patch, id }, imageUrls);
+      const dbPatch = jsRecordToDb({ ...patch, id }, imageUrls, depositReturnImageUrls);
       const { error: recErr } = await client.from('records').update(dbPatch).eq('id', id);
       if (recErr) throw recErr;
 
