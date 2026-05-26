@@ -1007,6 +1007,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .text-right { text-align: right; }
 .spacer { flex: 1; }
 
+/* form-layout: ป้องกัน horizontal overflow — left col ต้องมี min-width:0 */
+.form-layout { min-width: 0; }
+.form-layout > * { min-width: 0; }
+
 .page-header {
   display: flex;
   align-items: flex-end;

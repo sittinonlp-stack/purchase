@@ -318,8 +318,8 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
-        {/* Left column: main form */}
-        <div className="col gap-16">
+        {/* Left column: main form — min-width:0 บังคับให้ grid cell ยอม shrink แทนที่จะ overflow */}
+        <div className="col gap-16" style={{ minWidth: 0 }}>
           {/* Card 1: header info */}
           <div className="card">
             <div className="card-header">
@@ -612,8 +612,8 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
-        {/* Left column */}
-        <div className="col gap-16">
+        {/* Left column — min-width:0 บังคับให้ grid cell ยอม shrink แทนที่จะ overflow */}
+        <div className="col gap-16" style={{ minWidth: 0 }}>
           {/* Card 1: header */}
           <div className="card">
             <div className="card-header">
