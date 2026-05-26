@@ -703,11 +703,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .summary-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
+  gap: 8px;
   font-size: 13.5px;
 }
-.summary-row .label { color: var(--ink-3); }
-.summary-row .value { font-family: 'JetBrains Mono'; font-weight: 500; }
+.summary-row .label { color: var(--ink-3); flex-shrink: 0; white-space: nowrap; }
+.summary-row .value { font-family: 'JetBrains Mono'; font-weight: 500; text-align: right; }
 .summary-row.total {
   padding-top: 12px;
   margin-top: 4px;
@@ -1231,6 +1232,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   /* Form: single column */
   .form-grid { grid-template-columns: 1fr; }
   .form-layout { grid-template-columns: 1fr !important; }
+  /* sticky summary → normal flow เมื่อ collapse เป็น single column */
+  .form-summary-sticky { position: static !important; }
 
   /* Cat grid */
   .cat-grid { grid-template-columns: 1fr !important; }

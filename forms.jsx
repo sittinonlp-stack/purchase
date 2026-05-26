@@ -317,7 +317,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }} className="form-layout">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
         {/* Left column: main form */}
         <div className="col gap-16">
           {/* Card 1: header info */}
@@ -480,7 +480,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
         </div>
 
         {/* Right column: summary */}
-        <div style={{ position: 'sticky', top: 84 }}>
+        <div className="form-summary-sticky" style={{ position: 'sticky', top: 84 }}>
           <div className="card">
             <div className="card-header">
               <div className="card-title">สรุปยอด</div>
@@ -553,7 +553,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
       <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
 
       <style>{`
-        @media (max-width: 1100px) {
+        @media (max-width: 860px) {
           .form-layout { grid-template-columns: 1fr !important; }
         }
       `}</style>
@@ -611,7 +611,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }} className="form-layout">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
         {/* Left column */}
         <div className="col gap-16">
           {/* Card 1: header */}
@@ -727,7 +727,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
         </div>
 
         {/* Right column: summary */}
-        <div style={{ position: 'sticky', top: 84 }}>
+        <div className="form-summary-sticky" style={{ position: 'sticky', top: 84 }}>
           <div className="card">
             <div className="card-header">
               <div className="card-title">สรุปยอด</div>
@@ -764,7 +764,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
       <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
 
       <style>{`
-        @media (max-width: 1100px) { .form-layout { grid-template-columns: 1fr !important; } }
+        @media (max-width: 860px) { .form-layout { grid-template-columns: 1fr !important; } }
       `}</style>
     </>
   );

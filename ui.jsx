@@ -922,8 +922,9 @@ function QuickReceiptFab() {
   const app = window.useApp();
   const [hovered, setHovered] = useState(false);
 
-  // ซ่อนเมื่ออยู่หน้า quick-receipt อยู่แล้ว
-  if (app.view === 'quick-receipt') return null;
+  // ซ่อนในหน้าฟอร์มทุกชนิด — ป้องกัน FAB บังปุ่มบันทึกรายการ
+  const FORM_VIEWS = ['quick-receipt', 'new-material', 'new-machine', 'new-labor', 'new-lump-labor', 'new-other'];
+  if (FORM_VIEWS.includes(app.view)) return null;
 
   return (
     <button
