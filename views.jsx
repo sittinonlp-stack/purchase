@@ -1118,11 +1118,156 @@ function DepositReturnForm({ rec }) {
   );
 }
 
+// ---- Team history sub-view (แสดงเฉพาะทีมนั้น ๆ) ----
+function TeamHistoryView({ team, onBack }) {
+  const app = window.useApp();
+  const [projFilter, setProjFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('date-desc');
+
+  // รายการทั้งหมดของทีมนี้
+  const allTeamRecs = useMemo(() =>
+    app.records.filter(r =>
+      (r.type === 'labor' || r.type === 'lump-labor') && r.workerTeamId === team.id
+    ), [app.records, team.id]);
+
+  // โครงการที่ทีมนี้เคยทำ (สำหรับ dropdown filter)
+  const teamProjects = useMemo(() => {
+    const ids = new Set(allTeamRecs.map(r => r.projectId));
+    return app.projects.filter(p => ids.has(p.id));
+  }, [allTeamRecs, app.projects]);
+
+  // filtered + sorted
+  const filtered = useMemo(() => {
+    let arr = allTeamRecs;
+    if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
+    return [...arr].sort((a, b) => {
+      if (sortKey === 'date-desc') return (b.date || '').localeCompare(a.date || '');
+      if (sortKey === 'date-asc')  return (a.date || '').localeCompare(b.date || '');
+      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
+      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
+      return 0;
+    });
+  }, [allTeamRecs, projFilter, typeFilter, sortKey]);
+
+  const totalAmt   = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
+  const allAmt     = allTeamRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+
+  return (
+    <>
+      {/* Header */}
+      <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}
+            style={{ transform: 'rotate(90deg)', padding: '6px 8px' }}>
+            <Icon name="chevron" size={16} stroke={2.5} />
+          </button>
+          <div>
+            <h1 className="page-title" style={{ marginBottom: 2 }}>
+              ประวัติ: {team.name}
+            </h1>
+            <div className="page-sub">บันทึกค่าแรงทั้งหมดของทีมนี้ ·{' '}
+              <span className="mono">{allTeamRecs.length} บิล</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick stats */}
+      <div className="stat-grid" style={{ marginBottom: 20 }}>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(217,119,6,0.12)', color: 'var(--accent)' }}>
+            <Icon name="history" size={16} />
+          </div>
+          <div className="stat-label">บิลทั้งหมด</div>
+          <div className="stat-value mono">{allTeamRecs.length}</div>
+          <div className="stat-change positive">{teamProjects.length} โครงการ</div>
+        </div>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(22,163,74,0.12)', color: '#16a34a' }}>
+            <Icon name="money" size={16} />
+          </div>
+          <div className="stat-label">ยอดรวมทั้งหมด</div>
+          <div className="stat-value mono">฿{fmt(allAmt)}</div>
+          <div className="stat-change neutral">ทุกโครงการ</div>
+        </div>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>
+            <Icon name="clipboard" size={16} />
+          </div>
+          <div className="stat-label">ค่าแรง / เหมาจ่าย</div>
+          <div className="stat-value mono">
+            {allTeamRecs.filter(r => r.type === 'labor').length} /&nbsp;
+            {allTeamRecs.filter(r => r.type === 'lump-labor').length}
+          </div>
+          <div className="stat-change neutral">รายการ</div>
+        </div>
+      </div>
+
+      {/* Filter bar + table */}
+      <div className="card">
+        <div className="filter-bar">
+          {/* ประเภท */}
+          <div className="tabs">
+            <button className={'tab' + (typeFilter === 'all'        ? ' active' : '')} onClick={() => setTypeFilter('all')}>
+              ทั้งหมด <span className="badge gray mono">{allTeamRecs.length}</span>
+            </button>
+            <button className={'tab' + (typeFilter === 'labor'      ? ' active' : '')} onClick={() => setTypeFilter('labor')}>
+              <Icon name="hammer" size={13} /> ค่าแรง
+            </button>
+            <button className={'tab' + (typeFilter === 'lump-labor' ? ' active' : '')} onClick={() => setTypeFilter('lump-labor')}>
+              <Icon name="clipboard" size={13} /> เหมาจ่าย
+            </button>
+          </div>
+
+          {/* กรองโครงการ — แสดงเฉพาะโครงการที่ทีมนี้เคยทำ */}
+          <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
+            <option value="all">ทุกโครงการ ({teamProjects.length})</option>
+            {teamProjects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          {/* เรียง */}
+          <select className="select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
+            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
+            <option value="date-asc">วันที่ เก่า → ใหม่</option>
+            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
+            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
+          </select>
+
+          <div className="spacer" />
+          <div className="text-small text-muted">
+            พบ <strong className="mono" style={{ color: 'var(--ink-1)' }}>{filtered.length}</strong> รายการ ·
+            ยอดรวม <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(totalAmt)}</strong>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="history" size={28} /></div>
+            <div className="empty-title">ไม่พบประวัติ</div>
+            <div className="empty-sub">
+              {allTeamRecs.length === 0
+                ? 'ยังไม่มีบันทึกค่าแรงสำหรับทีมนี้'
+                : 'ไม่มีรายการที่ตรงกับตัวกรองที่เลือก'}
+            </div>
+          </div>
+        ) : (
+          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} />
+        )}
+      </div>
+    </>
+  );
+}
+
 // ---- Teams view (worker teams management) ----
 window.TeamsView = function TeamsView() {
   const app = window.useApp();
   const [open, setOpen] = useState(false);
   const [editTeam, setEditTeam] = useState(null); // team obj | null
+  const [selectedTeamId, setSelectedTeamId] = useState(null); // team history sub-view
 
   // compute stats per team — only count and projects (no money shown here)
   const stats = useMemo(() => {
@@ -1136,6 +1281,12 @@ window.TeamsView = function TeamsView() {
     });
     return m;
   }, [app.records]);
+
+  // ── แสดงหน้าประวัติทีมเมื่อเลือกทีม ─────────────
+  if (selectedTeamId) {
+    const team = app.workerTeams.find(t => t.id === selectedTeamId);
+    if (team) return <TeamHistoryView team={team} onBack={() => setSelectedTeamId(null)} />;
+  }
 
   return (
     <>
@@ -1218,8 +1369,11 @@ window.TeamsView = function TeamsView() {
 
                 {/* Action row */}
                 <div className="row gap-8" style={{ marginTop: extraImgs.length > 0 ? 0 : 4 }}>
-                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => app.setView('history')}>
-                    <Icon name="history" size={12} /> ดูประวัติ
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
+                    onClick={() => setSelectedTeamId(t.id)}
+                    disabled={!s.count}
+                    title={s.count ? `ดูประวัติ ${s.count} บิล` : 'ยังไม่มีประวัติ'}>
+                    <Icon name="history" size={12} /> ดูประวัติ {s.count > 0 && <span className="badge gray mono" style={{ marginLeft: 2 }}>{s.count}</span>}
                   </button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setEditTeam(t)} title="แก้ไขข้อมูลทีม">
                     <Icon name="edit" size={12} />
