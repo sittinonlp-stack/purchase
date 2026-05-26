@@ -435,6 +435,108 @@
       if (error) throw error;
     },
 
+    // ── Records (fetch single, with joins) ─────────
+    async fetchRecord(id) {
+      const { data, error } = await window.supabaseClient
+        .from('records')
+        .select('*, record_items(*), work_logs(*)')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return dbRecord(data);
+    },
+
+    // ── Realtime subscriptions ────────────────────
+    // ส่ง handlers map เพื่อตอบสนองต่อ event ที่เกี่ยวข้อง
+    // คืน channel object สำหรับ unsubscribe ภายหลัง
+    subscribe(handlers) {
+      const client = window.supabaseClient;
+      if (!client) return null;
+
+      const channelName = 'app-rt-' + Math.random().toString(36).slice(2, 9);
+      const channel = client.channel(channelName);
+
+      // debounce refetch ของ record เดียวกัน (กรณี items/logs ถูก insert ต่อเนื่อง)
+      const pendingRefetch = new Map();
+      const scheduleRefetch = (id) => {
+        if (!id) return;
+        if (pendingRefetch.has(id)) return;
+        const timer = setTimeout(async () => {
+          pendingRefetch.delete(id);
+          try {
+            const rec = await db.fetchRecord(id);
+            handlers.onRecordChange?.(rec);
+          } catch (e) {
+            // record อาจถูกลบไปแล้ว — ไม่ต้อง log warning
+            if (e.code !== 'PGRST116') console.warn('[RT] refetch failed:', e);
+          }
+        }, 200);
+        pendingRefetch.set(id, timer);
+      };
+
+      // ── records (parent) ───────────────────
+      channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'records' },
+        (p) => scheduleRefetch(p.new.id));
+      channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'records' },
+        (p) => scheduleRefetch(p.new.id));
+      channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'records' },
+        (p) => handlers.onRecordDelete?.(p.old.id));
+
+      // ── child tables: refetch parent ──────
+      for (const tbl of ['record_items', 'work_logs']) {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: tbl }, (p) => {
+          const rid = p.new?.record_id || p.old?.record_id;
+          scheduleRefetch(rid);
+        });
+      }
+
+      // ── projects ───────────────────────────
+      channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'projects' },
+        (p) => handlers.onProjectInsert?.(dbProject(p.new)));
+      channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'projects' },
+        (p) => handlers.onProjectUpdate?.(dbProject(p.new)));
+      channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'projects' },
+        (p) => handlers.onProjectDelete?.(p.old.id));
+
+      // ── categories (5 tables) ──────────────
+      const CATS = {
+        material_categories:    'Mat',
+        machinery_categories:   'Mach',
+        labor_categories:       'Labor',
+        lump_labor_categories:  'LumpLabor',
+        other_categories:       'Other',
+      };
+      for (const [table, name] of Object.entries(CATS)) {
+        channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table },
+          (p) => handlers[`on${name}CatInsert`]?.(dbCat(p.new)));
+        channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table },
+          (p) => handlers[`on${name}CatUpdate`]?.(dbCat(p.new)));
+        channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table },
+          (p) => handlers[`on${name}CatDelete`]?.(p.old.id));
+      }
+
+      // ── worker teams ───────────────────────
+      channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'worker_teams' },
+        (p) => handlers.onTeamInsert?.(dbTeam(p.new)));
+      channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'worker_teams' },
+        (p) => handlers.onTeamUpdate?.(dbTeam(p.new)));
+      channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'worker_teams' },
+        (p) => handlers.onTeamDelete?.(p.old.id));
+
+      channel.subscribe((status) => {
+        console.log('[RT] ' + channelName + ' status:', status);
+        handlers.onStatusChange?.(status);
+      });
+
+      return channel;
+    },
+
+    unsubscribe(channel) {
+      if (channel && window.supabaseClient) {
+        try { window.supabaseClient.removeChannel(channel); } catch (e) { /* ignore */ }
+      }
+    },
+
     // ── Profiles ──────────────────────────────────
     async getProfile(userId) {
       const { data, error } = await window.supabaseClient

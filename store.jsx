@@ -472,6 +472,102 @@ window.AppProvider = function AppProvider({ children }) {
     };
   }, []); // ← empty deps: register once, read session via ref
 
+  // ── Realtime subscriptions ──────────────────────────
+  // เมื่อ dbOnline=true → subscribe Postgres changes ของทุก table
+  // ทำให้ user เห็นข้อมูลที่ user คนอื่นบันทึกภายใน <1 วินาที โดยไม่ต้อง refresh
+  useEffect(() => {
+    if (!dbOnline || !window.db?.subscribe) return;
+
+    const upsertById = (setter) => (item) => {
+      setter((arr) => {
+        const idx = arr.findIndex((x) => x.id === item.id);
+        if (idx >= 0) {
+          const next = [...arr];
+          next[idx] = item;
+          return next;
+        }
+        return [...arr, item];
+      });
+    };
+    const removeById = (setter) => (id) => {
+      setter((arr) => arr.filter((x) => x.id !== id));
+    };
+
+    const channel = window.db.subscribe({
+      // records — prepend ถ้าใหม่, อัปเดตที่เดิมถ้ามีอยู่แล้ว
+      onRecordChange: (rec) => {
+        setRecords((rs) => {
+          const idx = rs.findIndex((r) => r.id === rec.id);
+          if (idx >= 0) {
+            const next = [...rs];
+            next[idx] = rec;
+            return next;
+          }
+          return [rec, ...rs]; // ใหม่: เอาขึ้นบนสุด
+        });
+      },
+      onRecordDelete: removeById(setRecords),
+
+      // projects
+      onProjectInsert: upsertById(setProjects),
+      onProjectUpdate: upsertById(setProjects),
+      onProjectDelete: (id) => {
+        setRecords((rs) => rs.filter((r) => r.projectId !== id)); // cascade
+        setProjects((ps) => ps.filter((p) => p.id !== id));
+      },
+
+      // categories
+      onMatCatInsert:       upsertById(setMatCats),
+      onMatCatUpdate:       upsertById(setMatCats),
+      onMatCatDelete:       removeById(setMatCats),
+      onMachCatInsert:      upsertById(setMachCats),
+      onMachCatUpdate:      upsertById(setMachCats),
+      onMachCatDelete:      removeById(setMachCats),
+      onLaborCatInsert:     upsertById(setLaborCats),
+      onLaborCatUpdate:     upsertById(setLaborCats),
+      onLaborCatDelete:     removeById(setLaborCats),
+      onLumpLaborCatInsert: upsertById(setLumpLaborCats),
+      onLumpLaborCatUpdate: upsertById(setLumpLaborCats),
+      onLumpLaborCatDelete: removeById(setLumpLaborCats),
+      onOtherCatInsert:     upsertById(setOtherCats),
+      onOtherCatUpdate:     upsertById(setOtherCats),
+      onOtherCatDelete:     removeById(setOtherCats),
+
+      // worker teams
+      onTeamInsert: upsertById(setWorkerTeams),
+      onTeamUpdate: upsertById(setWorkerTeams),
+      onTeamDelete: removeById(setWorkerTeams),
+
+      onStatusChange: (status) => {
+        if (status === 'SUBSCRIBED') console.log('[RT] ✓ Realtime พร้อมใช้งาน');
+        if (status === 'CHANNEL_ERROR') console.warn('[RT] ⚠ Realtime error — fallback to manual refresh');
+      },
+    });
+
+    return () => window.db.unsubscribe?.(channel);
+  }, [dbOnline]);
+
+  // ── Fallback safety net: silent refresh เมื่อ tab กลับมา visible ─
+  // ป้องกันกรณี Realtime พลาด event ระหว่างที่ tab อยู่ background
+  useEffect(() => {
+    if (!dbOnline) return;
+    let lastRefresh = Date.now();
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return;
+      // refresh เฉพาะถ้าผ่านมานานกว่า 30 วินาที (กัน burst)
+      if (Date.now() - lastRefresh < 30000) return;
+      lastRefresh = Date.now();
+      try {
+        const { records: recs } = await window.db.loadAll();
+        setRecords(recs);
+      } catch (e) {
+        console.warn('[Refresh] silent reload failed (non-fatal):', e);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [dbOnline]);
+
   // ── Sign out ────────────────────────────────────────
   const signOut = useCallback(async () => {
     if (window.supabaseClient) await window.supabaseClient.auth.signOut();
