@@ -210,7 +210,7 @@ window.ReceiptForm = function ReceiptForm({ initial, onSubmit, onCancel }) {
     vendor: '',          // ใช้เป็น "ชื่อลูกค้า" ใน UI
     items: [{ id: newId(), name: '', categoryId: '', qty: 1, unit: 'รายการ', price: 0 }],
     vatMode: 'exclusive',
-    vatRate: 7,
+    vatRate: 0,           // ใบเสร็จเฉย ๆ — ไม่คิด VAT
     whtEnabled: false,
     whtRate: 0,
     docs: [],
@@ -219,7 +219,6 @@ window.ReceiptForm = function ReceiptForm({ initial, onSubmit, onCancel }) {
     depositAmount: 0,
     depositStatus: 'none',
     meta: {
-      isTaxInvoice:    true,    // ใบเสร็จ/ใบกำกับภาษี
       customerAddress: '',
       customerTaxId:   '',
       customerBranch:  '',
@@ -295,11 +294,7 @@ window.ReceiptForm = function ReceiptForm({ initial, onSubmit, onCancel }) {
                 <div className="card-title">ข้อมูลเอกสาร</div>
                 <div className="card-sub">เลขที่ใบเสร็จ และวันที่ออก</div>
               </div>
-              <label className="row gap-8" style={{ fontSize: 12.5, cursor: 'pointer', userSelect: 'none' }}>
-                <input type="checkbox" checked={!!form.meta?.isTaxInvoice}
-                  onChange={(e) => setMeta({ isTaxInvoice: e.target.checked })} />
-                <span>ใบเสร็จ/ใบกำกับภาษี (รวม)</span>
-              </label>
+              <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>ใบเสร็จรับเงิน</span>
             </div>
             <div className="card-body">
               <div className="form-grid">
@@ -384,48 +379,15 @@ window.ReceiptForm = function ReceiptForm({ initial, onSubmit, onCancel }) {
             </div>
           </div>
 
-          {/* Card 4: ภาษี + การชำระเงิน */}
+          {/* Card 4: การชำระเงิน + หมายเหตุ */}
           <div className="card">
             <div className="card-header">
               <div>
-                <div className="card-title">ภาษี และการชำระเงิน</div>
-                <div className="card-sub">เงื่อนไข VAT, หัก ณ ที่จ่าย และวิธีชำระเงิน</div>
+                <div className="card-title">การชำระเงิน</div>
+                <div className="card-sub">วิธีชำระเงิน และผู้รับเงิน</div>
               </div>
             </div>
             <div className="card-body col gap-20">
-              {/* VAT */}
-              <div className="field">
-                <label className="field-label"><Icon name="money" size={13} /> เงื่อนไข VAT</label>
-                <window.VatModeRow value={form.vatMode} onChange={(v) => set({ vatMode: v })} />
-                <div className="row gap-8 mt-12">
-                  <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา VAT</span>
-                  <div className="input-affix" style={{ width: 110 }}>
-                    <input className="input mono" type="number" step="0.5" value={form.vatRate}
-                      onChange={(e) => set({ vatRate: e.target.value })} />
-                    <div className="input-affix-suffix">%</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* WHT */}
-              <div className="field">
-                <label className="row gap-8" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                  <input type="checkbox" checked={form.whtEnabled}
-                    onChange={(e) => set({ whtEnabled: e.target.checked, whtRate: e.target.checked ? 3 : 0 })} />
-                  <span className="field-label" style={{ margin: 0 }}>หัก ณ ที่จ่าย</span>
-                </label>
-                {form.whtEnabled && (
-                  <div className="row gap-8 mt-12">
-                    <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา</span>
-                    <div className="input-affix" style={{ width: 110 }}>
-                      <input className="input mono" type="number" step="0.5" value={form.whtRate}
-                        onChange={(e) => set({ whtRate: e.target.value })} />
-                      <div className="input-affix-suffix">%</div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Payment method */}
               <div className="field">
                 <label className="field-label"><Icon name="money" size={13} /> วิธีชำระเงิน</label>
@@ -490,34 +452,12 @@ window.ReceiptForm = function ReceiptForm({ initial, onSubmit, onCancel }) {
           <div className="card">
             <div className="card-header">
               <div className="card-title">สรุปยอด</div>
-              <span className="badge amber dot">
-                {form.vatMode === 'inclusive' ? 'รวม VAT แล้ว'
-                 : form.vatMode === 'exclusive' ? 'ยังไม่รวม VAT'
-                 : 'ไม่คิด VAT'}
-              </span>
+              <span className="badge gray mono">{form.items.length} รายการ</span>
             </div>
             <div className="card-body">
               <div className="summary-rows">
-                <div className="summary-row">
-                  <span className="label">มูลค่าก่อนภาษี</span>
-                  <span className="value">{fmt(totals.subTotal)}</span>
-                </div>
-                <div className="summary-row">
-                  <span className="label">VAT {form.vatRate}%</span>
-                  <span className="value">{fmt(totals.vat)}</span>
-                </div>
-                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
-                  <span className="label">รวมก่อนหัก ณ ที่จ่าย</span>
-                  <span className="value">{fmt(totals.beforeWht)}</span>
-                </div>
-                {form.whtEnabled && (
-                  <div className="summary-row">
-                    <span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span>
-                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
-                  </div>
-                )}
                 <div className="summary-row total">
-                  <span className="label">รับเงินสุทธิ</span>
+                  <span className="label">ยอดเงินรับสุทธิ</span>
                   <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
                 </div>
               </div>
@@ -577,7 +517,6 @@ function PrintableReceipt({ rec, company, app }) {
   const totals = computeTotals(rec);
   const proj = app?.projects?.find(p => p.id === rec.projectId);
   const meta = rec.meta || {};
-  const isTax = !!meta.isTaxInvoice;
 
   const paymentLabel = {
     cash:     'เงินสด',
@@ -609,8 +548,8 @@ function PrintableReceipt({ rec, company, app }) {
           </div>
         </div>
         <div className="rcpt-title-box">
-          <div className="rcpt-title">{isTax ? 'ใบเสร็จรับเงิน / ใบกำกับภาษี' : 'ใบเสร็จรับเงิน'}</div>
-          <div className="rcpt-title-en">{isTax ? 'RECEIPT / TAX INVOICE' : 'RECEIPT'}</div>
+          <div className="rcpt-title">ใบเสร็จรับเงิน</div>
+          <div className="rcpt-title-en">RECEIPT</div>
           <div className="rcpt-original">ต้นฉบับ (ORIGINAL)</div>
         </div>
       </div>
@@ -707,24 +646,8 @@ function PrintableReceipt({ rec, company, app }) {
           </div>
         </div>
         <div className="rcpt-totals-right">
-          <div className="rcpt-total-row">
-            <span>มูลค่าก่อนภาษี</span><span className="rcpt-mono">{fmt(totals.subTotal)}</span>
-          </div>
-          {totals.vat > 0 && (
-            <div className="rcpt-total-row">
-              <span>ภาษีมูลค่าเพิ่ม {rec.vatRate}%</span><span className="rcpt-mono">{fmt(totals.vat)}</span>
-            </div>
-          )}
-          <div className="rcpt-total-row">
-            <span>รวมก่อนหัก ณ ที่จ่าย</span><span className="rcpt-mono">{fmt(totals.beforeWht)}</span>
-          </div>
-          {rec.whtEnabled && totals.wht > 0 && (
-            <div className="rcpt-total-row">
-              <span>หัก ณ ที่จ่าย {rec.whtRate}%</span><span className="rcpt-mono">−{fmt(totals.wht)}</span>
-            </div>
-          )}
           <div className="rcpt-total-row rcpt-total-grand">
-            <span>รับเงินสุทธิ / TOTAL</span>
+            <span>ยอดเงินรับสุทธิ / TOTAL</span>
             <span className="rcpt-mono">{fmt(totals.total)} บาท</span>
           </div>
         </div>
