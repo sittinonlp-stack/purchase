@@ -72,7 +72,8 @@ function Shell() {
   if (view === 'new-labor')      { title = 'บันทึกค่าแรง'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-lump-labor') { title = 'ค่าแรงเหมาจ่าย'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-other')     { title = 'ค่าใช้จ่ายอื่นๆ'; sub = 'บันทึก / แก้ไข'; }
-  if (view === 'new-receipt')   { title = 'ใบเสร็จรับเงิน'; sub = 'ออก / แก้ไข'; }
+  if (view === 'new-receipt')    { title = 'ใบเสร็จรับเงิน'; sub = 'ออก / แก้ไข'; }
+  if (view === 'receipts-list')  { title = 'ประวัติใบเสร็จรับเงิน'; sub = 'ใบเสร็จที่ออกให้ลูกค้าทั้งหมด'; }
   if (view === 'quick-receipt') { title = 'ถ่ายรูปใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'receipts')     { title = 'รูปถ่ายใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'history')      { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
@@ -205,11 +206,12 @@ function Shell() {
                   app.pushToast('บันทึกใบเสร็จแล้ว');
                 }
                 clearEditing();
-                app.setView('history');
+                app.setView('receipts-list');
               }}
               onCancel={() => { clearEditing(); app.setView('dashboard'); }}
             />
           )}
+          {view === 'receipts-list' && <window.ReceiptsListView />}
         </div>
       </div>
       {app.detailId && <window.DetailDrawer />}
