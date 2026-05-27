@@ -74,6 +74,8 @@
       depositReturnDate:    row.deposit_return_date || '',
       depositReturnImages:  row.deposit_return_images || [],
       depositReturnNote:    row.deposit_return_note || '',
+      // ── meta JSONB — ใช้เก็บข้อมูลเฉพาะ type (เช่น receipt) ──
+      meta: row.meta || {},
     };
   }
 
@@ -104,6 +106,8 @@
                                ? depositReturnImageUrls
                                : (rec.depositReturnImages || []),
       deposit_return_note:   rec.depositReturnNote || '',
+      // ── meta JSONB ─────────────────────────────
+      meta: rec.meta || {},
     };
   }
 
@@ -124,6 +128,12 @@
     delete out.deposit_return_date;
     delete out.deposit_return_images;
     delete out.deposit_return_note;
+    return out;
+  }
+
+  function stripMetaField(obj) {
+    const out = { ...obj };
+    delete out.meta;
     return out;
   }
 
@@ -362,12 +372,12 @@
         uploadImages(rec.depositReturnImages || []),
       ]);
 
-      // 2. Insert record row — auto-fallback ถ้าคอลัมน์ deposit ยังไม่มีใน DB
+      // 2. Insert record row — auto-fallback ถ้าคอลัมน์ใหม่ยังไม่มีใน DB
       const dbRec = jsRecordToDb(rec, imageUrls, depositReturnImageUrls);
       let { error: recErr } = await client.from('records').insert(dbRec);
       if (recErr && isMissingColumnError(recErr)) {
-        console.warn('[DB] missing deposit columns — retry without them (โปรดรัน migration-deposit-fields.sql)');
-        const fallback = stripDepositFields(dbRec);
+        console.warn('[DB] missing optional columns — retry without deposit/meta (โปรดรัน migration ที่ค้าง)');
+        const fallback = stripMetaField(stripDepositFields(dbRec));
         ({ error: recErr } = await client.from('records').insert(fallback));
       }
       if (recErr) throw recErr;
@@ -412,12 +422,12 @@
         uploadImages(patch.depositReturnImages || []),
       ]);
 
-      // 2. Update record row — auto-fallback ถ้าคอลัมน์ deposit ยังไม่มีใน DB
+      // 2. Update record row — auto-fallback ถ้าคอลัมน์ใหม่ยังไม่มีใน DB
       const dbPatch = jsRecordToDb({ ...patch, id }, imageUrls, depositReturnImageUrls);
       let { error: recErr } = await client.from('records').update(dbPatch).eq('id', id);
       if (recErr && isMissingColumnError(recErr)) {
-        console.warn('[DB] missing deposit columns — retry without them (โปรดรัน migration-deposit-fields.sql)');
-        const fallback = stripDepositFields(dbPatch);
+        console.warn('[DB] missing optional columns — retry without deposit/meta (โปรดรัน migration ที่ค้าง)');
+        const fallback = stripMetaField(stripDepositFields(dbPatch));
         ({ error: recErr } = await client.from('records').update(fallback).eq('id', id));
       }
       if (recErr) throw recErr;

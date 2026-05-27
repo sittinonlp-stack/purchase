@@ -242,6 +242,9 @@ function Sidebar() {
           <button className={"nav-item" + (view === 'new-other' ? " active" : "")} onClick={() => go('new-other')}>
             <Icon name="sparkle" /> ค่าใช้จ่ายอื่นๆ
           </button>
+          <button className={"nav-item" + (view === 'new-receipt' ? " active" : "")} onClick={() => go('new-receipt')}>
+            <Icon name="receipt" /> ออกใบเสร็จรับเงิน
+          </button>
           <button className={"nav-item nav-item--quick" + (view === 'quick-receipt' ? " active" : "")} onClick={() => go('quick-receipt')}>
             <Icon name="camera" /> ถ่ายรูปใบเสร็จ
           </button>
@@ -548,8 +551,8 @@ function ProfileSettingsModal({ open, onClose }) {
 window.ProfileSettingsModal = ProfileSettingsModal;
 
 // ---- Global search helpers ----
-const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย', other: 'อื่นๆ', 'quick-receipt': 'บิลด่วน' };
-const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a', other: '#6366f1', 'quick-receipt': '#0ea5e9' };
+const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย', other: 'อื่นๆ', 'quick-receipt': 'บิลด่วน', receipt: 'ใบเสร็จ' };
+const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a', other: '#6366f1', 'quick-receipt': '#0ea5e9', receipt: '#059669' };
 
 // ---- Topbar ----
 function Topbar({ title, sub }) {
@@ -923,7 +926,7 @@ function QuickReceiptFab() {
   const [hovered, setHovered] = useState(false);
 
   // ซ่อนในหน้าฟอร์มทุกชนิด — ป้องกัน FAB บังปุ่มบันทึกรายการ
-  const FORM_VIEWS = ['quick-receipt', 'new-material', 'new-machine', 'new-labor', 'new-lump-labor', 'new-other'];
+  const FORM_VIEWS = ['quick-receipt', 'new-material', 'new-machine', 'new-labor', 'new-lump-labor', 'new-other', 'new-receipt'];
   if (FORM_VIEWS.includes(app.view)) return null;
 
   return (

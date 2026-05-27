@@ -1866,3 +1866,212 @@ img.zoomable:hover { opacity: 0.85; }
   .qr-cam-btn { width: 100%; justify-content: center; }
   .qr-btn-group { flex-direction: column; width: 100%; max-width: 280px; }
 }
+
+/* ===========================================================
+   Receipt — เทมเพลตใบเสร็จรับเงิน (formal print template)
+   ขนาดกระดาษ A4 (210 × 297 mm)
+   =========================================================== */
+.receipt-preview-modal {
+  width: 880px;
+  max-width: 96vw;
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+}
+.receipt-preview-modal .modal-body { overflow: auto; }
+
+.printable-receipt {
+  background: #fff;
+  color: #000;
+  font-family: 'Prompt', 'IBM Plex Sans Thai', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 28mm 16mm 16mm 16mm;
+  width: 210mm;
+  min-height: 287mm;
+  margin: 0 auto;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  box-sizing: border-box;
+  position: relative;
+}
+.printable-receipt .rcpt-mono { font-family: 'JetBrains Mono', monospace; }
+.printable-receipt .rcpt-num   { text-align: right; }
+
+/* Header */
+.rcpt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #000;
+}
+.rcpt-company { display: flex; gap: 14px; align-items: flex-start; flex: 1; min-width: 0; }
+.rcpt-logo {
+  width: 64px; height: 64px; object-fit: contain;
+  border: 1px solid #ccc; border-radius: 6px; background: #fff;
+}
+.rcpt-company-name { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.rcpt-company-line { font-size: 11.5px; color: #333; line-height: 1.55; }
+
+.rcpt-title-box { text-align: right; flex-shrink: 0; }
+.rcpt-title { font-size: 19px; font-weight: 700; letter-spacing: 0.02em; }
+.rcpt-title-en { font-size: 11px; color: #555; letter-spacing: 0.1em; margin-top: 2px; }
+.rcpt-original {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border: 1.5px solid #000;
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* Doc info row */
+.rcpt-info-row {
+  display: flex;
+  gap: 18px;
+  padding: 10px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px dashed #999;
+  font-size: 12px;
+}
+.rcpt-info-cell { display: flex; flex-direction: column; }
+.rcpt-info-label { color: #666; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; }
+.rcpt-info-value { font-weight: 600; font-size: 13px; margin-top: 1px; }
+
+/* Customer */
+.rcpt-customer {
+  border: 1px solid #999;
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: #fafafa;
+}
+.rcpt-customer-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  color: #555; text-transform: uppercase; margin-bottom: 6px;
+}
+.rcpt-customer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rcpt-customer-name { font-size: 14.5px; font-weight: 600; margin-bottom: 2px; }
+.rcpt-customer-line { font-size: 11.5px; color: #333; line-height: 1.6; }
+.rcpt-customer-key  { color: #666; font-size: 10.5px; }
+.rcpt-customer-side { text-align: right; }
+
+/* Items table */
+.rcpt-items {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  font-size: 11.5px;
+}
+.rcpt-items th,
+.rcpt-items td {
+  border: 1px solid #888;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.rcpt-items thead th {
+  background: #f0f0f0;
+  font-weight: 600;
+  font-size: 11px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.rcpt-items tbody td { height: 22px; }
+.rcpt-items .rcpt-empty-row td { border-color: #ddd; }
+
+/* Totals */
+.rcpt-totals {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 14px;
+  margin-top: 4px;
+  margin-bottom: 18px;
+}
+.rcpt-amount-words {
+  padding: 10px 14px;
+  border: 1px solid #999;
+  border-radius: 4px;
+  background: #fafafa;
+  font-size: 11.5px;
+}
+.rcpt-amount-words-label { color: #666; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; }
+.rcpt-amount-words-text  { margin-top: 4px; font-weight: 600; font-size: 12.5px; }
+
+.rcpt-totals-right {
+  border: 1px solid #888;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.rcpt-total-row {
+  display: flex; justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid #ddd;
+}
+.rcpt-total-row:last-child { border-bottom: none; }
+.rcpt-total-grand {
+  background: #000; color: #fff;
+  font-weight: 700; font-size: 14px;
+  padding: 9px 12px;
+}
+
+/* Footer */
+.rcpt-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-top: 14px;
+}
+.rcpt-footer-left { padding-top: 4px; }
+.rcpt-payment { font-size: 12px; margin-bottom: 10px; }
+.rcpt-payment-label { color: #666; }
+.rcpt-payment-sub   { color: #444; font-size: 11px; margin-top: 2px; }
+.rcpt-note { font-size: 11px; color: #444; line-height: 1.6; }
+.rcpt-note-label { color: #666; font-weight: 600; }
+
+.rcpt-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.rcpt-sig { text-align: center; padding-top: 26px; }
+.rcpt-sig-line { border-bottom: 1px solid #000; margin-bottom: 4px; }
+.rcpt-sig-label { font-size: 11px; color: #333; }
+.rcpt-sig-name  { font-size: 11px; color: #000; margin-top: 1px; }
+.rcpt-sig-date  { font-size: 10.5px; color: #777; margin-top: 4px; }
+
+/* ===========================================================
+   PRINT MODE
+   =========================================================== */
+@media print {
+  @page { size: A4; margin: 0; }
+  body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .printable-receipt, .printable-receipt * { visibility: visible !important; }
+  .printable-receipt {
+    position: absolute !important;
+    top: 0; left: 0;
+    margin: 0 !important;
+    box-shadow: none !important;
+    width: 210mm !important;
+    min-height: 287mm !important;
+  }
+  .no-print, .topbar, .sidebar, .fab, .toast-stack, .drawer-backdrop, .drawer { display: none !important; }
+}
+
+/* body class fallback ตอนพิมพ์จาก preview modal */
+body.printing-receipt .app > *:not(.modal-backdrop) { display: none !important; }
+body.printing-receipt .modal-backdrop { background: #fff !important; }
+body.printing-receipt .modal { box-shadow: none !important; background: #fff !important; width: auto !important; max-width: 100% !important; max-height: none !important; }
+body.printing-receipt .modal-header { display: none !important; }
+body.printing-receipt .modal-body { padding: 0 !important; background: #fff !important; overflow: visible !important; }
+
+/* Receipt preview on small screens — scale ลงให้พอดี */
+@media (max-width: 900px) {
+  .printable-receipt {
+    transform: scale(0.85);
+    transform-origin: top left;
+    margin-left: -8mm;
+  }
+}

@@ -221,6 +221,7 @@ function ItemsTable({ items, setItems, cats, onAddCat, type }) {
     </div>
   );
 }
+window.ItemsTable = ItemsTable;
 
 function DocTypeRow({ selected, onToggle }) {
   return (
@@ -258,6 +259,7 @@ function VatModeRow({ value, onChange }) {
     </div>
   );
 }
+window.VatModeRow = VatModeRow;
 
 window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel }) {
   const app = window.useApp();

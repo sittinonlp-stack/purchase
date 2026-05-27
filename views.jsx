@@ -569,6 +569,8 @@ function RecordsTable({ records, onOpen }) {
                     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>อื่นๆ</span>
                     : r.type === 'quick-receipt'
                     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
+                    : r.type === 'receipt'
+                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จ</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
                 <td>
@@ -648,6 +650,7 @@ window.HistoryView = function HistoryView() {
             <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
             <button className={"tab" + (typeFilter === 'lump-labor' ? ' active' : '')} onClick={() => setTypeFilter('lump-labor')}><Icon name="clipboard" size={13} /> เหมาจ่าย</button>
             <button className={"tab" + (typeFilter === 'other' ? ' active' : '')} onClick={() => setTypeFilter('other')}><Icon name="sparkle" size={13} /> อื่นๆ</button>
+            <button className={"tab" + (typeFilter === 'receipt' ? ' active' : '')} onClick={() => setTypeFilter('receipt')}><Icon name="receipt" size={13} /> ใบเสร็จ</button>
           </div>
           <div className="topbar-search" style={{ width: 280, margin: 0 }}>
             <Icon name="search" size={14} />
@@ -1445,6 +1448,8 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>ค่าใช้จ่ายอื่นๆ</span>
     : rec.type === 'quick-receipt'
     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
+    : rec.type === 'receipt'
+    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จรับเงิน</span>
     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>บันทึกค่าแรง</span>;
 
   // Editable work logs inline (saves immediately via updateRecord)
@@ -1470,6 +1475,31 @@ window.DetailDrawer = function DetailDrawer() {
                 app.deleteRecord(rec.id); app.pushToast('ลบรายการแล้ว'); close();
               }}><Icon name="trash" size={13} /> ลบ</button>
             )}
+            {rec.type === 'receipt' && (
+              <button className="btn btn-ghost btn-sm" onClick={() => {
+                // เปิด print preview สำหรับใบเสร็จ
+                const w = window.open('', '_blank');
+                if (!w) { app.pushToast('โปรดอนุญาต pop-up เพื่อพิมพ์ใบเสร็จ', 'error'); return; }
+                const c = window.getCompanySettings();
+                w.document.write('<html><head><title>ใบเสร็จ ' + rec.docNo + '</title>');
+                w.document.write('<link rel="stylesheet" href="' + window.location.origin + '/styles.css">');
+                w.document.write('<style>body{background:#fff;padding:20px;font-family:Prompt,sans-serif;}</style>');
+                w.document.write('</head><body><div id="receipt-print"></div></body></html>');
+                w.document.close();
+                // render หลัง stylesheet โหลด
+                setTimeout(() => {
+                  try {
+                    const root = window.ReactDOM.createRoot(w.document.getElementById('receipt-print'));
+                    root.render(window.React.createElement(window.PrintableReceipt, { rec, company: c, app }));
+                    setTimeout(() => { w.print(); }, 400);
+                  } catch (e) {
+                    console.error('print failed:', e);
+                  }
+                }, 300);
+              }} title="พิมพ์ใบเสร็จ">
+                <Icon name="download" size={13} /> พิมพ์
+              </button>
+            )}
             <button className="btn btn-accent btn-sm" onClick={() => {
               app.setEditingId(rec.id);
               const v = rec.type === 'machine' ? 'new-machine'
@@ -1477,6 +1507,7 @@ window.DetailDrawer = function DetailDrawer() {
                 : rec.type === 'lump-labor' ? 'new-lump-labor'
                 : rec.type === 'other' ? 'new-other'
                 : rec.type === 'quick-receipt' ? 'quick-receipt'
+                : rec.type === 'receipt' ? 'new-receipt'
                 : 'new-material';
               app.setView(v);
               close();

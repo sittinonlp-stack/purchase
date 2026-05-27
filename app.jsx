@@ -72,6 +72,7 @@ function Shell() {
   if (view === 'new-labor')      { title = 'บันทึกค่าแรง'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-lump-labor') { title = 'ค่าแรงเหมาจ่าย'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-other')     { title = 'ค่าใช้จ่ายอื่นๆ'; sub = 'บันทึก / แก้ไข'; }
+  if (view === 'new-receipt')   { title = 'ใบเสร็จรับเงิน'; sub = 'ออก / แก้ไข'; }
   if (view === 'quick-receipt') { title = 'ถ่ายรูปใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'receipts')     { title = 'รูปถ่ายใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'history')      { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
@@ -184,6 +185,24 @@ function Shell() {
                 } else {
                   app.addRecord(rec);
                   app.pushToast('บันทึกค่าใช้จ่ายอื่นๆ แล้ว');
+                }
+                clearEditing();
+                app.setView('history');
+              }}
+              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+            />
+          )}
+          {view === 'new-receipt' && (
+            <window.ReceiptForm
+              key={'rcpt-' + (app.editingId || 'new')}
+              initial={initial && initial.type === 'receipt' ? initial : null}
+              onSubmit={(rec) => {
+                if (app.editingId) {
+                  app.updateRecord(app.editingId, rec);
+                  app.pushToast('แก้ไขใบเสร็จเรียบร้อย');
+                } else {
+                  app.addRecord(rec);
+                  app.pushToast('บันทึกใบเสร็จแล้ว');
                 }
                 clearEditing();
                 app.setView('history');
