@@ -571,6 +571,8 @@ function RecordsTable({ records, onOpen }) {
                     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
                     : r.type === 'receipt'
                     ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จ</span>
+                    : r.type === 'tax-invoice'
+                    ? <span className="badge dot" style={{ background:'rgba(146,64,14,0.12)', color:'#92400e', borderColor:'rgba(146,64,14,0.3)' }}>🧾 ใบกำกับภาษี</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
                 <td>
@@ -602,8 +604,10 @@ window.HistoryView = function HistoryView() {
   const [sortKey, setSortKey] = useState('date-desc');
 
   const filtered = useMemo(() => {
-    // ไม่แสดง quick-receipt และ receipt ที่นี่ — มี view ของตัวเองแล้ว
-    let arr = app.records.filter(r => r.type !== 'quick-receipt' && r.type !== 'receipt');
+    // ไม่แสดง quick-receipt, receipt และ tax-invoice ที่นี่ — มี view ของตัวเองแล้ว
+    let arr = app.records.filter(r =>
+      r.type !== 'quick-receipt' && r.type !== 'receipt' && r.type !== 'tax-invoice'
+    );
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
     if (q.trim()) {
@@ -644,7 +648,7 @@ window.HistoryView = function HistoryView() {
       <div className="card">
         <div className="filter-bar">
           <div className="tabs">
-            <button className={"tab" + (typeFilter === 'all' ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type !== 'quick-receipt' && r.type !== 'receipt').length}</span></button>
+            <button className={"tab" + (typeFilter === 'all' ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type !== 'quick-receipt' && r.type !== 'receipt' && r.type !== 'tax-invoice').length}</span></button>
             <button className={"tab" + (typeFilter === 'material' ? ' active' : '')} onClick={() => setTypeFilter('material')}><Icon name="cart" size={13} /> วัสดุ</button>
             <button className={"tab" + (typeFilter === 'machine' ? ' active' : '')} onClick={() => setTypeFilter('machine')}><Icon name="truck" size={13} /> เครื่องจักร</button>
             <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
@@ -1449,6 +1453,8 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
     : rec.type === 'receipt'
     ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จรับเงิน</span>
+    : rec.type === 'tax-invoice'
+    ? <span className="badge dot" style={{ background:'rgba(146,64,14,0.12)', color:'#92400e', borderColor:'rgba(146,64,14,0.3)' }}>🧾 ใบเสร็จ/ใบกำกับภาษี</span>
     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>บันทึกค่าแรง</span>;
 
   // Editable work logs inline (saves immediately via updateRecord)
@@ -1474,28 +1480,28 @@ window.DetailDrawer = function DetailDrawer() {
                 app.deleteRecord(rec.id); app.pushToast('ลบรายการแล้ว'); close();
               }}><Icon name="trash" size={13} /> ลบ</button>
             )}
-            {rec.type === 'receipt' && (
+            {(rec.type === 'receipt' || rec.type === 'tax-invoice') && (
               <button className="btn btn-ghost btn-sm" onClick={() => {
-                // เปิด print preview สำหรับใบเสร็จ
                 const w = window.open('', '_blank');
-                if (!w) { app.pushToast('โปรดอนุญาต pop-up เพื่อพิมพ์ใบเสร็จ', 'error'); return; }
+                if (!w) { app.pushToast('โปรดอนุญาต pop-up เพื่อพิมพ์', 'error'); return; }
                 const c = window.getCompanySettings();
-                w.document.write('<html><head><title>ใบเสร็จ ' + rec.docNo + '</title>');
+                const titleLabel = rec.type === 'tax-invoice' ? 'ใบกำกับภาษี' : 'ใบเสร็จ';
+                w.document.write('<html><head><title>' + titleLabel + ' ' + rec.docNo + '</title>');
                 w.document.write('<link rel="stylesheet" href="' + window.location.origin + '/styles.css">');
                 w.document.write('<style>body{background:#fff;padding:20px;font-family:Prompt,sans-serif;}</style>');
                 w.document.write('</head><body><div id="receipt-print"></div></body></html>');
                 w.document.close();
-                // render หลัง stylesheet โหลด
                 setTimeout(() => {
                   try {
+                    const Component = rec.type === 'tax-invoice' ? window.PrintableTaxInvoice : window.PrintableReceipt;
                     const root = window.ReactDOM.createRoot(w.document.getElementById('receipt-print'));
-                    root.render(window.React.createElement(window.PrintableReceipt, { rec, company: c, app }));
+                    root.render(window.React.createElement(Component, { rec, company: c, app }));
                     setTimeout(() => { w.print(); }, 400);
                   } catch (e) {
                     console.error('print failed:', e);
                   }
                 }, 300);
-              }} title="พิมพ์ใบเสร็จ">
+              }} title="พิมพ์">
                 <Icon name="download" size={13} /> พิมพ์
               </button>
             )}
@@ -1507,6 +1513,7 @@ window.DetailDrawer = function DetailDrawer() {
                 : rec.type === 'other' ? 'new-other'
                 : rec.type === 'quick-receipt' ? 'quick-receipt'
                 : rec.type === 'receipt' ? 'new-receipt'
+                : rec.type === 'tax-invoice' ? 'new-tax-invoice'
                 : 'new-material';
               app.setView(v);
               close();
@@ -3346,6 +3353,219 @@ window.ReceiptsListView = function ReceiptsListView() {
                   );
                 })}
               </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+// ============================================================
+// TaxInvoicesListView — ประวัติใบเสร็จ/ใบกำกับภาษี (มี VAT)
+// ============================================================
+window.TaxInvoicesListView = function TaxInvoicesListView() {
+  const app = window.useApp();
+  const [q, setQ] = useState('');
+  const [projFilter, setProjFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('date-desc');
+
+  const allInvoices = useMemo(() =>
+    app.records.filter(r => r.type === 'tax-invoice'), [app.records]);
+
+  const usedProjects = useMemo(() => {
+    const ids = new Set(allInvoices.map(r => r.projectId).filter(Boolean));
+    return app.projects.filter(p => ids.has(p.id));
+  }, [allInvoices, app.projects]);
+
+  const filtered = useMemo(() => {
+    let arr = allInvoices;
+    if (projFilter !== 'all')    arr = arr.filter(r => r.projectId === projFilter);
+    if (paymentFilter !== 'all') arr = arr.filter(r => (r.meta?.paymentMethod || 'cash') === paymentFilter);
+    if (q.trim()) {
+      const s = q.toLowerCase();
+      arr = arr.filter(r =>
+        (r.docNo || '').toLowerCase().includes(s) ||
+        (r.vendor || '').toLowerCase().includes(s) ||
+        (r.meta?.customerTaxId || '').toLowerCase().includes(s) ||
+        (r.items || []).some(i => (i.name || '').toLowerCase().includes(s))
+      );
+    }
+    return [...arr].sort((a, b) => {
+      if (sortKey === 'date-desc')   return (b.date || '').localeCompare(a.date || '');
+      if (sortKey === 'date-asc')    return (a.date || '').localeCompare(b.date || '');
+      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
+      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
+      return 0;
+    });
+  }, [allInvoices, q, projFilter, paymentFilter, sortKey]);
+
+  // VAT รวม — สำหรับยื่นภาษี
+  const vatStats = useMemo(() => {
+    const arr = filtered.map(r => computeTotals(r));
+    return {
+      subTotal: arr.reduce((s, t) => s + t.subTotal, 0),
+      vatSum:   arr.reduce((s, t) => s + t.vat, 0),
+      total:    arr.reduce((s, t) => s + t.total, 0),
+    };
+  }, [filtered]);
+
+  const grandVatSum = useMemo(() =>
+    allInvoices.reduce((s, r) => s + computeTotals(r).vat, 0), [allInvoices]);
+  const grandTotal  = useMemo(() =>
+    allInvoices.reduce((s, r) => s + computeTotals(r).total, 0), [allInvoices]);
+
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const monthInvoices = allInvoices.filter(r => (r.date || '').slice(0, 7) === thisMonth);
+  const monthVat = monthInvoices.reduce((s, r) => s + computeTotals(r).vat, 0);
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">ประวัติใบเสร็จ/ใบกำกับภาษี</h1>
+          <div className="page-sub">ใบกำกับภาษีที่ออกให้ลูกค้า · พร้อมยอด VAT รวมสำหรับยื่นภาษี</div>
+        </div>
+        <div className="row gap-8">
+          <button className="btn btn-accent" onClick={() => app.setView('new-tax-invoice')}>
+            <Icon name="plus" size={14} stroke={2.5} /> ออกใบกำกับภาษีใหม่
+          </button>
+        </div>
+      </div>
+
+      <div className="stat-grid" style={{ marginBottom: 20 }}>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(146,64,14,0.12)', color: '#92400e' }}>
+            <Icon name="receipt" size={16} />
+          </div>
+          <div className="stat-label">ใบกำกับภาษีทั้งหมด</div>
+          <div className="stat-value mono">{allInvoices.length}</div>
+          <div className="stat-change positive">฿{fmt(grandTotal)}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
+            <Icon name="percent" size={16} />
+          </div>
+          <div className="stat-label">VAT รวม (ทั้งหมด)</div>
+          <div className="stat-value mono">฿{fmt(grandVatSum)}</div>
+          <div className="stat-change neutral">ยื่นภาษีขาย</div>
+        </div>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(217,119,6,0.12)', color: 'var(--accent)' }}>
+            <Icon name="calendar" size={16} />
+          </div>
+          <div className="stat-label">VAT เดือนนี้</div>
+          <div className="stat-value mono">฿{fmt(monthVat)}</div>
+          <div className="stat-change neutral">{monthInvoices.length} ใบ</div>
+        </div>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
+            <Icon name="money" size={16} />
+          </div>
+          <div className="stat-label">ยอดที่กรองอยู่</div>
+          <div className="stat-value mono">฿{fmt(vatStats.total)}</div>
+          <div className="stat-change neutral">VAT ฿{fmt(vatStats.vatSum)}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="filter-bar">
+          <div className="tabs">
+            <button className={'tab' + (paymentFilter === 'all'      ? ' active' : '')} onClick={() => setPaymentFilter('all')}>
+              ทั้งหมด <span className="badge gray mono">{allInvoices.length}</span>
+            </button>
+            <button className={'tab' + (paymentFilter === 'cash'     ? ' active' : '')} onClick={() => setPaymentFilter('cash')}>เงินสด</button>
+            <button className={'tab' + (paymentFilter === 'transfer' ? ' active' : '')} onClick={() => setPaymentFilter('transfer')}>โอนเงิน</button>
+            <button className={'tab' + (paymentFilter === 'cheque'   ? ' active' : '')} onClick={() => setPaymentFilter('cheque')}>เช็ค</button>
+            <button className={'tab' + (paymentFilter === 'credit'   ? ' active' : '')} onClick={() => setPaymentFilter('credit')}>เครดิต</button>
+          </div>
+
+          <div className="topbar-search" style={{ width: 280, margin: 0 }}>
+            <Icon name="search" size={14} />
+            <input placeholder="ค้นหา: เลขที่, ลูกค้า, Tax ID, รายการ"
+              value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+
+          <select className="select" value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
+            <option value="all">ทุกโครงการ ({usedProjects.length})</option>
+            {usedProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+
+          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
+            <option value="date-asc">วันที่ เก่า → ใหม่</option>
+            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
+            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
+          </select>
+
+          <div className="spacer" />
+          <div className="text-small text-muted">
+            <strong className="mono" style={{ color: 'var(--ink-1)' }}>{filtered.length}</strong> ใบ ·
+            ก่อนภาษี <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(vatStats.subTotal)}</strong> ·
+            VAT <strong className="mono" style={{ color: '#dc2626' }}>฿{fmt(vatStats.vatSum)}</strong>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="receipt" size={28} /></div>
+            <div className="empty-title">
+              {allInvoices.length === 0 ? 'ยังไม่มีใบกำกับภาษี' : 'ไม่พบใบที่ตรงกับตัวกรอง'}
+            </div>
+            <div className="empty-sub">
+              {allInvoices.length === 0
+                ? 'กดปุ่ม "ออกใบกำกับภาษีใหม่" เพื่อเริ่มต้น'
+                : 'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 130 }}>เลขที่</th>
+                  <th style={{ width: 100 }}>วันที่</th>
+                  <th>ลูกค้า</th>
+                  <th style={{ width: 120 }}>Tax ID</th>
+                  <th style={{ width: 100 }} className="num">ก่อน VAT</th>
+                  <th style={{ width: 90 }} className="num">VAT</th>
+                  <th style={{ width: 110 }} className="num">รวมสุทธิ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => {
+                  const t = computeTotals(r);
+                  return (
+                    <tr key={r.id} onClick={() => app.setDetailId(r.id)}>
+                      <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
+                      <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{r.vendor || '—'}</div>
+                        {r.meta?.customerBranch && (
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
+                            {r.meta.customerBranch}
+                          </div>
+                        )}
+                      </td>
+                      <td className="mono" style={{ fontSize: 12 }}>
+                        {r.meta?.customerTaxId || <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                      </td>
+                      <td className="num mono" style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{fmt(t.subTotal)}</td>
+                      <td className="num mono" style={{ fontSize: 12.5, color: '#dc2626' }}>{fmt(t.vat)}</td>
+                      <td className="num mono" style={{ fontWeight: 600, color: '#92400e' }}>{fmt(t.total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: 'var(--bg)', fontWeight: 600 }}>
+                  <td colSpan={4} style={{ textAlign: 'right', padding: '10px 12px' }}>รวม {filtered.length} ใบ:</td>
+                  <td className="num mono" style={{ padding: '10px 12px' }}>{fmt(vatStats.subTotal)}</td>
+                  <td className="num mono" style={{ padding: '10px 12px', color: '#dc2626' }}>{fmt(vatStats.vatSum)}</td>
+                  <td className="num mono" style={{ padding: '10px 12px', color: '#92400e' }}>{fmt(vatStats.total)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
