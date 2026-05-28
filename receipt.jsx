@@ -1940,30 +1940,33 @@ function PrintableInvoice({ rec, company, app }) {
             <div className="rcpt-amount-words-text">({thaiBahtText(totals.total)})</div>
           </div>
         </div>
-        {/* กล่อง AMOUNT DUE — ใช้ inline style + print-color-adjust เพื่อให้พื้นหลังแสดงตอนพิมพ์ */}
+        {/* กล่อง AMOUNT DUE */}
         <div style={{
-          border: '2.5px solid #000', borderRadius: 4, overflow: 'hidden',
+          border: '2px solid #1a1a1a', borderRadius: 4, overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
+          WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact',
         }}>
+          {/* header label — พื้นเทาอ่อน */}
           <div style={{
-            background: '#000', color: '#fff',
+            background: '#f0f0f0', borderBottom: '1px solid #bbb',
             WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact',
-            padding: '6px 14px',
-            fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em',
-            textTransform: 'uppercase',
+            padding: '5px 12px',
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+            color: '#333', textTransform: 'uppercase',
           }}>
             ยอดที่ต้องชำระ / Amount Due
           </div>
+          {/* ตัวเลขหลัก — พื้นขาว ตัวเลขใหญ่ดำ */}
           <div style={{
-            background: '#000', color: '#fff',
+            background: '#fff',
             WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact',
             padding: '10px 14px',
-            display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6,
+            display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 5,
           }}>
-            <span className="rcpt-mono" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '0.02em' }}>
+            <span className="rcpt-mono" style={{ fontSize: 28, fontWeight: 700, color: '#000', letterSpacing: '0.02em' }}>
               {fmt(totals.total)}
             </span>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>บาท</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#222' }}>บาท</span>
           </div>
         </div>
       </div>
