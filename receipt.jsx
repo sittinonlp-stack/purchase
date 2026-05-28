@@ -152,7 +152,7 @@ body{
 .rcpt-totals-right{border:1px solid #888;border-radius:4px;overflow:hidden}
 .rcpt-total-row{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;border-bottom:1px solid #ddd}
 .rcpt-total-row:last-child{border-bottom:none}
-.rcpt-total-grand{background:#000;color:#fff;font-weight:700;font-size:14px;padding:9px 12px}
+.rcpt-total-grand{background:#000;color:#fff;font-weight:700;font-size:14px;padding:9px 12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .rcpt-footer{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:14px}
 .rcpt-footer-left{padding-top:4px}
 .rcpt-payment{font-size:12px;margin-bottom:10px}
@@ -1940,10 +1940,30 @@ function PrintableInvoice({ rec, company, app }) {
             <div className="rcpt-amount-words-text">({thaiBahtText(totals.total)})</div>
           </div>
         </div>
-        <div className="rcpt-totals-right">
-          <div className="rcpt-total-row rcpt-total-grand">
-            <span>ยอดที่ต้องชำระ / AMOUNT DUE</span>
-            <span className="rcpt-mono">{fmt(totals.total)} บาท</span>
+        {/* กล่อง AMOUNT DUE — ใช้ inline style + print-color-adjust เพื่อให้พื้นหลังแสดงตอนพิมพ์ */}
+        <div style={{
+          border: '2.5px solid #000', borderRadius: 4, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            background: '#000', color: '#fff',
+            WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact',
+            padding: '6px 14px',
+            fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}>
+            ยอดที่ต้องชำระ / Amount Due
+          </div>
+          <div style={{
+            background: '#000', color: '#fff',
+            WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact',
+            padding: '10px 14px',
+            display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 6,
+          }}>
+            <span className="rcpt-mono" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '0.02em' }}>
+              {fmt(totals.total)}
+            </span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>บาท</span>
           </div>
         </div>
       </div>
