@@ -1305,9 +1305,9 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
       vendor: '',
       items: [{ id: newId(), name: 'งานก่อสร้างตามสัญญา งวดที่ ___', categoryId: '', qty: 1, unit: 'งวด', price: 0 }],
       vatMode: 'exclusive',
-      vatRate: 7,
+      vatRate: 0,             // ใบแจ้งหนี้ไม่คิด VAT
       whtEnabled: false,
-      whtRate: 3,
+      whtRate: 0,
       docs: [],
       note: '',
       images: [],
@@ -1527,46 +1527,7 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
             </div>
           </div>
 
-          {/* Card 4: VAT */}
-          <div className="card">
-            <div className="card-header">
-              <div>
-                <div className="card-title">ภาษีมูลค่าเพิ่ม (VAT)</div>
-                <div className="card-sub">เลือกว่าราคารวม VAT หรือไม่</div>
-              </div>
-            </div>
-            <div className="card-body col gap-16">
-              <window.VatModeRow value={form.vatMode} onChange={(v) => set({ vatMode: v })} />
-              <div className="row gap-12" style={{ alignItems: 'center' }}>
-                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>อัตรา VAT</span>
-                <div className="input-affix" style={{ width: 130 }}>
-                  <input className="input mono" type="number" step="0.5" value={form.vatRate}
-                    onChange={(e) => set({ vatRate: e.target.value })} />
-                  <div className="input-affix-suffix">%</div>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px dashed var(--line)', paddingTop: 16 }}>
-                <label className="row gap-8" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                  <input type="checkbox" checked={form.whtEnabled}
-                    onChange={(e) => set({ whtEnabled: e.target.checked, whtRate: e.target.checked ? 3 : 0 })} />
-                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>หัก ณ ที่จ่าย (ลูกค้าจะหักก่อนจ่าย)</span>
-                </label>
-                {form.whtEnabled && (
-                  <div className="row gap-12 mt-12" style={{ alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>อัตรา</span>
-                    <div className="input-affix" style={{ width: 130 }}>
-                      <input className="input mono" type="number" step="0.5" value={form.whtRate}
-                        onChange={(e) => set({ whtRate: e.target.value })} />
-                      <div className="input-affix-suffix">%</div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Card 5: บัญชีรับโอนเงิน */}
+          {/* Card 4: บัญชีรับโอนเงิน */}
           <div className="card">
             <div className="card-header">
               <div>
@@ -1610,7 +1571,7 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
             </div>
           </div>
 
-          {/* Card 6: ผู้จัดทำ + อนุมัติ + หมายเหตุ */}
+          {/* Card 5: ผู้จัดทำ + อนุมัติ + หมายเหตุ */}
           <div className="card">
             <div className="card-header">
               <div>
@@ -1648,30 +1609,10 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
           <div className="card">
             <div className="card-header">
               <div className="card-title">สรุปยอดเรียกเก็บ</div>
-              <span className="badge amber dot">
-                {form.vatMode === 'inclusive' ? 'รวม VAT' : 'ยังไม่รวม VAT'}
-              </span>
+              <span className="badge gray mono">{form.items.length} รายการ</span>
             </div>
             <div className="card-body">
               <div className="summary-rows">
-                <div className="summary-row">
-                  <span className="label">มูลค่าก่อนภาษี</span>
-                  <span className="value">{fmt(totals.subTotal)}</span>
-                </div>
-                <div className="summary-row">
-                  <span className="label">VAT {form.vatRate}%</span>
-                  <span className="value">{fmt(totals.vat)}</span>
-                </div>
-                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
-                  <span className="label">รวมทั้งสิ้น</span>
-                  <span className="value">{fmt(totals.beforeWht)}</span>
-                </div>
-                {form.whtEnabled && (
-                  <div className="summary-row">
-                    <span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span>
-                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
-                  </div>
-                )}
                 <div className="summary-row total">
                   <span className="label">ยอดที่ต้องรับ</span>
                   <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
@@ -1897,24 +1838,6 @@ function PrintableInvoice({ rec, company, app }) {
           </div>
         </div>
         <div className="rcpt-totals-right">
-          <div className="rcpt-total-row">
-            <span>มูลค่าก่อนภาษี / Sub-total</span>
-            <span className="rcpt-mono">{fmt(totals.subTotal)}</span>
-          </div>
-          <div className="rcpt-total-row">
-            <span>VAT {rec.vatRate}%</span>
-            <span className="rcpt-mono">{fmt(totals.vat)}</span>
-          </div>
-          <div className="rcpt-total-row" style={{ background:'#f5f5f5', fontWeight:600 }}>
-            <span>รวมทั้งสิ้น / Total</span>
-            <span className="rcpt-mono">{fmt(totals.beforeWht)}</span>
-          </div>
-          {rec.whtEnabled && totals.wht > 0 && (
-            <div className="rcpt-total-row">
-              <span>หัก ณ ที่จ่าย {rec.whtRate}% / WHT</span>
-              <span className="rcpt-mono">−{fmt(totals.wht)}</span>
-            </div>
-          )}
           <div className="rcpt-total-row rcpt-total-grand">
             <span>ยอดที่ต้องชำระ / AMOUNT DUE</span>
             <span className="rcpt-mono">{fmt(totals.total)} บาท</span>
