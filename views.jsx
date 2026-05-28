@@ -1487,38 +1487,14 @@ window.DetailDrawer = function DetailDrawer() {
             )}
             {(rec.type === 'receipt' || rec.type === 'tax-invoice' || rec.type === 'invoice') && (
               <button className="btn btn-ghost btn-sm" onClick={() => {
-                const w = window.open('', '_blank');
-                if (!w) { app.pushToast('โปรดอนุญาต pop-up เพื่อพิมพ์', 'error'); return; }
                 const c = window.getCompanySettings();
                 const titleLabel = rec.type === 'tax-invoice' ? 'ใบกำกับภาษี'
                   : rec.type === 'invoice' ? 'ใบแจ้งหนี้'
                   : 'ใบเสร็จ';
-                // หน้าต่างพิมพ์: ตั้ง @page A4 + body padding=0 + center receipt บนหน้าจอ
-                w.document.write('<html><head><title>' + titleLabel + ' ' + rec.docNo + '</title>');
-                w.document.write('<link rel="preconnect" href="https://fonts.googleapis.com">');
-                w.document.write('<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">');
-                w.document.write('<link rel="stylesheet" href="' + window.location.origin + '/styles.css">');
-                w.document.write('<style>');
-                w.document.write('@page { size: A4; margin: 0; }');
-                w.document.write('html, body { margin: 0 !important; padding: 0 !important; background: #e8e6e1; font-family: Prompt, sans-serif; }');
-                // screen view: center หน้ากระดาษกลางจอ + เพิ่มระยะรอบสำหรับการดู
-                w.document.write('@media screen { body { display: flex; justify-content: center; align-items: flex-start; padding: 24px 0 !important; min-height: 100vh; } }');
-                w.document.write('@media print { body { background: #fff !important; padding: 0 !important; } }');
-                w.document.write('</style>');
-                w.document.write('</head><body><div id="receipt-print"></div></body></html>');
-                w.document.close();
-                setTimeout(() => {
-                  try {
-                    const Component = rec.type === 'tax-invoice' ? window.PrintableTaxInvoice
-                      : rec.type === 'invoice' ? window.PrintableInvoice
-                      : window.PrintableReceipt;
-                    const root = window.ReactDOM.createRoot(w.document.getElementById('receipt-print'));
-                    root.render(window.React.createElement(Component, { rec, company: c, app }));
-                    setTimeout(() => { w.print(); }, 600);
-                  } catch (e) {
-                    console.error('print failed:', e);
-                  }
-                }, 400);
+                const Component = rec.type === 'tax-invoice' ? window.PrintableTaxInvoice
+                  : rec.type === 'invoice' ? window.PrintableInvoice
+                  : window.PrintableReceipt;
+                window.openPrintPopup(Component, titleLabel + ' ' + rec.docNo, rec, c, app);
               }} title="พิมพ์">
                 <Icon name="download" size={13} /> พิมพ์
               </button>

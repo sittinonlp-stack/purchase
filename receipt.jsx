@@ -97,6 +97,128 @@ window.getCompanySettings  = getCompanySettings;
 window.saveCompanySettings = saveCompanySettings;
 
 // ──────────────────────────────────────────────
+// POPUP_CSS — CSS แบบ standalone สำหรับหน้าต่าง popup
+// ไม่โหลด styles.css เพื่อป้องกัน body flex ถูก override
+// ──────────────────────────────────────────────
+const POPUP_CSS = `
+@page{size:A4;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  display:flex;flex-direction:column;align-items:center;
+  padding:28px 0;min-height:100vh;
+  background:#e8e6e1;
+  font-family:'Prompt','IBM Plex Sans Thai',sans-serif;font-size:13px;
+}
+.printable-receipt{
+  background:#fff;color:#000;
+  font-family:'Prompt','IBM Plex Sans Thai',sans-serif;
+  font-size:13px;line-height:1.5;
+  padding:18mm 16mm;width:210mm;min-height:297mm;
+  box-shadow:0 6px 24px rgba(0,0,0,0.18);
+  box-sizing:border-box;position:relative;
+}
+.rcpt-mono{font-family:'JetBrains Mono',monospace}
+.rcpt-num{text-align:right}
+.rcpt-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:2px solid #000}
+.rcpt-company{display:flex;gap:14px;align-items:flex-start;flex:1;min-width:0}
+.rcpt-logo{width:64px;height:64px;object-fit:contain;border:1px solid #ccc;border-radius:6px;background:#fff}
+.rcpt-company-name{font-size:17px;font-weight:700;margin-bottom:4px}
+.rcpt-company-line{font-size:11.5px;color:#333;line-height:1.55}
+.rcpt-title-box{text-align:right;flex-shrink:0}
+.rcpt-title{font-size:19px;font-weight:700;letter-spacing:0.02em}
+.rcpt-title-en{font-size:11px;color:#555;letter-spacing:0.1em;margin-top:2px}
+.rcpt-original{display:inline-block;margin-top:8px;padding:4px 12px;border:1.5px solid #000;font-size:10.5px;font-weight:600;letter-spacing:0.06em}
+.rcpt-info-row{display:flex;gap:18px;padding:10px 0;margin-bottom:12px;border-bottom:1px dashed #999;font-size:12px}
+.rcpt-info-cell{display:flex;flex-direction:column}
+.rcpt-info-label{color:#666;font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase}
+.rcpt-info-value{font-weight:600;font-size:13px;margin-top:1px}
+.rcpt-customer{border:1px solid #999;border-radius:4px;padding:10px 14px;margin-bottom:14px;background:#fafafa}
+.rcpt-customer-title{font-size:10px;font-weight:700;letter-spacing:0.08em;color:#555;text-transform:uppercase;margin-bottom:6px}
+.rcpt-customer-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rcpt-customer-name{font-size:14.5px;font-weight:600;margin-bottom:2px}
+.rcpt-customer-line{font-size:11.5px;color:#333;line-height:1.6}
+.rcpt-customer-key{color:#666;font-size:10.5px}
+.rcpt-customer-side{text-align:right}
+.rcpt-items{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:11.5px}
+.rcpt-items th,.rcpt-items td{border:1px solid #888;padding:6px 8px;vertical-align:top}
+.rcpt-items thead th{background:#f0f0f0;font-weight:600;font-size:11px;text-align:center;letter-spacing:0.02em}
+.rcpt-items tbody td{height:22px}
+.rcpt-items .rcpt-empty-row td{border-color:#ddd}
+.rcpt-totals{display:grid;grid-template-columns:1fr 280px;gap:14px;margin-top:4px;margin-bottom:18px}
+.rcpt-amount-words{padding:10px 14px;border:1px solid #999;border-radius:4px;background:#fafafa;font-size:11.5px}
+.rcpt-amount-words-label{color:#666;font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase}
+.rcpt-amount-words-text{margin-top:4px;font-weight:600;font-size:12.5px}
+.rcpt-totals-right{border:1px solid #888;border-radius:4px;overflow:hidden}
+.rcpt-total-row{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;border-bottom:1px solid #ddd}
+.rcpt-total-row:last-child{border-bottom:none}
+.rcpt-total-grand{background:#000;color:#fff;font-weight:700;font-size:14px;padding:9px 12px}
+.rcpt-footer{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:14px}
+.rcpt-footer-left{padding-top:4px}
+.rcpt-payment{font-size:12px;margin-bottom:10px}
+.rcpt-payment-label{color:#666}
+.rcpt-payment-sub{color:#444;font-size:11px;margin-top:2px}
+.rcpt-note{font-size:11px;color:#444;line-height:1.6}
+.rcpt-note-label{color:#666;font-weight:600}
+.rcpt-signatures{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.rcpt-sig{text-align:center;padding-top:26px}
+.rcpt-sig-line{border-bottom:1px solid #000;margin-bottom:4px}
+.rcpt-sig-label{font-size:11px;color:#333}
+.rcpt-sig-name{font-size:11px;color:#000;margin-top:1px}
+.rcpt-sig-date{font-size:10.5px;color:#777;margin-top:4px}
+.invoice-project-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding:10px 14px;margin-bottom:14px;border:1px solid #999;border-radius:4px;background:#fafafa}
+.ipb-label{font-size:10px;color:#555;letter-spacing:0.05em;text-transform:uppercase}
+.ipb-value{font-size:12.5px;font-weight:500;margin-top:2px}
+.invoice-payment-box{margin-top:14px;padding:12px 14px;border:1.5px solid #1d4ed8;border-radius:4px;background:rgba(37,99,235,0.04)}
+.invoice-payment-title{font-size:12px;font-weight:700;color:#1d4ed8;letter-spacing:0.05em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.invoice-payment-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px}
+.invoice-payment-item{display:flex;flex-direction:column}
+.invoice-payment-label{font-size:10.5px;color:#666;letter-spacing:0.03em}
+.invoice-payment-value{font-size:12.5px;font-weight:600;color:#1f1d18;margin-top:1px}
+.invoice-payment-terms{margin-top:10px;padding-top:8px;border-top:1px dashed rgba(37,99,235,0.3);font-size:11.5px;color:#333}
+@media print{
+  @page{size:A4;margin:0}
+  body{display:block!important;padding:0!important;background:#fff!important}
+  .printable-receipt{box-shadow:none!important;margin:0!important;position:static!important;width:210mm!important;min-height:297mm!important;padding:18mm 16mm!important}
+}
+`;
+
+// ──────────────────────────────────────────────
+// openPrintPopup — เปิดหน้าต่าง popup สะอาด และ render component พิมพ์
+// ใช้ POPUP_CSS แบบ inline เพื่อป้องกัน styles.css override body flex
+// ──────────────────────────────────────────────
+function openPrintPopup(Component, title, rec, company, app) {
+  const w = window.open('', '_blank');
+  if (!w) {
+    // Popup ถูกบล็อก → fallback body-class
+    document.body.classList.add('printing-receipt');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => document.body.classList.remove('printing-receipt'), 200);
+    }, 100);
+    return;
+  }
+  const fontHref = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+    .find(l => l.href.includes('googleapis.com'))?.href || '';
+  w.document.write('<!DOCTYPE html><html lang="th"><head>' +
+    '<meta charset="UTF-8"><title>' + title + '</title>' +
+    '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+    (fontHref ? '<link href="' + fontHref + '" rel="stylesheet">' : '') +
+    '<style>' + POPUP_CSS + '</style>' +
+    '</head><body><div id="proot"></div></body></html>');
+  w.document.close();
+  setTimeout(() => {
+    try {
+      const root = window.ReactDOM.createRoot(w.document.getElementById('proot'));
+      root.render(window.React.createElement(Component, { rec, company, app }));
+      setTimeout(() => w.print(), 600);
+    } catch (e) { console.error('[Print]', e); w.close(); }
+  }, 400);
+}
+window.openPrintPopup = openPrintPopup;
+
+// ──────────────────────────────────────────────
 // CompanySettingsModal — modal สำหรับแก้ไขข้อมูลบริษัท
 // ──────────────────────────────────────────────
 function CompanySettingsModal({ open, onClose, onSaved }) {
@@ -255,14 +377,7 @@ window.ReceiptForm = function ReceiptForm({ initial, onSubmit, onCancel }) {
     onSubmit(form);
   };
 
-  const printNow = () => {
-    // ปิด modal ก่อน → set print mode ใน body → window.print()
-    document.body.classList.add('printing-receipt');
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => document.body.classList.remove('printing-receipt'), 200);
-    }, 100);
-  };
+  const printNow = () => openPrintPopup(PrintableReceipt, 'ใบเสร็จ ' + (form.docNo || ''), form, company, app);
 
   return (
     <>
@@ -750,13 +865,7 @@ window.TaxInvoiceForm = function TaxInvoiceForm({ initial, onSubmit, onCancel })
     onSubmit(form);
   };
 
-  const printNow = () => {
-    document.body.classList.add('printing-receipt');
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => document.body.classList.remove('printing-receipt'), 200);
-    }, 100);
-  };
+  const printNow = () => openPrintPopup(PrintableTaxInvoice, 'ใบกำกับภาษี ' + (form.docNo || ''), form, company, app);
 
   return (
     <>
@@ -1360,13 +1469,7 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
     onSubmit(form);
   };
 
-  const printNow = () => {
-    document.body.classList.add('printing-receipt');
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => document.body.classList.remove('printing-receipt'), 200);
-    }, 100);
-  };
+  const printNow = () => openPrintPopup(PrintableInvoice, 'ใบแจ้งหนี้ ' + (form.docNo || ''), form, company, app);
 
   return (
     <>

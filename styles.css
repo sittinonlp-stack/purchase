@@ -2044,43 +2044,42 @@ img.zoomable:hover { opacity: 0.85; }
 
 /* ===========================================================
    PRINT MODE — เนื้อหาอยู่กึ่งกลางหน้ากระดาษ A4
+   ใช้ position:fixed เพื่อให้ตำแหน่งอ้างอิงจากขอบหน้ากระดาษ
+   ไม่ใช่จาก parent element หรือ scroll offset ใดๆ
    =========================================================== */
 @media print {
   @page { size: A4; margin: 0; }
 
-  /* reset ทุกอย่างให้เริ่มจาก (0,0) ของหน้ากระดาษ */
   html, body {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
   }
 
   /* ซ่อนทุก element ยกเว้นใบเสร็จ */
   body * { visibility: hidden !important; }
   .printable-receipt, .printable-receipt * { visibility: visible !important; }
 
-  /* ใบเสร็จเต็มหน้า A4 — ขอบใน 18mm/16mm ทำให้เนื้อหาดูกลางหน้า */
+  /* position:fixed = อ้างอิงจาก page box เสมอ ไม่ขึ้นกับ DOM parent */
   .printable-receipt {
-    position: absolute !important;
+    position: fixed !important;
     top: 0 !important;
     left: 0 !important;
-    right: 0 !important;
-    margin: 0 auto !important;
     width: 210mm !important;
     min-height: 297mm !important;
     padding: 18mm 16mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
-    page-break-inside: avoid;
+    background: #fff !important;
+    margin: 0 !important;
   }
 
   /* ซ่อน UI ของแอพ */
-  .no-print, .topbar, .sidebar, .fab, .toast-stack, .drawer-backdrop, .drawer { display: none !important; }
+  .no-print, .topbar, .sidebar, .fab, .toast-stack,
+  .drawer-backdrop, .drawer, .modal-header { display: none !important; }
 }
 
-/* body class fallback ตอนพิมพ์จาก preview modal */
+/* body class fallback — ใช้เมื่อ popup ถูกบล็อก */
 body.printing-receipt .app > *:not(.modal-backdrop) { display: none !important; }
 body.printing-receipt .modal-backdrop {
   background: #fff !important;

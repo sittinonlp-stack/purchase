@@ -316,6 +316,9 @@ window.AppProvider = function AppProvider({ children }) {
         detail = 'อ้างอิงข้อมูลไม่ถูกต้อง (เช่น โครงการ/ทีมถูกลบไปแล้ว)';
       } else if (err?.code === '42P01') {
         detail = 'ตารางไม่มีใน DB — โปรดรัน schema.sql';
+      } else if (err?.code === '23514') {
+        // check_violation — ประเภทเอกสารยังไม่อยู่ใน CHECK constraint
+        detail = 'ประเภทเอกสารยังไม่รองรับใน DB — โปรดรัน migration-invoice.sql ใน Supabase → SQL Editor';
       } else if (err?.message?.toLowerCase().includes('row-level security')) {
         detail = 'ไม่มีสิทธิ์ — RLS policy ไม่อนุญาต';
       }
