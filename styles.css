@@ -2112,3 +2112,71 @@ body.printing-receipt .modal-body {
     margin-left: -8mm;
   }
 }
+
+/* ===========================================================
+   Invoice-specific blocks
+   =========================================================== */
+.invoice-project-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 1px solid #999;
+  border-radius: 4px;
+  background: #fafafa;
+}
+.ipb-cell {}
+.ipb-label {
+  font-size: 10px;
+  color: #555;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.ipb-value {
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.invoice-payment-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1.5px solid #1d4ed8;
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.04);
+}
+.invoice-payment-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d4ed8;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.invoice-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+}
+.invoice-payment-item { display: flex; flex-direction: column; }
+.invoice-payment-label {
+  font-size: 10.5px;
+  color: #666;
+  letter-spacing: 0.03em;
+}
+.invoice-payment-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1f1d18;
+  margin-top: 1px;
+}
+.invoice-payment-terms {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(37, 99, 235, 0.3);
+  font-size: 11.5px;
+  color: #333;
+}

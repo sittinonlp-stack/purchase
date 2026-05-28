@@ -74,8 +74,10 @@ function Shell() {
   if (view === 'new-other')     { title = 'ค่าใช้จ่ายอื่นๆ'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-receipt')    { title = 'ใบเสร็จรับเงิน'; sub = 'ออก / แก้ไข'; }
   if (view === 'new-tax-invoice'){ title = 'ใบเสร็จรับเงิน/ใบกำกับภาษี'; sub = 'ออก / แก้ไข (มี VAT)'; }
+  if (view === 'new-invoice')    { title = 'ใบแจ้งหนี้'; sub = 'ตั้งเบิกงวดงานกับลูกค้า'; }
   if (view === 'receipts-list')  { title = 'ประวัติใบเสร็จรับเงิน'; sub = 'ใบเสร็จที่ออกให้ลูกค้าทั้งหมด'; }
   if (view === 'tax-invoices-list') { title = 'ประวัติใบกำกับภาษี'; sub = 'ใบกำกับภาษีที่ออกให้ลูกค้าทั้งหมด'; }
+  if (view === 'invoices-list')  { title = 'ประวัติใบแจ้งหนี้'; sub = 'ใบแจ้งหนี้ที่ตั้งเบิกกับลูกค้า'; }
   if (view === 'quick-receipt') { title = 'ถ่ายรูปใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'receipts')     { title = 'รูปถ่ายใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'history')      { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
@@ -233,6 +235,25 @@ function Shell() {
             />
           )}
           {view === 'tax-invoices-list' && <window.TaxInvoicesListView />}
+          {view === 'new-invoice' && (
+            <window.InvoiceForm
+              key={'iv-' + (app.editingId || 'new')}
+              initial={initial && initial.type === 'invoice' ? initial : null}
+              onSubmit={(rec) => {
+                if (app.editingId) {
+                  app.updateRecord(app.editingId, rec);
+                  app.pushToast('แก้ไขใบแจ้งหนี้เรียบร้อย');
+                } else {
+                  app.addRecord(rec);
+                  app.pushToast('บันทึกใบแจ้งหนี้แล้ว');
+                }
+                clearEditing();
+                app.setView('invoices-list');
+              }}
+              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+            />
+          )}
+          {view === 'invoices-list' && <window.InvoicesListView />}
         </div>
       </div>
       {app.detailId && <window.DetailDrawer />}

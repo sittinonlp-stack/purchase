@@ -1287,3 +1287,695 @@ function PrintableTaxInvoice({ rec, company, app }) {
 }
 window.PrintableTaxInvoice = PrintableTaxInvoice;
 
+// ============================================================
+// InvoiceForm — ใบแจ้งหนี้ตั้งเบิกงวดงาน (ก่อนรับเงิน)
+// ============================================================
+window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
+  const app = window.useApp();
+
+  const blank = () => {
+    // due date default = +30 วันจากวันที่ออก
+    const due = new Date();
+    due.setDate(due.getDate() + 30);
+    return {
+      type: 'invoice',
+      docNo: 'IV-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
+      date: todayStr(),
+      projectId: '',
+      vendor: '',
+      items: [{ id: newId(), name: 'งานก่อสร้างตามสัญญา งวดที่ ___', categoryId: '', qty: 1, unit: 'งวด', price: 0 }],
+      vatMode: 'exclusive',
+      vatRate: 7,
+      whtEnabled: false,
+      whtRate: 3,
+      docs: [],
+      note: '',
+      images: [],
+      depositAmount: 0,
+      depositStatus: 'none',
+      meta: {
+        customerAddress:  '',
+        customerTaxId:    '',
+        customerBranch:   'สำนักงานใหญ่',
+        dueDate:          due.toISOString().slice(0, 10),
+        installmentNo:    '',
+        installmentTotal: '',
+        workPeriodFrom:   '',
+        workPeriodTo:     '',
+        progressPercent:  '',
+        contractNo:       '',
+        bankName:         '',
+        bankAccountNo:    '',
+        bankAccountName:  '',
+        bankBranch:       '',
+        paymentTerms:     'ชำระภายใน 30 วัน นับจากวันที่ออกใบแจ้งหนี้',
+        preparedBy:       '',
+        approvedBy:       '',
+      },
+    };
+  };
+
+  const [form, setForm] = useState(() => {
+    if (initial) {
+      const merged = { ...initial };
+      merged.meta = { ...blank().meta, ...(initial.meta || {}) };
+      return merged;
+    }
+    return blank();
+  });
+  const [companyOpen, setCompanyOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [company, setCompany]         = useState(() => getCompanySettings());
+
+  const totals = useMemo(() => computeTotals(form), [form]);
+
+  const set     = (patch)     => setForm((f) => ({ ...f, ...patch }));
+  const setMeta = (metaPatch) => setForm((f) => ({ ...f, meta: { ...(f.meta || {}), ...metaPatch } }));
+
+  const handleSubmit = () => {
+    if (!form.vendor.trim()) return app.pushToast('โปรดระบุชื่อลูกค้า', 'error');
+    if (!form.items.some(it => it.name.trim() && Number(it.price) > 0)) {
+      return app.pushToast('โปรดกรอกรายการอย่างน้อย 1 รายการ พร้อมจำนวนเงิน', 'error');
+    }
+    onSubmit(form);
+  };
+
+  const printNow = () => {
+    document.body.classList.add('printing-receipt');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => document.body.classList.remove('printing-receipt'), 200);
+    }, 100);
+  };
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{initial ? 'แก้ไขใบแจ้งหนี้' : 'ออกใบแจ้งหนี้ตั้งเบิกงวดงาน'}</h1>
+          <div className="page-sub">ใบแจ้งหนี้เพื่อตั้งเบิกค่างวดงานกับลูกค้า · ระบุงวดงาน วันครบกำหนด และเลขบัญชี</div>
+        </div>
+        <div className="row gap-8 dash-actions">
+          <button className="btn btn-ghost" onClick={() => setCompanyOpen(true)} title="ตั้งค่าข้อมูลบริษัท">
+            <Icon name="settings" size={14} /> ข้อมูลบริษัท
+          </button>
+          <button className="btn btn-ghost" onClick={() => setPreviewOpen(true)}>
+            <Icon name="eye" size={14} /> ดูตัวอย่าง
+          </button>
+          <button className="btn btn-ghost" onClick={onCancel}><Icon name="x" size={14} /> ยกเลิก</button>
+          <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
+        <div className="col gap-16" style={{ minWidth: 0 }}>
+
+          {/* Card 1: ข้อมูลเอกสาร + งวดงาน */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">ข้อมูลเอกสาร</div>
+                <div className="card-sub">เลขที่ วันออก วันครบกำหนดชำระ และงวดงาน</div>
+              </div>
+              <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>
+                ใบแจ้งหนี้
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label">เลขที่เอกสาร <span className="req">*</span></label>
+                  <input className="input mono" value={form.docNo} onChange={(e) => set({ docNo: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">วันที่ออก <span className="req">*</span></label>
+                  <input className="input" type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">
+                    <Icon name="calendar" size={13} /> วันครบกำหนดชำระ <span className="req">*</span>
+                  </label>
+                  <input className="input" type="date" value={form.meta?.dueDate || ''}
+                    onChange={(e) => setMeta({ dueDate: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">เลขที่สัญญา / Contract No.</label>
+                  <input className="input mono" value={form.meta?.contractNo || ''}
+                    onChange={(e) => setMeta({ contractNo: e.target.value })}
+                    placeholder="เช่น C-2026-001" />
+                </div>
+
+                {/* งวดงาน */}
+                <div className="field">
+                  <label className="field-label">งวดที่</label>
+                  <input className="input mono" value={form.meta?.installmentNo || ''}
+                    onChange={(e) => setMeta({ installmentNo: e.target.value })}
+                    placeholder="เช่น 3" />
+                </div>
+                <div className="field">
+                  <label className="field-label">จากทั้งหมด (งวด)</label>
+                  <input className="input mono" value={form.meta?.installmentTotal || ''}
+                    onChange={(e) => setMeta({ installmentTotal: e.target.value })}
+                    placeholder="เช่น 5" />
+                </div>
+
+                {/* ช่วงงานที่เบิก */}
+                <div className="field">
+                  <label className="field-label">ช่วงงาน — เริ่ม</label>
+                  <input className="input" type="date" value={form.meta?.workPeriodFrom || ''}
+                    onChange={(e) => setMeta({ workPeriodFrom: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">ช่วงงาน — สิ้นสุด</label>
+                  <input className="input" type="date" value={form.meta?.workPeriodTo || ''}
+                    onChange={(e) => setMeta({ workPeriodTo: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">ความก้าวหน้างาน</label>
+                  <div className="input-affix">
+                    <input className="input mono" type="number" min="0" max="100" step="1"
+                      value={form.meta?.progressPercent || ''}
+                      onChange={(e) => setMeta({ progressPercent: e.target.value })}
+                      placeholder="0" />
+                    <div className="input-affix-suffix">%</div>
+                  </div>
+                </div>
+
+                <div className="field full">
+                  <label className="field-label">โครงการ</label>
+                  <window.ProjectPicker value={form.projectId} onChange={(v) => set({ projectId: v })}
+                    projects={app.projects} onAdd={() => {}} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: ลูกค้า */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">ข้อมูลลูกค้า</div>
+                <div className="card-sub">ชื่อ ที่อยู่ และเลขประจำตัวผู้เสียภาษี</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field full">
+                  <label className="field-label">ชื่อลูกค้า / นิติบุคคล <span className="req">*</span></label>
+                  <input className="input" value={form.vendor}
+                    onChange={(e) => set({ vendor: e.target.value })}
+                    placeholder="เช่น บจก. ABC คอนสตรัคชั่น" />
+                </div>
+                <div className="field">
+                  <label className="field-label">เลขประจำตัวผู้เสียภาษี</label>
+                  <input className="input mono" value={form.meta?.customerTaxId || ''}
+                    onChange={(e) => setMeta({ customerTaxId: e.target.value })}
+                    placeholder="0-0000-00000-00-0" />
+                </div>
+                <div className="field">
+                  <label className="field-label">สาขา</label>
+                  <input className="input" value={form.meta?.customerBranch || ''}
+                    onChange={(e) => setMeta({ customerBranch: e.target.value })} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">ที่อยู่</label>
+                  <textarea className="textarea" rows={2} value={form.meta?.customerAddress || ''}
+                    onChange={(e) => setMeta({ customerAddress: e.target.value })}
+                    placeholder="เลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: รายการ */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รายการเรียกเก็บ</div>
+                <div className="card-sub">รายละเอียดงานที่ตั้งเบิก พร้อมจำนวนเงิน</div>
+              </div>
+              <span className="badge gray mono">{form.items.length} รายการ</span>
+            </div>
+            <div className="card-body">
+              <window.ItemsTable
+                items={form.items}
+                setItems={(items) => set({ items })}
+                cats={[]}
+                onAddCat={() => {}}
+                type="invoice"
+              />
+            </div>
+          </div>
+
+          {/* Card 4: VAT */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">ภาษีมูลค่าเพิ่ม (VAT)</div>
+                <div className="card-sub">เลือกว่าราคารวม VAT หรือไม่</div>
+              </div>
+            </div>
+            <div className="card-body col gap-16">
+              <window.VatModeRow value={form.vatMode} onChange={(v) => set({ vatMode: v })} />
+              <div className="row gap-12" style={{ alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>อัตรา VAT</span>
+                <div className="input-affix" style={{ width: 130 }}>
+                  <input className="input mono" type="number" step="0.5" value={form.vatRate}
+                    onChange={(e) => set({ vatRate: e.target.value })} />
+                  <div className="input-affix-suffix">%</div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px dashed var(--line)', paddingTop: 16 }}>
+                <label className="row gap-8" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={form.whtEnabled}
+                    onChange={(e) => set({ whtEnabled: e.target.checked, whtRate: e.target.checked ? 3 : 0 })} />
+                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>หัก ณ ที่จ่าย (ลูกค้าจะหักก่อนจ่าย)</span>
+                </label>
+                {form.whtEnabled && (
+                  <div className="row gap-12 mt-12" style={{ alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>อัตรา</span>
+                    <div className="input-affix" style={{ width: 130 }}>
+                      <input className="input mono" type="number" step="0.5" value={form.whtRate}
+                        onChange={(e) => set({ whtRate: e.target.value })} />
+                      <div className="input-affix-suffix">%</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 5: บัญชีรับโอนเงิน */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title"><Icon name="money" size={14} /> บัญชีรับโอนเงิน</div>
+                <div className="card-sub">บัญชีธนาคารที่ให้ลูกค้าโอนเงินมา</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label">ธนาคาร</label>
+                  <input className="input" value={form.meta?.bankName || ''}
+                    onChange={(e) => setMeta({ bankName: e.target.value })}
+                    placeholder="เช่น ธนาคารกสิกรไทย" />
+                </div>
+                <div className="field">
+                  <label className="field-label">สาขา</label>
+                  <input className="input" value={form.meta?.bankBranch || ''}
+                    onChange={(e) => setMeta({ bankBranch: e.target.value })}
+                    placeholder="เช่น สาขาสีลม" />
+                </div>
+                <div className="field">
+                  <label className="field-label">เลขที่บัญชี</label>
+                  <input className="input mono" value={form.meta?.bankAccountNo || ''}
+                    onChange={(e) => setMeta({ bankAccountNo: e.target.value })}
+                    placeholder="xxx-x-xxxxx-x" />
+                </div>
+                <div className="field">
+                  <label className="field-label">ชื่อบัญชี</label>
+                  <input className="input" value={form.meta?.bankAccountName || ''}
+                    onChange={(e) => setMeta({ bankAccountName: e.target.value })}
+                    placeholder="เช่น บจก. ฟอร์เฮ้าส์" />
+                </div>
+                <div className="field full">
+                  <label className="field-label">เงื่อนไขการชำระเงิน</label>
+                  <input className="input" value={form.meta?.paymentTerms || ''}
+                    onChange={(e) => setMeta({ paymentTerms: e.target.value })}
+                    placeholder="เช่น ชำระภายใน 30 วัน นับจากวันที่ออกใบแจ้งหนี้" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 6: ผู้จัดทำ + อนุมัติ + หมายเหตุ */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">ลงนาม และหมายเหตุ</div>
+                <div className="card-sub">ผู้จัดทำเอกสาร และผู้อนุมัติ</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label">ผู้จัดทำเอกสาร</label>
+                  <input className="input" value={form.meta?.preparedBy || ''}
+                    onChange={(e) => setMeta({ preparedBy: e.target.value })}
+                    placeholder="ชื่อ-นามสกุล" />
+                </div>
+                <div className="field">
+                  <label className="field-label">ผู้อนุมัติ</label>
+                  <input className="input" value={form.meta?.approvedBy || ''}
+                    onChange={(e) => setMeta({ approvedBy: e.target.value })}
+                    placeholder="ชื่อ-นามสกุล" />
+                </div>
+                <div className="field full">
+                  <label className="field-label">หมายเหตุ</label>
+                  <textarea className="textarea" value={form.note}
+                    onChange={(e) => set({ note: e.target.value })}
+                    placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* คอลัมน์ขวา: สรุปยอด */}
+        <div className="form-summary-sticky" style={{ position: 'sticky', top: 84 }}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">สรุปยอดเรียกเก็บ</div>
+              <span className="badge amber dot">
+                {form.vatMode === 'inclusive' ? 'รวม VAT' : 'ยังไม่รวม VAT'}
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="summary-rows">
+                <div className="summary-row">
+                  <span className="label">มูลค่าก่อนภาษี</span>
+                  <span className="value">{fmt(totals.subTotal)}</span>
+                </div>
+                <div className="summary-row">
+                  <span className="label">VAT {form.vatRate}%</span>
+                  <span className="value">{fmt(totals.vat)}</span>
+                </div>
+                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
+                  <span className="label">รวมทั้งสิ้น</span>
+                  <span className="value">{fmt(totals.beforeWht)}</span>
+                </div>
+                {form.whtEnabled && (
+                  <div className="summary-row">
+                    <span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
+                  </div>
+                )}
+                <div className="summary-row total">
+                  <span className="label">ยอดที่ต้องรับ</span>
+                  <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
+                </div>
+              </div>
+
+              <div className="mt-20" style={{ padding: 12, background: 'rgba(37,99,235,0.06)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6, borderLeft:'3px solid #2563eb' }}>
+                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color:'#1d4ed8' }}>
+                  <Icon name="calendar" size={13} /> ครบกำหนดชำระ
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {form.meta?.dueDate ? fmtDate(form.meta.dueDate) : '— โปรดเลือกวันที่ —'}
+                </div>
+              </div>
+
+              <div className="mt-12" style={{ padding: 12, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="sparkle" size={13} /> ตัวอักษร
+                </div>
+                <div style={{ fontSize: 12 }}>{thaiBahtText(totals.total)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="row gap-8 mt-16">
+            <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}>
+              <Icon name="save" size={14} /> บันทึก
+            </button>
+            <button className="btn btn-ghost" onClick={() => setPreviewOpen(true)}>
+              <Icon name="eye" size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {previewOpen && (
+        <div className="modal-backdrop" onClick={() => setPreviewOpen(false)}>
+          <div className="modal receipt-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header no-print">
+              <div className="card-title">ตัวอย่างใบแจ้งหนี้</div>
+              <div className="row gap-8">
+                <button className="btn btn-accent btn-sm" onClick={printNow}>
+                  <Icon name="download" size={13} /> พิมพ์ / บันทึก PDF
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setPreviewOpen(false)}>
+                  <Icon name="x" size={13} />
+                </button>
+              </div>
+            </div>
+            <div className="modal-body" style={{ background: '#e8e6e1', padding: 24 }}>
+              <PrintableInvoice rec={form} company={company} app={app} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CompanySettingsModal open={companyOpen} onClose={() => setCompanyOpen(false)}
+        onSaved={(c) => { setCompany(c); app.pushToast('บันทึกข้อมูลบริษัทแล้ว'); }} />
+    </>
+  );
+};
+
+// ============================================================
+// PrintableInvoice — ใบแจ้งหนี้ตั้งเบิกงวดงาน (A4 ทางการ)
+// ============================================================
+function PrintableInvoice({ rec, company, app }) {
+  const totals = computeTotals(rec);
+  const proj = app?.projects?.find(p => p.id === rec.projectId);
+  const meta = rec.meta || {};
+
+  const installmentText = meta.installmentNo
+    ? `งวดที่ ${meta.installmentNo}${meta.installmentTotal ? ` / ${meta.installmentTotal}` : ''}`
+    : null;
+
+  const workPeriodText = meta.workPeriodFrom && meta.workPeriodTo
+    ? `${fmtDate(meta.workPeriodFrom)} — ${fmtDate(meta.workPeriodTo)}`
+    : null;
+
+  return (
+    <div className="printable-receipt">
+      {/* Header */}
+      <div className="rcpt-header">
+        <div className="rcpt-company">
+          {company.logoDataUrl && (
+            <img src={company.logoDataUrl} alt="logo" className="rcpt-logo" />
+          )}
+          <div>
+            <div className="rcpt-company-name">{company.name || 'ชื่อบริษัท'}</div>
+            {company.branch  && <div className="rcpt-company-line">{company.branch}</div>}
+            {company.address && <div className="rcpt-company-line">{company.address}</div>}
+            <div className="rcpt-company-line">
+              {company.phone && <span>โทร {company.phone}</span>}
+              {company.phone && company.email && <span> · </span>}
+              {company.email && <span>{company.email}</span>}
+            </div>
+            {company.taxId && (
+              <div className="rcpt-company-line" style={{ marginTop: 3 }}>
+                <strong>เลขประจำตัวผู้เสียภาษี:</strong> <span className="rcpt-mono">{company.taxId}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="rcpt-title-box">
+          <div className="rcpt-title">ใบแจ้งหนี้</div>
+          <div className="rcpt-title-en">INVOICE</div>
+          <div className="rcpt-original">ต้นฉบับ (ORIGINAL)</div>
+        </div>
+      </div>
+
+      {/* Doc info */}
+      <div className="rcpt-info-row">
+        <div className="rcpt-info-cell">
+          <div className="rcpt-info-label">เลขที่ / No.</div>
+          <div className="rcpt-info-value rcpt-mono">{rec.docNo}</div>
+        </div>
+        <div className="rcpt-info-cell">
+          <div className="rcpt-info-label">วันที่ออก / Issue Date</div>
+          <div className="rcpt-info-value">{fmtDate(rec.date)}</div>
+        </div>
+        <div className="rcpt-info-cell" style={{ background:'rgba(220,38,38,0.06)', padding:'4px 10px', borderRadius:4 }}>
+          <div className="rcpt-info-label" style={{ color:'#dc2626' }}>ครบกำหนด / Due Date</div>
+          <div className="rcpt-info-value" style={{ color:'#dc2626', fontWeight:700 }}>{fmtDate(meta.dueDate)}</div>
+        </div>
+        {meta.contractNo && (
+          <div className="rcpt-info-cell">
+            <div className="rcpt-info-label">สัญญา / Contract</div>
+            <div className="rcpt-info-value rcpt-mono">{meta.contractNo}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Customer */}
+      <div className="rcpt-customer">
+        <div className="rcpt-customer-title">ลูกค้า / Bill To</div>
+        <div className="rcpt-customer-grid">
+          <div>
+            <div className="rcpt-customer-name">{rec.vendor || '—'}</div>
+            {meta.customerAddress && <div className="rcpt-customer-line">{meta.customerAddress}</div>}
+          </div>
+          <div className="rcpt-customer-side">
+            {meta.customerTaxId && (
+              <div className="rcpt-customer-line">
+                <span className="rcpt-customer-key">เลขผู้เสียภาษี:</span>{' '}
+                <span className="rcpt-mono">{meta.customerTaxId}</span>
+              </div>
+            )}
+            {meta.customerBranch && (
+              <div className="rcpt-customer-line">
+                <span className="rcpt-customer-key">สาขา:</span> {meta.customerBranch}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Project + Installment info */}
+      {(proj || installmentText || workPeriodText || meta.progressPercent) && (
+        <div className="invoice-project-bar">
+          {proj && (
+            <div className="ipb-cell">
+              <div className="ipb-label">โครงการ</div>
+              <div className="ipb-value">{proj.name}</div>
+            </div>
+          )}
+          {installmentText && (
+            <div className="ipb-cell">
+              <div className="ipb-label">งวดงาน</div>
+              <div className="ipb-value" style={{ color:'#1d4ed8', fontWeight:700 }}>{installmentText}</div>
+            </div>
+          )}
+          {workPeriodText && (
+            <div className="ipb-cell">
+              <div className="ipb-label">ช่วงงาน</div>
+              <div className="ipb-value">{workPeriodText}</div>
+            </div>
+          )}
+          {meta.progressPercent && (
+            <div className="ipb-cell">
+              <div className="ipb-label">ความก้าวหน้า</div>
+              <div className="ipb-value">{meta.progressPercent}%</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Items table */}
+      <table className="rcpt-items">
+        <thead>
+          <tr>
+            <th style={{ width: 36 }}>ลำดับ</th>
+            <th>รายการ / Description</th>
+            <th style={{ width: 56 }} className="rcpt-num">จำนวน</th>
+            <th style={{ width: 56 }}>หน่วย</th>
+            <th style={{ width: 88 }} className="rcpt-num">ราคา/หน่วย</th>
+            <th style={{ width: 110 }} className="rcpt-num">จำนวนเงิน</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(rec.items || []).map((it, i) => (
+            <tr key={it.id || i}>
+              <td className="rcpt-num">{i + 1}</td>
+              <td>{it.name || '—'}</td>
+              <td className="rcpt-num rcpt-mono">{Number(it.qty || 0)}</td>
+              <td>{it.unit || ''}</td>
+              <td className="rcpt-num rcpt-mono">{fmt(Number(it.price || 0))}</td>
+              <td className="rcpt-num rcpt-mono">{fmt(Number(it.qty || 0) * Number(it.price || 0))}</td>
+            </tr>
+          ))}
+          {Array.from({ length: Math.max(0, 4 - (rec.items || []).length) }).map((_, i) => (
+            <tr key={'empty-' + i} className="rcpt-empty-row">
+              <td colSpan={6}>&nbsp;</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Totals */}
+      <div className="rcpt-totals">
+        <div className="rcpt-totals-left">
+          <div className="rcpt-amount-words">
+            <span className="rcpt-amount-words-label">จำนวนเงินตัวอักษร / Amount in words:</span>
+            <div className="rcpt-amount-words-text">({thaiBahtText(totals.total)})</div>
+          </div>
+        </div>
+        <div className="rcpt-totals-right">
+          <div className="rcpt-total-row">
+            <span>มูลค่าก่อนภาษี / Sub-total</span>
+            <span className="rcpt-mono">{fmt(totals.subTotal)}</span>
+          </div>
+          <div className="rcpt-total-row">
+            <span>VAT {rec.vatRate}%</span>
+            <span className="rcpt-mono">{fmt(totals.vat)}</span>
+          </div>
+          <div className="rcpt-total-row" style={{ background:'#f5f5f5', fontWeight:600 }}>
+            <span>รวมทั้งสิ้น / Total</span>
+            <span className="rcpt-mono">{fmt(totals.beforeWht)}</span>
+          </div>
+          {rec.whtEnabled && totals.wht > 0 && (
+            <div className="rcpt-total-row">
+              <span>หัก ณ ที่จ่าย {rec.whtRate}% / WHT</span>
+              <span className="rcpt-mono">−{fmt(totals.wht)}</span>
+            </div>
+          )}
+          <div className="rcpt-total-row rcpt-total-grand">
+            <span>ยอดที่ต้องชำระ / AMOUNT DUE</span>
+            <span className="rcpt-mono">{fmt(totals.total)} บาท</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment info box */}
+      <div className="invoice-payment-box">
+        <div className="invoice-payment-title">
+          <Icon name="money" size={14} /> ข้อมูลการชำระเงิน / Payment Information
+        </div>
+        <div className="invoice-payment-grid">
+          <div className="invoice-payment-item">
+            <div className="invoice-payment-label">ธนาคาร / Bank</div>
+            <div className="invoice-payment-value">{meta.bankName || '—'}</div>
+          </div>
+          <div className="invoice-payment-item">
+            <div className="invoice-payment-label">สาขา / Branch</div>
+            <div className="invoice-payment-value">{meta.bankBranch || '—'}</div>
+          </div>
+          <div className="invoice-payment-item">
+            <div className="invoice-payment-label">เลขที่บัญชี / Acc No.</div>
+            <div className="invoice-payment-value rcpt-mono">{meta.bankAccountNo || '—'}</div>
+          </div>
+          <div className="invoice-payment-item">
+            <div className="invoice-payment-label">ชื่อบัญชี / Acc Name</div>
+            <div className="invoice-payment-value">{meta.bankAccountName || '—'}</div>
+          </div>
+        </div>
+        {meta.paymentTerms && (
+          <div className="invoice-payment-terms">
+            <strong>เงื่อนไข:</strong> {meta.paymentTerms}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="rcpt-footer">
+        <div className="rcpt-footer-left">
+          {rec.note && (
+            <div className="rcpt-note">
+              <span className="rcpt-note-label">หมายเหตุ:</span> {rec.note}
+            </div>
+          )}
+        </div>
+        <div className="rcpt-signatures">
+          <div className="rcpt-sig">
+            <div className="rcpt-sig-line"></div>
+            <div className="rcpt-sig-label">ผู้จัดทำ / Prepared by</div>
+            {meta.preparedBy && <div className="rcpt-sig-name">({meta.preparedBy})</div>}
+          </div>
+          <div className="rcpt-sig">
+            <div className="rcpt-sig-line"></div>
+            <div className="rcpt-sig-label">ผู้อนุมัติ / Approved by</div>
+            {meta.approvedBy && <div className="rcpt-sig-name">({meta.approvedBy})</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+window.PrintableInvoice = PrintableInvoice;
+

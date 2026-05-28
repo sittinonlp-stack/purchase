@@ -248,6 +248,9 @@ function Sidebar() {
           <button className={"nav-item" + (view === 'new-tax-invoice' ? " active" : "")} onClick={() => go('new-tax-invoice')}>
             <Icon name="receipt" /> ออกใบเสร็จ/ใบกำกับภาษี
           </button>
+          <button className={"nav-item" + (view === 'new-invoice' ? " active" : "")} onClick={() => go('new-invoice')}>
+            <Icon name="clipboard" /> ออกใบแจ้งหนี้
+          </button>
           <button className={"nav-item nav-item--quick" + (view === 'quick-receipt' ? " active" : "")} onClick={() => go('quick-receipt')}>
             <Icon name="camera" /> ถ่ายรูปใบเสร็จ
           </button>
@@ -270,6 +273,14 @@ function Sidebar() {
             {records.filter(r => r.type === 'tax-invoice').length > 0 && (
               <span className="badge" style={{ background:'rgba(146,64,14,0.15)', color:'#92400e', border:'1px solid rgba(146,64,14,0.3)' }}>
                 {records.filter(r => r.type === 'tax-invoice').length}
+              </span>
+            )}
+          </button>
+          <button className={"nav-item" + (view === 'invoices-list' ? " active" : "")} onClick={() => go('invoices-list')}>
+            <Icon name="clipboard" /> ประวัติใบแจ้งหนี้
+            {records.filter(r => r.type === 'invoice').length > 0 && (
+              <span className="badge" style={{ background:'rgba(37,99,235,0.15)', color:'#1d4ed8', border:'1px solid rgba(37,99,235,0.3)' }}>
+                {records.filter(r => r.type === 'invoice').length}
               </span>
             )}
           </button>
@@ -570,8 +581,8 @@ function ProfileSettingsModal({ open, onClose }) {
 window.ProfileSettingsModal = ProfileSettingsModal;
 
 // ---- Global search helpers ----
-const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย', other: 'อื่นๆ', 'quick-receipt': 'บิลด่วน', receipt: 'ใบเสร็จ', 'tax-invoice': 'ใบกำกับภาษี' };
-const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a', other: '#6366f1', 'quick-receipt': '#0ea5e9', receipt: '#059669', 'tax-invoice': '#92400e' };
+const TYPE_LABEL = { material: 'วัสดุ', machine: 'เครื่องจักร', labor: 'ค่าแรง', 'lump-labor': 'เหมาจ่าย', other: 'อื่นๆ', 'quick-receipt': 'บิลด่วน', receipt: 'ใบเสร็จ', 'tax-invoice': 'ใบกำกับภาษี', invoice: 'ใบแจ้งหนี้' };
+const TYPE_COLOR = { material: '#d97706', machine: '#64748b', labor: '#7c3aed', 'lump-labor': '#16a34a', other: '#6366f1', 'quick-receipt': '#0ea5e9', receipt: '#059669', 'tax-invoice': '#92400e', invoice: '#1d4ed8' };
 
 // ---- Topbar ----
 function Topbar({ title, sub }) {
@@ -945,7 +956,7 @@ function QuickReceiptFab() {
   const [hovered, setHovered] = useState(false);
 
   // ซ่อนในหน้าฟอร์มทุกชนิด — ป้องกัน FAB บังปุ่มบันทึกรายการ
-  const FORM_VIEWS = ['quick-receipt', 'new-material', 'new-machine', 'new-labor', 'new-lump-labor', 'new-other', 'new-receipt', 'new-tax-invoice'];
+  const FORM_VIEWS = ['quick-receipt', 'new-material', 'new-machine', 'new-labor', 'new-lump-labor', 'new-other', 'new-receipt', 'new-tax-invoice', 'new-invoice'];
   if (FORM_VIEWS.includes(app.view)) return null;
 
   return (

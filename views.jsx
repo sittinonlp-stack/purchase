@@ -573,6 +573,8 @@ function RecordsTable({ records, onOpen }) {
                     ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จ</span>
                     : r.type === 'tax-invoice'
                     ? <span className="badge dot" style={{ background:'rgba(146,64,14,0.12)', color:'#92400e', borderColor:'rgba(146,64,14,0.3)' }}>🧾 ใบกำกับภาษี</span>
+                    : r.type === 'invoice'
+                    ? <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>📋 ใบแจ้งหนี้</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
                 <td>
@@ -604,9 +606,10 @@ window.HistoryView = function HistoryView() {
   const [sortKey, setSortKey] = useState('date-desc');
 
   const filtered = useMemo(() => {
-    // ไม่แสดง quick-receipt, receipt และ tax-invoice ที่นี่ — มี view ของตัวเองแล้ว
+    // ไม่แสดง quick-receipt, receipt, tax-invoice, invoice ที่นี่ — มี view ของตัวเองแล้ว
     let arr = app.records.filter(r =>
-      r.type !== 'quick-receipt' && r.type !== 'receipt' && r.type !== 'tax-invoice'
+      r.type !== 'quick-receipt' && r.type !== 'receipt' &&
+      r.type !== 'tax-invoice'   && r.type !== 'invoice'
     );
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
@@ -648,7 +651,7 @@ window.HistoryView = function HistoryView() {
       <div className="card">
         <div className="filter-bar">
           <div className="tabs">
-            <button className={"tab" + (typeFilter === 'all' ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type !== 'quick-receipt' && r.type !== 'receipt' && r.type !== 'tax-invoice').length}</span></button>
+            <button className={"tab" + (typeFilter === 'all' ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type !== 'quick-receipt' && r.type !== 'receipt' && r.type !== 'tax-invoice' && r.type !== 'invoice').length}</span></button>
             <button className={"tab" + (typeFilter === 'material' ? ' active' : '')} onClick={() => setTypeFilter('material')}><Icon name="cart" size={13} /> วัสดุ</button>
             <button className={"tab" + (typeFilter === 'machine' ? ' active' : '')} onClick={() => setTypeFilter('machine')}><Icon name="truck" size={13} /> เครื่องจักร</button>
             <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
@@ -1455,6 +1458,8 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จรับเงิน</span>
     : rec.type === 'tax-invoice'
     ? <span className="badge dot" style={{ background:'rgba(146,64,14,0.12)', color:'#92400e', borderColor:'rgba(146,64,14,0.3)' }}>🧾 ใบเสร็จ/ใบกำกับภาษี</span>
+    : rec.type === 'invoice'
+    ? <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>📋 ใบแจ้งหนี้</span>
     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>บันทึกค่าแรง</span>;
 
   // Editable work logs inline (saves immediately via updateRecord)
@@ -1480,12 +1485,14 @@ window.DetailDrawer = function DetailDrawer() {
                 app.deleteRecord(rec.id); app.pushToast('ลบรายการแล้ว'); close();
               }}><Icon name="trash" size={13} /> ลบ</button>
             )}
-            {(rec.type === 'receipt' || rec.type === 'tax-invoice') && (
+            {(rec.type === 'receipt' || rec.type === 'tax-invoice' || rec.type === 'invoice') && (
               <button className="btn btn-ghost btn-sm" onClick={() => {
                 const w = window.open('', '_blank');
                 if (!w) { app.pushToast('โปรดอนุญาต pop-up เพื่อพิมพ์', 'error'); return; }
                 const c = window.getCompanySettings();
-                const titleLabel = rec.type === 'tax-invoice' ? 'ใบกำกับภาษี' : 'ใบเสร็จ';
+                const titleLabel = rec.type === 'tax-invoice' ? 'ใบกำกับภาษี'
+                  : rec.type === 'invoice' ? 'ใบแจ้งหนี้'
+                  : 'ใบเสร็จ';
                 // หน้าต่างพิมพ์: ตั้ง @page A4 + body padding=0 + center receipt บนหน้าจอ
                 w.document.write('<html><head><title>' + titleLabel + ' ' + rec.docNo + '</title>');
                 w.document.write('<link rel="preconnect" href="https://fonts.googleapis.com">');
@@ -1502,7 +1509,9 @@ window.DetailDrawer = function DetailDrawer() {
                 w.document.close();
                 setTimeout(() => {
                   try {
-                    const Component = rec.type === 'tax-invoice' ? window.PrintableTaxInvoice : window.PrintableReceipt;
+                    const Component = rec.type === 'tax-invoice' ? window.PrintableTaxInvoice
+                      : rec.type === 'invoice' ? window.PrintableInvoice
+                      : window.PrintableReceipt;
                     const root = window.ReactDOM.createRoot(w.document.getElementById('receipt-print'));
                     root.render(window.React.createElement(Component, { rec, company: c, app }));
                     setTimeout(() => { w.print(); }, 600);
@@ -1523,6 +1532,7 @@ window.DetailDrawer = function DetailDrawer() {
                 : rec.type === 'quick-receipt' ? 'quick-receipt'
                 : rec.type === 'receipt' ? 'new-receipt'
                 : rec.type === 'tax-invoice' ? 'new-tax-invoice'
+                : rec.type === 'invoice' ? 'new-invoice'
                 : 'new-material';
               app.setView(v);
               close();
@@ -3575,6 +3585,247 @@ window.TaxInvoicesListView = function TaxInvoicesListView() {
                   <td className="num mono" style={{ padding: '10px 12px', color: '#92400e' }}>{fmt(vatStats.total)}</td>
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+// ============================================================
+// InvoicesListView — ประวัติใบแจ้งหนี้ (Invoice billing)
+// ============================================================
+window.InvoicesListView = function InvoicesListView() {
+  const app = window.useApp();
+  const [q, setQ] = useState('');
+  const [projFilter, setProjFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('date-desc');
+
+  const allInvoices = useMemo(() =>
+    app.records.filter(r => r.type === 'invoice'), [app.records]);
+
+  const usedProjects = useMemo(() => {
+    const ids = new Set(allInvoices.map(r => r.projectId).filter(Boolean));
+    return app.projects.filter(p => ids.has(p.id));
+  }, [allInvoices, app.projects]);
+
+  const todayKey = todayStr();
+  const in7Days = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })();
+
+  const statusOf = (rec) => {
+    const due = rec.meta?.dueDate;
+    if (!due) return 'no-due';
+    if (due < todayKey) return 'overdue';
+    if (due <= in7Days) return 'upcoming';
+    return 'pending';
+  };
+
+  const filtered = useMemo(() => {
+    let arr = allInvoices;
+    if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'this-month') {
+        const thisMonth = new Date().toISOString().slice(0, 7);
+        arr = arr.filter(r => (r.date || '').slice(0, 7) === thisMonth);
+      } else {
+        arr = arr.filter(r => statusOf(r) === statusFilter);
+      }
+    }
+    if (q.trim()) {
+      const s = q.toLowerCase();
+      arr = arr.filter(r =>
+        (r.docNo || '').toLowerCase().includes(s) ||
+        (r.vendor || '').toLowerCase().includes(s) ||
+        (r.meta?.contractNo || '').toLowerCase().includes(s) ||
+        (r.items || []).some(i => (i.name || '').toLowerCase().includes(s))
+      );
+    }
+    return [...arr].sort((a, b) => {
+      if (sortKey === 'date-desc')   return (b.date || '').localeCompare(a.date || '');
+      if (sortKey === 'date-asc')    return (a.date || '').localeCompare(b.date || '');
+      if (sortKey === 'due-asc')     return (a.meta?.dueDate || '').localeCompare(b.meta?.dueDate || '');
+      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
+      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
+      return 0;
+    });
+  }, [allInvoices, q, projFilter, statusFilter, sortKey]);
+
+  const grandTotal = useMemo(() => allInvoices.reduce((s, r) => s + computeTotals(r).total, 0), [allInvoices]);
+  const filteredTotal = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
+
+  const overdueList   = allInvoices.filter(r => statusOf(r) === 'overdue');
+  const upcomingList  = allInvoices.filter(r => statusOf(r) === 'upcoming');
+  const overdueTotal  = overdueList.reduce((s, r) => s + computeTotals(r).total, 0);
+  const upcomingTotal = upcomingList.reduce((s, r) => s + computeTotals(r).total, 0);
+
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const monthList = allInvoices.filter(r => (r.date || '').slice(0, 7) === thisMonth);
+  const monthTotal = monthList.reduce((s, r) => s + computeTotals(r).total, 0);
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">ประวัติใบแจ้งหนี้</h1>
+          <div className="page-sub">ใบแจ้งหนี้ที่ตั้งเบิกกับลูกค้า · ติดตามวันครบกำหนดและสถานะ</div>
+        </div>
+        <div className="row gap-8">
+          <button className="btn btn-accent" onClick={() => app.setView('new-invoice')}>
+            <Icon name="plus" size={14} stroke={2.5} /> ออกใบแจ้งหนี้ใหม่
+          </button>
+        </div>
+      </div>
+
+      <div className="stat-grid" style={{ marginBottom: 20 }}>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }}>
+            <Icon name="clipboard" size={16} />
+          </div>
+          <div className="stat-label">ใบแจ้งหนี้ทั้งหมด</div>
+          <div className="stat-value mono">{allInvoices.length}</div>
+          <div className="stat-change positive">฿{fmt(grandTotal)}</div>
+        </div>
+        <div className="stat" style={{ borderLeft: overdueList.length > 0 ? '3px solid #dc2626' : '' }}>
+          <div className="stat-icon" style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
+            <Icon name="bell" size={16} />
+          </div>
+          <div className="stat-label">เกินกำหนดชำระ</div>
+          <div className="stat-value mono" style={{ color: overdueList.length > 0 ? '#dc2626' : undefined }}>
+            {overdueList.length}
+          </div>
+          <div className="stat-change neutral">฿{fmt(overdueTotal)}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(217,119,6,0.12)', color: 'var(--accent)' }}>
+            <Icon name="calendar" size={16} />
+          </div>
+          <div className="stat-label">ครบกำหนดใน 7 วัน</div>
+          <div className="stat-value mono">{upcomingList.length}</div>
+          <div className="stat-change neutral">฿{fmt(upcomingTotal)}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-icon" style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
+            <Icon name="money" size={16} />
+          </div>
+          <div className="stat-label">ออกบิลเดือนนี้</div>
+          <div className="stat-value mono">{monthList.length}</div>
+          <div className="stat-change neutral">฿{fmt(monthTotal)}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="filter-bar">
+          <div className="tabs">
+            <button className={'tab' + (statusFilter === 'all'        ? ' active' : '')} onClick={() => setStatusFilter('all')}>
+              ทั้งหมด <span className="badge gray mono">{allInvoices.length}</span>
+            </button>
+            <button className={'tab' + (statusFilter === 'overdue'    ? ' active' : '')} onClick={() => setStatusFilter('overdue')}>
+              เกินกำหนด {overdueList.length > 0 && <span className="badge" style={{ background:'#dc2626', color:'#fff' }}>{overdueList.length}</span>}
+            </button>
+            <button className={'tab' + (statusFilter === 'upcoming'   ? ' active' : '')} onClick={() => setStatusFilter('upcoming')}>
+              ใน 7 วัน
+            </button>
+            <button className={'tab' + (statusFilter === 'this-month' ? ' active' : '')} onClick={() => setStatusFilter('this-month')}>
+              เดือนนี้
+            </button>
+          </div>
+
+          <div className="topbar-search" style={{ width: 280, margin: 0 }}>
+            <Icon name="search" size={14} />
+            <input placeholder="ค้นหา: เลขที่, ลูกค้า, สัญญา, รายการ"
+              value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+
+          <select className="select" value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
+            <option value="all">ทุกโครงการ ({usedProjects.length})</option>
+            {usedProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+
+          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+            <option value="date-desc">วันออก ใหม่ → เก่า</option>
+            <option value="date-asc">วันออก เก่า → ใหม่</option>
+            <option value="due-asc">ครบกำหนด เร็วสุด</option>
+            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
+            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
+          </select>
+
+          <div className="spacer" />
+          <div className="text-small text-muted">
+            <strong className="mono" style={{ color: 'var(--ink-1)' }}>{filtered.length}</strong> ใบ ·
+            ยอดรวม <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(filteredTotal)}</strong>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="clipboard" size={28} /></div>
+            <div className="empty-title">
+              {allInvoices.length === 0 ? 'ยังไม่มีใบแจ้งหนี้' : 'ไม่พบใบที่ตรงกับตัวกรอง'}
+            </div>
+            <div className="empty-sub">
+              {allInvoices.length === 0
+                ? 'กดปุ่ม "ออกใบแจ้งหนี้ใหม่" เพื่อเริ่มต้น'
+                : 'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 110 }}>เลขที่</th>
+                  <th style={{ width: 90 }}>วันออก</th>
+                  <th style={{ width: 110 }}>ครบกำหนด</th>
+                  <th>ลูกค้า</th>
+                  <th style={{ width: 80 }}>งวด</th>
+                  <th style={{ width: 120 }}>สถานะ</th>
+                  <th style={{ width: 120 }} className="num">ยอดเรียกเก็บ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => {
+                  const t = computeTotals(r);
+                  const st = statusOf(r);
+                  const proj = app.projects.find(p => p.id === r.projectId);
+                  const inst = r.meta?.installmentNo
+                    ? `${r.meta.installmentNo}${r.meta.installmentTotal ? '/' + r.meta.installmentTotal : ''}`
+                    : '—';
+
+                  const statusBadge = st === 'overdue'
+                    ? <span className="badge" style={{ background:'rgba(220,38,38,0.15)', color:'#dc2626', border:'1px solid rgba(220,38,38,0.3)' }}>⚠ เกินกำหนด</span>
+                    : st === 'upcoming'
+                    ? <span className="badge" style={{ background:'rgba(217,119,6,0.15)', color:'#d97706', border:'1px solid rgba(217,119,6,0.3)' }}>ใกล้ครบกำหนด</span>
+                    : st === 'pending'
+                    ? <span className="badge gray">ตั้งเบิก</span>
+                    : <span className="badge gray">ไม่ระบุ</span>;
+
+                  return (
+                    <tr key={r.id} onClick={() => app.setDetailId(r.id)}>
+                      <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
+                      <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
+                      <td style={{
+                        color: st === 'overdue' ? '#dc2626'
+                          : st === 'upcoming' ? '#d97706'
+                          : 'var(--ink-2)',
+                        fontWeight: st === 'overdue' || st === 'upcoming' ? 600 : 400,
+                      }}>{r.meta?.dueDate ? fmtDate(r.meta.dueDate) : '—'}</td>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{r.vendor || '—'}</div>
+                        {proj && (
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
+                            {proj.name}
+                          </div>
+                        )}
+                      </td>
+                      <td className="mono" style={{ fontSize: 12.5, color: '#1d4ed8', fontWeight: 600 }}>{inst}</td>
+                      <td>{statusBadge}</td>
+                      <td className="num mono" style={{ fontWeight: 600, color: '#1d4ed8' }}>{fmt(t.total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
           </div>
         )}
