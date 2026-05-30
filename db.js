@@ -76,6 +76,8 @@
       depositReturnNote:    row.deposit_return_note || '',
       // ── meta JSONB — ใช้เก็บข้อมูลเฉพาะ type (เช่น receipt) ──
       meta: row.meta || {},
+      // ── lightweight flags stored inside meta ──────
+      accountingPosted: Boolean((row.meta || {}).accountingPosted),
     };
   }
 
@@ -106,8 +108,8 @@
                                ? depositReturnImageUrls
                                : (rec.depositReturnImages || []),
       deposit_return_note:   rec.depositReturnNote || '',
-      // ── meta JSONB ─────────────────────────────
-      meta: rec.meta || {},
+      // ── meta JSONB (รวม lightweight flags เช่น accountingPosted) ──
+      meta: { ...(rec.meta || {}), accountingPosted: Boolean(rec.accountingPosted) },
     };
   }
 
@@ -415,6 +417,18 @@
     // ── Records (update) ──────────────────────────
     async updateRecord(id, patch) {
       const client = window.supabaseClient;
+
+      // Fast path: lightweight flag-only patch (e.g. accountingPosted)
+      // หลีกเลี่ยงการ overwrite ข้อมูลจริงด้วย null ที่เกิดจาก jsRecordToDb(partial patch)
+      const LIGHTWEIGHT = new Set(['accountingPosted']);
+      const patchKeys = Object.keys(patch);
+      if (patchKeys.length > 0 && patchKeys.every(k => LIGHTWEIGHT.has(k))) {
+        const { data: row } = await client.from('records').select('meta').eq('id', id).single();
+        const newMeta = { ...(row?.meta || {}), ...Object.fromEntries(patchKeys.map(k => [k, patch[k]])) };
+        const { error } = await client.from('records').update({ meta: newMeta }).eq('id', id);
+        if (error) throw error;
+        return;
+      }
 
       // 1. Upload images (รูปแนบหลัก + รูปสลิปคืนเงินประกัน)
       const [imageUrls, depositReturnImageUrls] = await Promise.all([
