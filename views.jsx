@@ -518,6 +518,34 @@ window.DashboardView = function DashboardView() {
 };
 
 // ---- Shared records table ----
+// ---- Accounting checkbox — ปุ่มติ๊กลงบัญชี ----
+function AccCheckbox({ record }) {
+  const app = window.useApp();
+  const posted = !!record.accountingPosted;
+  const toggle = (e) => {
+    e.stopPropagation();
+    app.updateRecord(record.id, { accountingPosted: !posted });
+  };
+  return (
+    <button
+      onClick={toggle}
+      title={posted ? 'ลงบัญชีแล้ว — คลิกเพื่อยกเลิก' : 'คลิกเพื่อทำเครื่องหมายว่าลงบัญชีแล้ว'}
+      style={{
+        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+        border: posted ? '2px solid #059669' : '2px solid #d1d5db',
+        background: posted ? '#059669' : '#fff',
+        color: '#fff',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', transition: 'all 150ms',
+        fontSize: 15, fontWeight: 700, lineHeight: 1,
+        padding: 0,
+      }}
+    >
+      {posted ? '✓' : ''}
+    </button>
+  );
+}
+
 function RecordsTable({ records, onOpen }) {
   const app = window.useApp();
   if (!records.length) {
@@ -534,6 +562,9 @@ function RecordsTable({ records, onOpen }) {
       <table className="history-table">
         <thead>
           <tr>
+            <th style={{ width: 44, textAlign: 'center' }} title="ลงบันทึกค่าใช้จ่ายในบัญชีแล้ว">
+              <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>บัญชี</span>
+            </th>
             <th style={{ width: 130 }}>เลขที่</th>
             <th style={{ width: 90 }}>วันที่</th>
             <th>โครงการ</th>
@@ -548,7 +579,12 @@ function RecordsTable({ records, onOpen }) {
             const proj = app.projects.find(p => p.id === r.projectId);
             const total = computeTotals(r).total;
             return (
-              <tr key={r.id} onClick={() => onOpen(r.id)}>
+              <tr key={r.id} onClick={() => onOpen(r.id)}
+                style={{ background: r.accountingPosted ? 'rgba(5,150,105,0.04)' : undefined }}>
+                {/* ── Accounting checkbox ── */}
+                <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                  <AccCheckbox record={r} />
+                </td>
                 <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
                 <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
                 <td>
@@ -601,9 +637,10 @@ window.RecordsTable = RecordsTable;
 window.HistoryView = function HistoryView() {
   const app = window.useApp();
   const [q, setQ] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all'); // all | material | machine
+  const [typeFilter, setTypeFilter] = useState('all');
   const [projFilter, setProjFilter] = useState('all');
   const [sortKey, setSortKey] = useState('date-desc');
+  const [accFilter, setAccFilter] = useState('all'); // all | unposted | posted
 
   const filtered = useMemo(() => {
     // ไม่แสดง quick-receipt, receipt, tax-invoice, invoice ที่นี่ — มี view ของตัวเองแล้ว
@@ -613,6 +650,8 @@ window.HistoryView = function HistoryView() {
     );
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    if (accFilter === 'unposted') arr = arr.filter(r => !r.accountingPosted);
+    if (accFilter === 'posted')   arr = arr.filter(r =>  r.accountingPosted);
     if (q.trim()) {
       const s = q.toLowerCase();
       arr = arr.filter(r =>
@@ -629,7 +668,7 @@ window.HistoryView = function HistoryView() {
       return 0;
     });
     return arr;
-  }, [app.records, q, typeFilter, projFilter, sortKey]);
+  }, [app.records, q, typeFilter, projFilter, sortKey, accFilter]);
 
   const sum = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
 
@@ -671,6 +710,12 @@ window.HistoryView = function HistoryView() {
             <option value="date-asc">วันที่ เก่า → ใหม่</option>
             <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
             <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
+          </select>
+          <select className="select" value={accFilter} onChange={(e) => setAccFilter(e.target.value)}
+            style={{ borderColor: accFilter !== 'all' ? '#059669' : undefined, color: accFilter !== 'all' ? '#059669' : undefined }}>
+            <option value="all">สถานะบัญชี: ทั้งหมด</option>
+            <option value="unposted">ยังไม่ลงบัญชี</option>
+            <option value="posted">ลงบัญชีแล้ว</option>
           </select>
           <div className="spacer"></div>
           <div className="text-small text-muted">
@@ -3091,7 +3136,9 @@ window.ReceiptsView = function ReceiptsView() {
             const thumb = imgs[0];
 
             return (
-              <div key={r.id} className="receipt-card" onClick={() => app.setDetailId(r.id)}>
+              <div key={r.id} className="receipt-card"
+                style={{ outline: r.accountingPosted ? '2px solid rgba(5,150,105,0.35)' : undefined }}
+                onClick={() => app.setDetailId(r.id)}>
                 {/* Thumbnail */}
                 <div className="rc-photo">
                   {thumb
@@ -3117,6 +3164,32 @@ window.ReceiptsView = function ReceiptsView() {
                     <div className="rc-amount-none">ไม่ระบุยอด</div>
                   )}
                   {r.note && <div className="rc-note">{r.note}</div>}
+
+                  {/* ── Accounting toggle ── */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); app.updateRecord(r.id, { accountingPosted: !r.accountingPosted }); }}
+                    title={r.accountingPosted ? 'ลงบัญชีแล้ว — คลิกเพื่อยกเลิก' : 'คลิกเพื่อทำเครื่องหมายว่าลงบัญชีแล้ว'}
+                    style={{
+                      marginTop: 8,
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '3px 9px 3px 6px',
+                      borderRadius: 20,
+                      border: r.accountingPosted ? '1.5px solid #059669' : '1.5px solid #d1d5db',
+                      background: r.accountingPosted ? 'rgba(5,150,105,0.1)' : '#fff',
+                      color: r.accountingPosted ? '#059669' : '#9ca3af',
+                      fontSize: 11.5, fontWeight: r.accountingPosted ? 600 : 400,
+                      cursor: 'pointer', transition: 'all 150ms',
+                    }}
+                  >
+                    <span style={{
+                      width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                      border: r.accountingPosted ? 'none' : '1.5px solid #d1d5db',
+                      background: r.accountingPosted ? '#059669' : 'transparent',
+                      color: '#fff', fontSize: 11, fontWeight: 700,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    }}>{r.accountingPosted ? '✓' : ''}</span>
+                    {r.accountingPosted ? 'ลงบัญชีแล้ว' : 'ยังไม่ลงบัญชี'}
+                  </button>
                 </div>
               </div>
             );
