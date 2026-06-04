@@ -6,18 +6,20 @@
 
 // ---- Worker team picker (with search) ----
 function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState('');
+  const [open,    setOpen]    = useState(false);
+  const [q,       setQ]       = useState('');
   const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 300 });
-  const btnRef  = useRef(null);
+  const btnRef   = useRef(null);
   const inputRef = useRef(null);
   const cur = teams.find((t) => t.id === value);
+
+  const close = () => { setOpen(false); setQ(''); };
 
   const handleToggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
-      const dropH = Math.min(teams.length * 58 + 100, 400);
+      const dropH = Math.min(teams.length * 58 + 108, 420);
       const top = spaceBelow < dropH && r.top > dropH ? r.top - dropH - 2 : r.bottom + 4;
       setDropPos({ top, left: r.left, width: Math.max(r.width, 320) });
     }
@@ -25,31 +27,36 @@ function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
     setQ('');
   };
 
-  const close = () => { setOpen(false); setQ(''); };
-
   // auto-focus search input เมื่อ dropdown เปิด
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+    if (open) setTimeout(() => inputRef.current && inputRef.current.focus(), 60);
   }, [open]);
 
   // filter ตามคำค้น (ชื่อ, หัวหน้า, เบอร์, specialty)
   const visible = q.trim()
-    ? teams.filter(t => [t.name, t.leader, t.phone, t.specialty].join(' ').toLowerCase().includes(q.toLowerCase()))
+    ? teams.filter(t =>
+        [t.name, t.leader, t.phone, t.specialty].join(' ')
+          .toLowerCase().includes(q.toLowerCase()))
     : teams;
+
+  // avatar ทีม
+  const Avatar = ({ name }) => (
+    <span style={{
+      width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+      background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))',
+      display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 600, fontSize: 12,
+    }}>{name.charAt(0)}</span>
+  );
 
   return (
     <div style={{ position: 'relative' }}>
+      {/* ── Trigger button ── */}
       <button ref={btnRef} type="button" className="input"
         style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
         onClick={handleToggle}>
         {cur ? (
           <>
-            <span style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))',
-              display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 600, fontSize: 12,
-              flexShrink: 0,
-            }}>{cur.name.charAt(0)}</span>
+            <Avatar name={cur.name} />
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
               <span style={{ fontWeight: 500 }}>{cur.name}</span>
               <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>หัวหน้า: {cur.leader} · {cur.size} คน</span>
@@ -60,22 +67,28 @@ function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
         )}
         <Icon name="chevron" size={14} stroke={2} />
       </button>
+
+      {/* ── Dropdown ── */}
       {open && (
         <>
-          {/* Transparent overlay — catches outside clicks */}
+          {/* overlay ปิด */}
           <div style={{ position: 'fixed', inset: 0, zIndex: 9990 }} onClick={close} />
-          {/* Dropdown */}
+
           <div style={{
-            position: 'fixed',
+            position: 'fixed', zIndex: 9999,
             top: dropPos.top, left: dropPos.left, width: dropPos.width,
-            zIndex: 9999,
-            background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.22)', overflow: 'hidden',
+            background: 'var(--surface)', border: '1px solid var(--line-strong)',
+            borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.22)', overflow: 'hidden',
           }}>
-            {/* ── Search input ── */}
+            {/* ── Search box ── */}
             <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line)', background: 'var(--bg)' }}>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <Icon name="search" size={14} style={{ position: 'absolute', left: 10, color: 'var(--ink-3)', pointerEvents: 'none' }} />
+              <div style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)',
+                  pointerEvents: 'none', display: 'flex',
+                }}>
+                  <Icon name="search" size={14} />
+                </span>
                 <input
                   ref={inputRef}
                   value={q}
@@ -86,40 +99,41 @@ function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
                     if (e.key === 'Enter' && visible.length === 1) { onChange(visible[0].id); close(); }
                   }}
                   style={{
-                    width: '100%', padding: '7px 10px 7px 32px',
+                    width: '100%', padding: '7px 30px 7px 32px',
                     border: '1px solid var(--line-strong)', borderRadius: 7,
                     background: 'var(--surface)', fontSize: 13, fontFamily: 'inherit',
-                    outline: 'none', color: 'var(--ink-1)',
+                    outline: 'none', color: 'var(--ink-1)', boxSizing: 'border-box',
                   }}
                 />
                 {q && (
-                  <button type="button" onClick={() => setQ('')}
-                    style={{ position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 2, lineHeight: 1 }}>
-                    ✕
-                  </button>
+                  <button type="button" onClick={() => setQ('')} style={{
+                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--ink-3)', padding: 2, lineHeight: 1, fontSize: 13,
+                  }}>✕</button>
                 )}
               </div>
             </div>
 
             {/* ── Team list ── */}
             <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-              {visible.length === 0 && (
+              {visible.length === 0 ? (
                 <div style={{ padding: '20px 14px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
                   ไม่พบทีมที่ค้นหา
                 </div>
-              )}
-              {visible.map((t) => (
+              ) : visible.map((t) => (
                 <button key={t.id} type="button"
                   onClick={() => { onChange(t.id); close(); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                    padding: '10px 14px', border: 'none', background: t.id === value ? 'rgba(217,119,6,0.08)' : 'transparent',
-                    cursor: 'pointer', fontSize: 13, textAlign: 'left', fontFamily: 'inherit',
+                    padding: '10px 14px', border: 'none', fontFamily: 'inherit',
+                    background: t.id === value ? 'rgba(217,119,6,0.08)' : 'transparent',
+                    cursor: 'pointer', fontSize: 13, textAlign: 'left',
                   }}
-                  onMouseEnter={(e) => { if (t.id !== value) e.currentTarget.style.background = 'var(--bg-2)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = t.id === value ? 'rgba(217,119,6,0.08)' : 'transparent'; }}
+                  onMouseEnter={e => { if (t.id !== value) e.currentTarget.style.background = 'var(--bg-2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = t.id === value ? 'rgba(217,119,6,0.08)' : 'transparent'; }}
                 >
-                  <span style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))', display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 600, fontSize: 12, flexShrink: 0 }}>{t.name.charAt(0)}</span>
+                  <Avatar name={t.name} />
                   <span style={{ flex: 1 }}>
                     <div style={{ fontWeight: 500 }}>{t.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{t.leader} · {t.phone} · {t.specialty}</div>
@@ -127,13 +141,15 @@ function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
                   <span className="badge gray mono">{t.size} คน</span>
                 </button>
               ))}
-            <button type="button" onClick={() => { close(); onAdd && onAdd(); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                padding: '12px 14px', border: 'none', cursor: 'pointer',
-                background: 'var(--bg-2)', borderTop: '1px solid var(--line)', fontFamily: 'inherit',
-                fontSize: 13, color: 'var(--accent-ink)', fontWeight: 500
-              }}>
+            </div>
+
+            {/* ── Add team button ── */}
+            <button type="button" onClick={() => { close(); onAdd && onAdd(); }} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+              padding: '12px 14px', border: 'none', cursor: 'pointer',
+              background: 'var(--bg-2)', borderTop: '1px solid var(--line)',
+              fontFamily: 'inherit', fontSize: 13, color: 'var(--accent-ink)', fontWeight: 500,
+            }}>
               <Icon name="plus" size={14} /> เพิ่มทีมช่างใหม่
             </button>
           </div>
