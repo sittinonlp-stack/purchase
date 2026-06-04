@@ -80,7 +80,8 @@ function Shell() {
   if (view === 'invoices-list')  { title = 'ประวัติใบแจ้งหนี้'; sub = 'ใบแจ้งหนี้ที่ตั้งเบิกกับลูกค้า'; }
   if (view === 'quick-receipt') { title = 'ถ่ายรูปใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'receipts')     { title = 'รูปถ่ายใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
-  if (view === 'history')      { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
+  if (view === 'history')       { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
+  if (view === 'labor-history') { title = 'ประวัติการเบิกค่าแรง'; sub = 'ค่าแรงรายวัน และค่าแรงเหมาจ่าย'; }
   if (view === 'projects')     { title = 'โครงการ'; sub = 'จัดการโครงการ'; }
   if (view === 'categories')   { title = 'หมวดหมู่'; sub = 'จัดการหมวดหมู่'; }
   if (view === 'teams')        { title = 'ทีมช่าง'; sub = 'จัดการทีมช่างและประวัติ'; }
@@ -137,7 +138,8 @@ function Shell() {
           )}
           {view === 'quick-receipt' && <window.QuickReceiptView key={'qr-' + (app.editingId || 'new')} />}
           {view === 'receipts'   && <window.ReceiptsView />}
-          {view === 'history'    && <window.HistoryView />}
+          {view === 'history'       && <window.HistoryView />}
+          {view === 'labor-history' && <window.LaborHistoryView />}
           {view === 'projects'   && <window.ProjectsView />}
           {view === 'categories' && <window.CategoriesView />}
           {view === 'teams'      && <window.TeamsView />}

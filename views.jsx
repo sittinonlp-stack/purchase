@@ -643,10 +643,11 @@ window.HistoryView = function HistoryView() {
   const [accFilter, setAccFilter] = useState('all'); // all | unposted | posted
 
   const filtered = useMemo(() => {
-    // ไม่แสดง quick-receipt, receipt, tax-invoice, invoice ที่นี่ — มี view ของตัวเองแล้ว
+    // แสดงเฉพาะ material, machine, other — labor/lump-labor ย้ายไป LaborHistoryView
     let arr = app.records.filter(r =>
       r.type !== 'quick-receipt' && r.type !== 'receipt' &&
-      r.type !== 'tax-invoice'   && r.type !== 'invoice'
+      r.type !== 'tax-invoice'   && r.type !== 'invoice' &&
+      r.type !== 'labor'         && r.type !== 'lump-labor'
     );
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
@@ -690,12 +691,10 @@ window.HistoryView = function HistoryView() {
       <div className="card">
         <div className="filter-bar">
           <div className="tabs">
-            <button className={"tab" + (typeFilter === 'all' ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type !== 'quick-receipt' && r.type !== 'receipt' && r.type !== 'tax-invoice' && r.type !== 'invoice').length}</span></button>
-            <button className={"tab" + (typeFilter === 'material' ? ' active' : '')} onClick={() => setTypeFilter('material')}><Icon name="cart" size={13} /> วัสดุ</button>
-            <button className={"tab" + (typeFilter === 'machine' ? ' active' : '')} onClick={() => setTypeFilter('machine')}><Icon name="truck" size={13} /> เครื่องจักร</button>
-            <button className={"tab" + (typeFilter === 'labor' ? ' active' : '')} onClick={() => setTypeFilter('labor')}><Icon name="hammer" size={13} /> ค่าแรง</button>
-            <button className={"tab" + (typeFilter === 'lump-labor' ? ' active' : '')} onClick={() => setTypeFilter('lump-labor')}><Icon name="clipboard" size={13} /> เหมาจ่าย</button>
-            <button className={"tab" + (typeFilter === 'other' ? ' active' : '')} onClick={() => setTypeFilter('other')}><Icon name="sparkle" size={13} /> อื่นๆ</button>
+            <button className={"tab" + (typeFilter === 'all'      ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type==='material'||r.type==='machine'||r.type==='other').length}</span></button>
+            <button className={"tab" + (typeFilter === 'material' ? ' active' : '')} onClick={() => setTypeFilter('material')}><Icon name="cart"    size={13} /> วัสดุ</button>
+            <button className={"tab" + (typeFilter === 'machine'  ? ' active' : '')} onClick={() => setTypeFilter('machine')} ><Icon name="truck"   size={13} /> เครื่องจักร</button>
+            <button className={"tab" + (typeFilter === 'other'    ? ' active' : '')} onClick={() => setTypeFilter('other')}   ><Icon name="sparkle" size={13} /> อื่นๆ</button>
           </div>
           <div className="topbar-search" style={{ width: 280, margin: 0 }}>
             <Icon name="search" size={14} />
@@ -3883,3 +3882,158 @@ window.InvoicesListView = function InvoicesListView() {
   );
 };
 
+
+// ============================================================
+// LaborHistoryView — ประวัติการเบิกค่าแรง (labor + lump-labor)
+// ============================================================
+window.LaborHistoryView = function LaborHistoryView() {
+  const app = window.useApp();
+  const [q,          setQ]          = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [projFilter, setProjFilter] = useState('all');
+  const [teamFilter, setTeamFilter] = useState('all');
+  const [sortKey,    setSortKey]    = useState('date-desc');
+  const [accFilter,  setAccFilter]  = useState('all');
+
+  const allLabor = useMemo(() =>
+    app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor'),
+    [app.records]);
+
+  const filtered = useMemo(() => {
+    let arr = allLabor;
+    if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
+    if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    if (teamFilter !== 'all') arr = arr.filter(r => r.workerTeamId === teamFilter);
+    if (accFilter === 'unposted') arr = arr.filter(r => !r.accountingPosted);
+    if (accFilter === 'posted')   arr = arr.filter(r =>  r.accountingPosted);
+    if (q.trim()) {
+      const s = q.toLowerCase();
+      arr = arr.filter(r =>
+        (r.docNo  || '').toLowerCase().includes(s) ||
+        (r.vendor || '').toLowerCase().includes(s) ||
+        (r.items  || []).some(i => (i.name || '').toLowerCase().includes(s))
+      );
+    }
+    arr.sort((a, b) => {
+      if (sortKey === 'date-desc')   return (b.date || '').localeCompare(a.date || '');
+      if (sortKey === 'date-asc')    return (a.date || '').localeCompare(b.date || '');
+      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
+      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
+      return 0;
+    });
+    return arr;
+  }, [allLabor, typeFilter, projFilter, teamFilter, accFilter, sortKey, q]);
+
+  const sum      = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
+  const laborSum = filtered.filter(r => r.type === 'labor')     .reduce((s, r) => s + computeTotals(r).total, 0);
+  const lumpSum  = filtered.filter(r => r.type === 'lump-labor').reduce((s, r) => s + computeTotals(r).total, 0);
+
+  const usedTeamIds = useMemo(() => new Set(allLabor.map(r => r.workerTeamId).filter(Boolean)), [allLabor]);
+  const usedTeams   = useMemo(() => (app.teams || []).filter(t => usedTeamIds.has(t.id)), [app.teams, usedTeamIds]);
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">ประวัติการเบิกค่าแรง</h1>
+          <div className="page-sub">ค่าแรงรายวัน และค่าแรงเหมาจ่าย — รายการย้อนหลังทั้งหมด</div>
+        </div>
+        <div className="row gap-8 dash-actions">
+          <button className="btn btn-ghost" onClick={() => app.setView('new-labor')}>
+            <Icon name="hammer" size={14} /> บันทึกค่าแรง
+          </button>
+          <button className="btn btn-accent" onClick={() => app.setView('new-lump-labor')}>
+            <Icon name="clipboard" size={14} /> ค่าแรงเหมาจ่าย
+          </button>
+        </div>
+      </div>
+
+      <div className="stat-grid" style={{ marginBottom: 20 }}>
+        <div className="stat">
+          <div className="stat-label">รายการทั้งหมด</div>
+          <div className="stat-value mono">{fmtInt(allLabor.length)}</div>
+          <div className="stat-icon" style={{ background:'oklch(0.95 0.04 290)', color:'oklch(0.50 0.14 290)' }}>
+            <Icon name="hammer" size={18} />
+          </div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">ยอดรวมค่าแรง</div>
+          <div className="stat-value mono">{"฿"+fmt(sum)}</div>
+          <div className="stat-icon" style={{ background:'oklch(0.95 0.04 290)', color:'oklch(0.50 0.14 290)' }}>
+            <Icon name="money" size={18} />
+          </div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">ค่าแรงรายวัน</div>
+          <div className="stat-value mono">{"฿"+fmt(laborSum)}</div>
+          <div className="stat-icon" style={{ background:'oklch(0.95 0.04 290)', color:'oklch(0.50 0.14 290)' }}>
+            <Icon name="users" size={18} />
+          </div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">ค่าแรงเหมาจ่าย</div>
+          <div className="stat-value mono">{"฿"+fmt(lumpSum)}</div>
+          <div className="stat-icon" style={{ background:'oklch(0.95 0.04 290)', color:'oklch(0.50 0.14 290)' }}>
+            <Icon name="clipboard" size={18} />
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="filter-bar">
+          <div className="tabs">
+            <button className={"tab"+(typeFilter==='all'?' active':'')} onClick={() => setTypeFilter('all')}>
+              ทั้งหมด <span className="badge gray mono">{allLabor.length}</span>
+            </button>
+            <button className={"tab"+(typeFilter==='labor'?' active':'')} onClick={() => setTypeFilter('labor')}>
+              <Icon name="hammer" size={13}/> ค่าแรงรายวัน
+            </button>
+            <button className={"tab"+(typeFilter==='lump-labor'?' active':'')} onClick={() => setTypeFilter('lump-labor')}>
+              <Icon name="clipboard" size={13}/> เหมาจ่าย
+            </button>
+          </div>
+          <div className="topbar-search" style={{ width:240, margin:0 }}>
+            <Icon name="search" size={14}/>
+            <input placeholder="ค้นหา: เลขที่, ทีมช่าง, รายการ" value={q} onChange={e => setQ(e.target.value)}/>
+          </div>
+          <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
+            <option value="all">ทุกโครงการ</option>
+            {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {usedTeams.length > 0 && (
+            <select className="select" value={teamFilter} onChange={e => setTeamFilter(e.target.value)}>
+              <option value="all">ทุกทีมช่าง</option>
+              {usedTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
+          <select className="select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
+            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
+            <option value="date-asc">วันที่ เก่า → ใหม่</option>
+            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
+            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
+          </select>
+          <select className="select" value={accFilter} onChange={e => setAccFilter(e.target.value)}
+            style={{ borderColor:accFilter!=='all'?'#059669':undefined, color:accFilter!=='all'?'#059669':undefined }}>
+            <option value="all">สถานะบัญชี: ทั้งหมด</option>
+            <option value="unposted">ยังไม่ลงบัญชี</option>
+            <option value="posted">ลงบัญชีแล้ว</option>
+          </select>
+          <div className="spacer"/>
+          <div className="text-small text-muted">
+            พบ <strong style={{ color:'var(--ink-1)' }} className="mono">{filtered.length}</strong> รายการ
+            {" · "}ยอดรวม <strong className="mono" style={{ color:'var(--ink-1)' }}>{"฿"+fmt(sum)}</strong>
+          </div>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="hammer" size={28}/></div>
+            <div className="empty-title">ยังไม่มีรายการค่าแรง</div>
+            <div className="empty-sub">เริ่มบันทึกค่าแรงรายวันหรือค่าแรงเหมาจ่ายรายการแรกได้เลย</div>
+          </div>
+        ) : (
+          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)}/>
+        )}
+      </div>
+    </>
+  );
+};
