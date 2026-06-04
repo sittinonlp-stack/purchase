@@ -4,23 +4,38 @@
 // includes deductions (advance, retention) and post-creation work logs
 // ============================
 
-// ---- Worker team picker ----
+// ---- Worker team picker (with search) ----
 function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
   const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 300 });
-  const btnRef = useRef(null);
+  const btnRef  = useRef(null);
+  const inputRef = useRef(null);
   const cur = teams.find((t) => t.id === value);
 
   const handleToggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
-      const dropH = Math.min(teams.length * 58 + 52, 360);
+      const dropH = Math.min(teams.length * 58 + 100, 400);
       const top = spaceBelow < dropH && r.top > dropH ? r.top - dropH - 2 : r.bottom + 4;
-      setDropPos({ top, left: r.left, width: r.width });
+      setDropPos({ top, left: r.left, width: Math.max(r.width, 320) });
     }
     setOpen(v => !v);
+    setQ('');
   };
+
+  const close = () => { setOpen(false); setQ(''); };
+
+  // auto-focus search input เมื่อ dropdown เปิด
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+  }, [open]);
+
+  // filter ตามคำค้น (ชื่อ, หัวหน้า, เบอร์, specialty)
+  const visible = q.trim()
+    ? teams.filter(t => [t.name, t.leader, t.phone, t.specialty].join(' ').toLowerCase().includes(q.toLowerCase()))
+    : teams;
 
   return (
     <div style={{ position: 'relative' }}>
@@ -48,37 +63,71 @@ function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
       {open && (
         <>
           {/* Transparent overlay — catches outside clicks */}
-          <div style={{ position: 'fixed', inset: 0, zIndex: 9990 }} onClick={() => setOpen(false)} />
-          {/* Dropdown — always on top via fixed + high z-index */}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9990 }} onClick={close} />
+          {/* Dropdown */}
           <div style={{
             position: 'fixed',
-            top: dropPos.top,
-            left: dropPos.left,
-            width: dropPos.width,
+            top: dropPos.top, left: dropPos.left, width: dropPos.width,
             zIndex: 9999,
             background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.22)', overflow: 'hidden', maxHeight: 360, overflowY: 'auto'
+            boxShadow: '0 8px 32px rgba(0,0,0,0.22)', overflow: 'hidden',
           }}>
-            {teams.map((t) => (
-              <button key={t.id} type="button"
-                onClick={() => { onChange(t.id); setOpen(false); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                  padding: '10px 14px', border: 'none', background: 'transparent', cursor: 'pointer',
-                  fontSize: 13, textAlign: 'left', fontFamily: 'inherit'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-2)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                <span style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))', display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 600, fontSize: 12, flexShrink: 0 }}>{t.name.charAt(0)}</span>
-                <span style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500 }}>{t.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{t.leader} · {t.phone} · {t.specialty}</div>
-                </span>
-                <span className="badge gray mono">{t.size} คน</span>
-              </button>
-            ))}
-            <button type="button" onClick={() => { setOpen(false); onAdd && onAdd(); }}
+            {/* ── Search input ── */}
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line)', background: 'var(--bg)' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <Icon name="search" size={14} style={{ position: 'absolute', left: 10, color: 'var(--ink-3)', pointerEvents: 'none' }} />
+                <input
+                  ref={inputRef}
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                  placeholder="พิมพ์ชื่อทีม, หัวหน้า, เบอร์..."
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') close();
+                    if (e.key === 'Enter' && visible.length === 1) { onChange(visible[0].id); close(); }
+                  }}
+                  style={{
+                    width: '100%', padding: '7px 10px 7px 32px',
+                    border: '1px solid var(--line-strong)', borderRadius: 7,
+                    background: 'var(--surface)', fontSize: 13, fontFamily: 'inherit',
+                    outline: 'none', color: 'var(--ink-1)',
+                  }}
+                />
+                {q && (
+                  <button type="button" onClick={() => setQ('')}
+                    style={{ position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 2, lineHeight: 1 }}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Team list ── */}
+            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+              {visible.length === 0 && (
+                <div style={{ padding: '20px 14px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
+                  ไม่พบทีมที่ค้นหา
+                </div>
+              )}
+              {visible.map((t) => (
+                <button key={t.id} type="button"
+                  onClick={() => { onChange(t.id); close(); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                    padding: '10px 14px', border: 'none', background: t.id === value ? 'rgba(217,119,6,0.08)' : 'transparent',
+                    cursor: 'pointer', fontSize: 13, textAlign: 'left', fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={(e) => { if (t.id !== value) e.currentTarget.style.background = 'var(--bg-2)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = t.id === value ? 'rgba(217,119,6,0.08)' : 'transparent'; }}
+                >
+                  <span style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, var(--accent), var(--accent-strong))', display: 'grid', placeItems: 'center', color: '#1f1d18', fontWeight: 600, fontSize: 12, flexShrink: 0 }}>{t.name.charAt(0)}</span>
+                  <span style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500 }}>{t.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{t.leader} · {t.phone} · {t.specialty}</div>
+                  </span>
+                  <span className="badge gray mono">{t.size} คน</span>
+                </button>
+              ))}
+            <button type="button" onClick={() => { close(); onAdd && onAdd(); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%',
                 padding: '12px 14px', border: 'none', cursor: 'pointer',
