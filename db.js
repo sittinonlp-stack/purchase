@@ -78,6 +78,7 @@
       meta: row.meta || {},
       // ── lightweight flags stored inside meta ──────
       accountingPosted: Boolean((row.meta || {}).accountingPosted),
+      approved:         Boolean((row.meta || {}).approved),
     };
   }
 
@@ -108,8 +109,8 @@
                                ? depositReturnImageUrls
                                : (rec.depositReturnImages || []),
       deposit_return_note:   rec.depositReturnNote || '',
-      // ── meta JSONB (รวม lightweight flags เช่น accountingPosted) ──
-      meta: { ...(rec.meta || {}), accountingPosted: Boolean(rec.accountingPosted) },
+      // ── meta JSONB (รวม lightweight flags เช่น accountingPosted, approved) ──
+      meta: { ...(rec.meta || {}), accountingPosted: Boolean(rec.accountingPosted), approved: Boolean(rec.approved) },
     };
   }
 
@@ -418,9 +419,9 @@
     async updateRecord(id, patch) {
       const client = window.supabaseClient;
 
-      // Fast path: lightweight flag-only patch (e.g. accountingPosted)
+      // Fast path: lightweight flag-only patch (e.g. accountingPosted, approved)
       // หลีกเลี่ยงการ overwrite ข้อมูลจริงด้วย null ที่เกิดจาก jsRecordToDb(partial patch)
-      const LIGHTWEIGHT = new Set(['accountingPosted']);
+      const LIGHTWEIGHT = new Set(['accountingPosted', 'approved']);
       const patchKeys = Object.keys(patch);
       if (patchKeys.length > 0 && patchKeys.every(k => LIGHTWEIGHT.has(k))) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();

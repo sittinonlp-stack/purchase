@@ -546,7 +546,55 @@ function AccCheckbox({ record }) {
   );
 }
 
-function RecordsTable({ records, onOpen }) {
+// ---- Approve checkbox — อนุมัติโดย Admin เท่านั้น ----
+function ApproveCheckbox({ record }) {
+  const app = window.useApp();
+  const approved = !!record.approved;
+
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (!app.isAdmin) return; // กันไม่ให้ non-admin แก้ไข
+    app.updateRecord(record.id, { approved: !approved });
+  };
+
+  // non-admin: แสดงเฉพาะสถานะ ไม่ให้กด
+  if (!app.isAdmin) {
+    return (
+      <div title={approved ? 'อนุมัติแล้ว' : 'รออนุมัติ'} style={{
+        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+        border: approved ? '2px solid #2563eb' : '2px solid #e5e7eb',
+        background: approved ? '#2563eb' : '#f9fafb',
+        color: '#fff',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 15, fontWeight: 700, lineHeight: 1,
+        cursor: 'default',
+      }}>
+        {approved ? '✓' : ''}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      title={approved ? 'อนุมัติแล้ว — คลิกเพื่อยกเลิก' : 'คลิกเพื่ออนุมัติ (Admin)'}
+      style={{
+        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+        border: approved ? '2px solid #2563eb' : '2px solid #d1d5db',
+        background: approved ? '#2563eb' : '#fff',
+        color: '#fff',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', transition: 'all 150ms',
+        fontSize: 15, fontWeight: 700, lineHeight: 1,
+        padding: 0,
+      }}
+    >
+      {approved ? '✓' : ''}
+    </button>
+  );
+}
+
+function RecordsTable({ records, onOpen, showApprove = false }) {
   const app = window.useApp();
   if (!records.length) {
     return (
@@ -565,6 +613,11 @@ function RecordsTable({ records, onOpen }) {
             <th style={{ width: 44, textAlign: 'center' }} title="ลงบันทึกค่าใช้จ่ายในบัญชีแล้ว">
               <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>บัญชี</span>
             </th>
+            {showApprove && (
+              <th style={{ width: 52, textAlign: 'center' }} title="อนุมัติโดย Admin">
+                <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>อนุมัติ</span>
+              </th>
+            )}
             <th style={{ width: 130 }}>เลขที่</th>
             <th style={{ width: 90 }}>วันที่</th>
             <th>โครงการ</th>
@@ -578,13 +631,22 @@ function RecordsTable({ records, onOpen }) {
           {records.map((r) => {
             const proj = app.projects.find(p => p.id === r.projectId);
             const total = computeTotals(r).total;
+            // row highlight: อนุมัติแล้ว = น้ำเงินอ่อน, ลงบัญชี = เขียวอ่อน, ทั้งคู่ = น้ำเงินอ่อน
+            const rowBg = r.approved
+              ? 'rgba(37,99,235,0.05)'
+              : r.accountingPosted ? 'rgba(5,150,105,0.04)' : undefined;
             return (
-              <tr key={r.id} onClick={() => onOpen(r.id)}
-                style={{ background: r.accountingPosted ? 'rgba(5,150,105,0.04)' : undefined }}>
+              <tr key={r.id} onClick={() => onOpen(r.id)} style={{ background: rowBg }}>
                 {/* ── Accounting checkbox ── */}
                 <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                   <AccCheckbox record={r} />
                 </td>
+                {/* ── Approve checkbox (แสดงเฉพาะเมื่อ showApprove=true) ── */}
+                {showApprove && (
+                  <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <ApproveCheckbox record={r} />
+                  </td>
+                )}
                 <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
                 <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
                 <td>
@@ -3892,8 +3954,9 @@ window.LaborHistoryView = function LaborHistoryView() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [projFilter, setProjFilter] = useState('all');
   const [teamFilter, setTeamFilter] = useState('all');
-  const [sortKey,    setSortKey]    = useState('date-desc');
-  const [accFilter,  setAccFilter]  = useState('all');
+  const [sortKey,       setSortKey]       = useState('date-desc');
+  const [accFilter,     setAccFilter]     = useState('all');
+  const [approveFilter, setApproveFilter] = useState('all'); // all | pending | approved
 
   const allLabor = useMemo(() =>
     app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor'),
@@ -3904,8 +3967,10 @@ window.LaborHistoryView = function LaborHistoryView() {
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
     if (teamFilter !== 'all') arr = arr.filter(r => r.workerTeamId === teamFilter);
-    if (accFilter === 'unposted') arr = arr.filter(r => !r.accountingPosted);
-    if (accFilter === 'posted')   arr = arr.filter(r =>  r.accountingPosted);
+    if (accFilter === 'unposted')       arr = arr.filter(r => !r.accountingPosted);
+    if (accFilter === 'posted')         arr = arr.filter(r =>  r.accountingPosted);
+    if (approveFilter === 'pending')    arr = arr.filter(r => !r.approved);
+    if (approveFilter === 'approved')   arr = arr.filter(r =>  r.approved);
     if (q.trim()) {
       const s = q.toLowerCase();
       arr = arr.filter(r =>
@@ -3922,7 +3987,7 @@ window.LaborHistoryView = function LaborHistoryView() {
       return 0;
     });
     return arr;
-  }, [allLabor, typeFilter, projFilter, teamFilter, accFilter, sortKey, q]);
+  }, [allLabor, typeFilter, projFilter, teamFilter, accFilter, approveFilter, sortKey, q]);
 
   const sum      = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
   const laborSum = filtered.filter(r => r.type === 'labor')     .reduce((s, r) => s + computeTotals(r).total, 0);
@@ -4018,6 +4083,12 @@ window.LaborHistoryView = function LaborHistoryView() {
             <option value="unposted">ยังไม่ลงบัญชี</option>
             <option value="posted">ลงบัญชีแล้ว</option>
           </select>
+          <select className="select" value={approveFilter} onChange={e => setApproveFilter(e.target.value)}
+            style={{ borderColor:approveFilter!=='all'?'#2563eb':undefined, color:approveFilter!=='all'?'#2563eb':undefined }}>
+            <option value="all">การอนุมัติ: ทั้งหมด</option>
+            <option value="pending">รออนุมัติ</option>
+            <option value="approved">อนุมัติแล้ว</option>
+          </select>
           <div className="spacer"/>
           <div className="text-small text-muted">
             พบ <strong style={{ color:'var(--ink-1)' }} className="mono">{filtered.length}</strong> รายการ
@@ -4031,7 +4102,7 @@ window.LaborHistoryView = function LaborHistoryView() {
             <div className="empty-sub">เริ่มบันทึกค่าแรงรายวันหรือค่าแรงเหมาจ่ายรายการแรกได้เลย</div>
           </div>
         ) : (
-          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)}/>
+          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} showApprove={true}/>
         )}
       </div>
     </>
