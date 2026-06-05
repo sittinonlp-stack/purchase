@@ -627,9 +627,20 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
     docInfo: { name: '', taxId: '', address: '' },
   });
 
-  const [form, setForm] = useState(() => initial
-    ? { ...initial, workLogs: initial.workLogs || [], docInfo: { name:'', taxId:'', address:'', ...(initial.docInfo||{}) } }
-    : blank());
+  const [form, setForm] = useState(() => {
+    if (!initial) return blank();
+    const docInfo = { name:'', taxId:'', address:'', ...(initial.docInfo||{}) };
+    // fallback: ดึงจาก team ถ้า docInfo ว่าง (เช่น record เก่าที่ยังไม่มีข้อมูล)
+    if (!docInfo.name && !docInfo.taxId && !docInfo.address && initial.workerTeamId) {
+      const t = (app.workerTeams || []).find(x => x.id === initial.workerTeamId);
+      if (t?.needsDoc && (t.fullName || t.idCard || t.address)) {
+        docInfo.name    = t.fullName || '';
+        docInfo.taxId   = t.idCard   || '';
+        docInfo.address = t.address  || '';
+      }
+    }
+    return { ...initial, workLogs: initial.workLogs || [], docInfo };
+  });
   const [catModalOpen,  setCatModalOpen]  = useState(false);
   const [projModalOpen, setProjModalOpen] = useState(false);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
@@ -1114,9 +1125,19 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
     docInfo: { name: '', taxId: '', address: '' },
   });
 
-  const [form, setForm] = useState(() => initial
-    ? { ...initial, workLogs: initial.workLogs || [], docInfo: { name:'', taxId:'', address:'', ...(initial.docInfo||{}) } }
-    : blank());
+  const [form, setForm] = useState(() => {
+    if (!initial) return blank();
+    const docInfo = { name:'', taxId:'', address:'', ...(initial.docInfo||{}) };
+    if (!docInfo.name && !docInfo.taxId && !docInfo.address && initial.workerTeamId) {
+      const t = (app.workerTeams || []).find(x => x.id === initial.workerTeamId);
+      if (t?.needsDoc && (t.fullName || t.idCard || t.address)) {
+        docInfo.name    = t.fullName || '';
+        docInfo.taxId   = t.idCard   || '';
+        docInfo.address = t.address  || '';
+      }
+    }
+    return { ...initial, workLogs: initial.workLogs || [], docInfo };
+  });
   const [catModalOpen,  setCatModalOpen]  = useState(false);
   const [projModalOpen, setProjModalOpen] = useState(false);
   const [teamModalOpen, setTeamModalOpen] = useState(false);

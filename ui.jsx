@@ -258,13 +258,15 @@ function Sidebar() {
           <div className="nav-section-label">เรียกดู</div>
           <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => go('history')}>
             <Icon name="history" /> ประวัติทั้งหมด
-            <span className="badge">{records.filter(r => r.type==='material'||r.type==='machine'||r.type==='other').length}</span>
+            {records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted).length > 0 && (
+              <span className="badge">{records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted).length}</span>
+            )}
           </button>
           <button className={"nav-item" + (view === 'labor-history' ? " active" : "")} onClick={() => go('labor-history')}>
             <Icon name="hammer" /> ประวัติการเบิกค่าแรง
-            {records.filter(r => r.type==='labor'||r.type==='lump-labor').length > 0 && (
+            {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length > 0 && (
               <span className="badge" style={{ background:'oklch(0.93 0.06 290)', color:'oklch(0.45 0.14 290)', border:'1px solid oklch(0.84 0.08 290)' }}>
-                {records.filter(r => r.type==='labor'||r.type==='lump-labor').length}
+                {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length}
               </span>
             )}
           </button>

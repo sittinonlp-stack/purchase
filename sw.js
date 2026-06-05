@@ -1,44 +1,49 @@
 // ============================================================
 // Service Worker — ระบบจัดซื้องานก่อสร้าง
-// กลยุทธ์: Cache-first สำหรับ static assets
-//           Network-first สำหรับ Supabase API
+// กลยุทธ์: Network-first สำหรับไฟล์แอป (jsx/js/css/html)
+//           Cache-first สำหรับ CDN (React, Babel, SheetJS)
+//           Network-only สำหรับ Supabase API
 // ============================================================
 
-const CACHE_NAME = 'jadsuea-v1';
+const CACHE_NAME = 'jadsuea-v3';
 
-// ไฟล์ที่ต้องการ cache (app shell)
-const PRECACHE_ASSETS = [
-  '/',
-  '/styles.css',
-  '/config.js',
-  '/supabase-client.js',
-  '/db.js',
-  '/store.jsx',
-  '/auth-ui.jsx',
-  '/ui.jsx',
-  '/forms.jsx',
-  '/labor.jsx',
-  '/views.jsx',
-  '/app.jsx',
-  '/icon.svg',
-  '/icon-maskable.svg',
-  '/manifest.json',
+// ไฟล์ CDN ที่เปลี่ยนแปลงไม่บ่อย — ใช้ cache-first เพื่อความเร็ว
+const CDN_HOSTS = [
+  'unpkg.com',
+  'cdn.jsdelivr.net',
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
 ];
 
-// ── Install: pre-cache app shell ────────────────────────────
+// ── Install: pre-cache ไฟล์แอป ────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
+      return cache.addAll([
+        '/',
+        '/styles.css',
+        '/config.js',
+        '/supabase-client.js',
+        '/db.js',
+        '/store.jsx',
+        '/auth-ui.jsx',
+        '/ui.jsx',
+        '/forms.jsx',
+        '/labor.jsx',
+        '/views.jsx',
+        '/app.jsx',
+        '/icon.svg',
+        '/icon-maskable.svg',
+        '/manifest.json',
+      ]);
     }).catch((err) => {
-      // ไม่หยุด install ถ้า pre-cache บางไฟล์ล้มเหลว
       console.warn('[SW] Pre-cache partial failure:', err);
     })
   );
   self.skipWaiting();
 });
 
-// ── Activate: ลบ cache เก่า ─────────────────────────────────
+// ── Activate: ลบ cache เก่าทั้งหมด ────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -55,40 +60,39 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// ── Fetch: cache-first strategy ────────────────────────────
+// ── Fetch ──────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
-  // เฉพาะ GET
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // ข้าม Supabase API — ต้องใช้ network เสมอ
-  if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.io')) {
-    return; // ใช้ browser default (network)
-  }
+  // ข้าม Supabase API — network เสมอ
+  if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.io')) return;
 
-  // ข้าม chrome-extension URLs
+  // ข้าม chrome-extension
   if (url.protocol === 'chrome-extension:') return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        // คืน cache ทันที + อัปเดต cache ใน background (stale-while-revalidate)
-        const networkUpdate = fetch(event.request)
-          .then((res) => {
-            if (res && res.status === 200 && res.type !== 'opaque') {
-              caches.open(CACHE_NAME).then((c) => c.put(event.request, res.clone()));
-            }
-            return res;
-          })
-          .catch(() => {/* ignore network error when we have cache */});
-        // eslint-disable-next-line no-unused-expressions
-        networkUpdate;
-        return cached;
-      }
+  const isCDN = CDN_HOSTS.some((h) => url.hostname.includes(h));
 
-      // ไม่มี cache — ไปดึงจาก network แล้วเก็บ
-      return fetch(event.request)
+  if (isCDN) {
+    // ── Cache-first สำหรับ CDN ────────────────────────────
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((res) => {
+          if (res && res.status === 200 && res.type !== 'opaque') {
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, res.clone()));
+          }
+          return res;
+        });
+      })
+    );
+  } else {
+    // ── Network-first สำหรับไฟล์แอป (jsx/js/css/html) ───
+    // ดึงจาก network ก่อนเสมอ → เห็นการเปลี่ยนแปลงทันทีเมื่อ refresh
+    // ถ้า network ล้มเหลว (offline) → ใช้ cache แทน
+    event.respondWith(
+      fetch(event.request)
         .then((res) => {
           if (res && res.status === 200 && res.type !== 'opaque') {
             const clone = res.clone();
@@ -97,12 +101,12 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => {
-          // Offline fallback: คืน index.html สำหรับ navigation requests
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
-          return new Response('Offline', { status: 503 });
-        });
-    })
-  );
+          return caches.match(event.request).then((cached) => {
+            if (cached) return cached;
+            if (event.request.mode === 'navigate') return caches.match('/');
+            return new Response('Offline', { status: 503 });
+          });
+        })
+    );
+  }
 });
