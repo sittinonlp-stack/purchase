@@ -245,6 +245,49 @@ function DocTypeRow({ selected, onToggle }) {
   );
 }
 
+// ── DocInfoSection — ฟิลด์ข้อมูลสำหรับออกเอกสาร (shared ทุก form) ──
+function DocInfoSection({ docInfo, onChange, autoFilled }) {
+  const set = (patch) => onChange({ ...(docInfo || {}), ...patch });
+  const v = docInfo || { name: '', taxId: '', address: '' };
+  return (
+    <div style={{
+      padding: '14px 16px', borderRadius: 10, marginTop: 4,
+      border: '1.5px solid rgba(37,99,235,0.3)',
+      background: 'rgba(37,99,235,0.04)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#1d4ed8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+          ข้อมูลผู้รับเงิน/ผู้ขาย (สำหรับออกเอกสาร)
+        </span>
+        {autoFilled && (
+          <span style={{ fontSize: 11, background: 'rgba(5,150,105,0.12)', color: '#059669', border: '1px solid rgba(5,150,105,0.3)', borderRadius: 20, padding: '1px 8px', fontWeight: 600 }}>
+            ✓ ดึงจากข้อมูลทีมช่าง
+          </span>
+        )}
+      </div>
+      <div className="form-grid">
+        <div className="field">
+          <label className="field-label">ชื่อ-นามสกุล / ชื่อนิติบุคคล <span className="req">*</span></label>
+          <input className="input" placeholder="ชื่อจริง-นามสกุลจริง หรือชื่อบริษัท"
+            value={v.name} onChange={e => set({ name: e.target.value })} />
+        </div>
+        <div className="field">
+          <label className="field-label">เลขบัตรประชาชน / เลขผู้เสียภาษี <span className="req">*</span></label>
+          <input className="input mono" placeholder="0-0000-00000-00-0" maxLength={17}
+            value={v.taxId} onChange={e => set({ taxId: e.target.value })} />
+        </div>
+        <div className="field full">
+          <label className="field-label">ที่อยู่ <span className="req">*</span></label>
+          <textarea className="textarea" rows={2}
+            placeholder="เลขที่ หมู่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"
+            value={v.address} onChange={e => set({ address: e.target.value })} />
+        </div>
+      </div>
+    </div>
+  );
+}
+window.DocInfoSection = DocInfoSection;
+
 function VatModeRow({ value, onChange }) {
   return (
     <div className="option-row">
@@ -285,9 +328,10 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
     depositReturnDate: '',
     depositReturnImages: [],
     depositReturnNote: '',
+    docInfo: { name: '', taxId: '', address: '' },
   });
 
-  const [form, setForm] = useState(() => initial ? { ...initial } : blank());
+  const [form, setForm] = useState(() => initial ? { ...initial, docInfo: { name:'', taxId:'', address:'', ...(initial.docInfo||{}) } } : blank());
   const [catModalOpen, setCatModalOpen] = useState(false);
   const [projModalOpen, setProjModalOpen] = useState(false);
 
@@ -300,6 +344,12 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
     if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.vendor.trim()) return app.pushToast('โปรดระบุชื่อผู้ขาย/ผู้ให้เช่า', 'error');
     if (!form.items.some(it => it.name.trim() && Number(it.qty) > 0)) return app.pushToast('โปรดเพิ่มรายการอย่างน้อย 1 รายการ', 'error');
+    if (form.docs.length > 0) {
+      const di = form.docInfo || {};
+      if (!di.name?.trim())    return app.pushToast('โปรดระบุชื่อ-นามสกุล สำหรับออกเอกสาร', 'error');
+      if (!di.taxId?.trim())   return app.pushToast('โปรดระบุเลขบัตรประชาชน/เลขผู้เสียภาษี', 'error');
+      if (!di.address?.trim()) return app.pushToast('โปรดระบุที่อยู่ สำหรับออกเอกสาร', 'error');
+    }
     onSubmit(form);
   };
 
@@ -421,6 +471,12 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
               <div className="field">
                 <label className="field-label"><Icon name="receipt" size={14} /> เอกสารที่ต้องออก (เลือกได้หลายรายการ)</label>
                 <DocTypeRow selected={form.docs} onToggle={toggleDoc} />
+                {form.docs.length > 0 && (
+                  <DocInfoSection
+                    docInfo={form.docInfo}
+                    onChange={v => set({ docInfo: v })}
+                  />
+                )}
               </div>
 
               <div className="field">

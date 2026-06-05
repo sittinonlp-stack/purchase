@@ -624,10 +624,13 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
     note: '',
     images: [],
     workLogs: [],
+    docInfo: { name: '', taxId: '', address: '' },
   });
 
-  const [form, setForm] = useState(() => initial ? { ...initial, workLogs: initial.workLogs || [] } : blank());
-  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [form, setForm] = useState(() => initial
+    ? { ...initial, workLogs: initial.workLogs || [], docInfo: { name:'', taxId:'', address:'', ...(initial.docInfo||{}) } }
+    : blank());
+  const [catModalOpen,  setCatModalOpen]  = useState(false);
   const [projModalOpen, setProjModalOpen] = useState(false);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
 
@@ -635,16 +638,30 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const toggleDoc = (id) => set({ docs: form.docs.includes(id) ? form.docs.filter(d => d !== id) : [...form.docs, id] });
 
-  // Update vendor field to mirror team name when team is picked
+  // Update vendor + auto-fill docInfo จาก team ที่มีข้อมูลเอกสาร
   const setTeam = (teamId) => {
     const t = app.workerTeams.find(x => x.id === teamId);
-    set({ workerTeamId: teamId, vendor: t ? t.name : form.vendor });
+    const patch = { workerTeamId: teamId, vendor: t ? t.name : form.vendor };
+    if (t?.needsDoc && (t.fullName || t.idCard || t.address)) {
+      patch.docInfo = {
+        name:    t.fullName || form.docInfo?.name    || '',
+        taxId:   t.idCard   || form.docInfo?.taxId   || '',
+        address: t.address  || form.docInfo?.address || '',
+      };
+    }
+    set(patch);
   };
 
   const handleSubmit = () => {
-    if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
+    if (!form.projectId)   return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.workerTeamId) return app.pushToast('โปรดเลือกทีมช่างก่อนบันทึก', 'error');
     if (!form.items.some(it => it.name.trim() && Number(it.qty) > 0)) return app.pushToast('โปรดเพิ่มรายการงานอย่างน้อย 1 รายการ', 'error');
+    if (form.docs.length > 0) {
+      const di = form.docInfo || {};
+      if (!di.name?.trim())    return app.pushToast('โปรดระบุชื่อ-นามสกุล สำหรับออกเอกสาร', 'error');
+      if (!di.taxId?.trim())   return app.pushToast('โปรดระบุเลขบัตรประชาชน/เลขผู้เสียภาษี', 'error');
+      if (!di.address?.trim()) return app.pushToast('โปรดระบุที่อยู่ สำหรับออกเอกสาร', 'error');
+    }
     onSubmit(form);
   };
 
@@ -838,6 +855,14 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                     </button>
                   ))}
                 </div>
+                {/* ── ข้อมูลสำหรับออกเอกสาร ── */}
+                {form.docs.length > 0 && (
+                  <window.DocInfoSection
+                    docInfo={form.docInfo}
+                    onChange={v => set({ docInfo: v })}
+                    autoFilled={!!(form.workerTeamId && app.workerTeams.find(t => t.id === form.workerTeamId)?.needsDoc)}
+                  />
+                )}
               </div>
 
               <div className="form-grid">
@@ -1086,10 +1111,13 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
     note: '',
     images: [],
     workLogs: [],
+    docInfo: { name: '', taxId: '', address: '' },
   });
 
-  const [form, setForm] = useState(() => initial ? { ...initial, workLogs: initial.workLogs || [] } : blank());
-  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [form, setForm] = useState(() => initial
+    ? { ...initial, workLogs: initial.workLogs || [], docInfo: { name:'', taxId:'', address:'', ...(initial.docInfo||{}) } }
+    : blank());
+  const [catModalOpen,  setCatModalOpen]  = useState(false);
   const [projModalOpen, setProjModalOpen] = useState(false);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
 
@@ -1099,13 +1127,27 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
 
   const setTeam = (teamId) => {
     const t = app.workerTeams.find(x => x.id === teamId);
-    set({ workerTeamId: teamId, vendor: t ? t.name : form.vendor });
+    const patch = { workerTeamId: teamId, vendor: t ? t.name : form.vendor };
+    if (t?.needsDoc && (t.fullName || t.idCard || t.address)) {
+      patch.docInfo = {
+        name:    t.fullName || form.docInfo?.name    || '',
+        taxId:   t.idCard   || form.docInfo?.taxId   || '',
+        address: t.address  || form.docInfo?.address || '',
+      };
+    }
+    set(patch);
   };
 
   const handleSubmit = () => {
-    if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
+    if (!form.projectId)    return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.workerTeamId) return app.pushToast('โปรดเลือกทีมช่างก่อนบันทึก', 'error');
     if (!form.items.some(it => it.name.trim() && Number(it.price) > 0)) return app.pushToast('โปรดเพิ่มรายการงานพร้อมราคาเหมาอย่างน้อย 1 รายการ', 'error');
+    if (form.docs.length > 0) {
+      const di = form.docInfo || {};
+      if (!di.name?.trim())    return app.pushToast('โปรดระบุชื่อ-นามสกุล สำหรับออกเอกสาร', 'error');
+      if (!di.taxId?.trim())   return app.pushToast('โปรดระบุเลขบัตรประชาชน/เลขผู้เสียภาษี', 'error');
+      if (!di.address?.trim()) return app.pushToast('โปรดระบุที่อยู่ สำหรับออกเอกสาร', 'error');
+    }
     onSubmit(form);
   };
 
@@ -1294,6 +1336,14 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
                     </button>
                   ))}
                 </div>
+                {/* ── ข้อมูลสำหรับออกเอกสาร ── */}
+                {form.docs.length > 0 && (
+                  <window.DocInfoSection
+                    docInfo={form.docInfo}
+                    onChange={v => set({ docInfo: v })}
+                    autoFilled={!!(form.workerTeamId && app.workerTeams.find(t => t.id === form.workerTeamId)?.needsDoc)}
+                  />
+                )}
               </div>
               <div className="form-grid">
                 <div className="field">
