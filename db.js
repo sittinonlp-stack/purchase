@@ -22,10 +22,27 @@
   }
 
   function dbTeam(row) {
-    return { id: row.id, name: row.name, leader: row.leader || '', phone: row.phone || '', size: Number(row.size || 1), specialty: row.specialty || '', note: row.note || '' };
+    return {
+      id: row.id, name: row.name,
+      leader: row.leader || '', phone: row.phone || '',
+      size: Number(row.size || 1), specialty: row.specialty || '', note: row.note || '',
+      // ── ข้อมูลสำหรับออกเอกสาร (migration-worker-team-doc-fields.sql) ──
+      needsDoc: Boolean(row.needs_doc),
+      fullName: row.full_name || '',
+      idCard:   row.id_card   || '',
+      address:  row.address   || '',
+    };
   }
   function jsTeam(t) {
-    return { id: t.id, name: t.name, leader: t.leader || '', phone: t.phone || '', size: Number(t.size || 1), specialty: t.specialty || '', note: t.note || '' };
+    return {
+      id: t.id, name: t.name,
+      leader: t.leader || '', phone: t.phone || '',
+      size: Number(t.size || 1), specialty: t.specialty || '', note: t.note || '',
+      needs_doc: Boolean(t.needsDoc),
+      full_name: t.fullName || '',
+      id_card:   t.idCard   || '',
+      address:   t.address  || '',
+    };
   }
 
   function dbRecord(row) {
@@ -357,7 +374,13 @@
       if (error) throw error;
     },
     async updateWorkerTeam(id, patch) {
-      const { error } = await window.supabaseClient.from('worker_teams').update(jsTeam({ ...patch, id })).eq('id', id);
+      const full = jsTeam({ ...patch, id });
+      let { error } = await window.supabaseClient.from('worker_teams').update(full).eq('id', id);
+      if (error && isMissingColumnError(error)) {
+        // migration-worker-team-doc-fields.sql ยังไม่ได้รัน → retry ไม่รวมคอลัมน์ใหม่
+        const { needs_doc, full_name, id_card, address, ...base } = full;
+        ({ error } = await window.supabaseClient.from('worker_teams').update(base).eq('id', id));
+      }
       if (error) throw error;
     },
     async deleteWorkerTeam(id) {

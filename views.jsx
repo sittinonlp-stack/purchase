@@ -1455,7 +1455,23 @@ window.TeamsView = function TeamsView() {
                   <span className="badge gray">{t.size} คน</span>
                   <span className="badge gray">{s.projects.size} โครงการ</span>
                   <span className="badge gray mono">{s.count} บิล</span>
+                  {t.needsDoc
+                    ? <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>📄 ต้องออกเอกสาร</span>
+                    : <span className="badge dot" style={{ background:'rgba(107,114,128,0.1)', color:'#6b7280', borderColor:'rgba(107,114,128,0.25)' }}>ไม่ออกเอกสาร</span>}
                 </div>
+
+                {/* ข้อมูลเอกสาร — แสดงเมื่อ needsDoc */}
+                {t.needsDoc && (t.fullName || t.idCard || t.address) && (
+                  <div style={{
+                    padding: '10px 12px', borderRadius: 8, marginBottom: 12,
+                    background: 'rgba(37,99,235,0.05)', border: '1px solid rgba(37,99,235,0.18)',
+                    fontSize: 12, lineHeight: 1.7,
+                  }}>
+                    {t.fullName && <div><span style={{ color:'#6b7280' }}>ชื่อจริง:</span> <strong>{t.fullName}</strong></div>}
+                    {t.idCard   && <div><span style={{ color:'#6b7280' }}>บัตรประชาชน:</span> <span className="mono">{t.idCard}</span></div>}
+                    {t.address  && <div><span style={{ color:'#6b7280' }}>ที่อยู่:</span> {t.address}</div>}
+                  </div>
+                )}
 
                 {/* Note */}
                 {t.note && (

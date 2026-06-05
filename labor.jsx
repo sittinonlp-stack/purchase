@@ -160,37 +160,121 @@ function WorkerTeamPicker({ value, onChange, teams, onAdd }) {
 }
 window.WorkerTeamPicker = WorkerTeamPicker;
 
+// ---- Shared: section divider ใน form ----
+function FormSectionLabel({ children }) {
+  return (
+    <div className="field full" style={{ marginBottom: -4 }}>
+      <div style={{
+        fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+        color: 'var(--ink-3)', borderBottom: '1px solid var(--line)', paddingBottom: 6,
+      }}>{children}</div>
+    </div>
+  );
+}
+
+// ---- Shared: fields สำหรับออกเอกสาร ----
+function DocFields({ needsDoc, setNeedsDoc, fullName, setFullName, idCard, setIdCard, address, setAddress }) {
+  return (
+    <>
+      <FormSectionLabel>ข้อมูลสำหรับออกเอกสาร</FormSectionLabel>
+
+      {/* Toggle */}
+      <div className="field full">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none' }}>
+          {/* custom toggle */}
+          <span onClick={() => setNeedsDoc(v => !v)} style={{
+            width: 44, height: 24, borderRadius: 12, flexShrink: 0,
+            background: needsDoc ? 'var(--accent)' : 'var(--line-strong)',
+            position: 'relative', transition: 'background 150ms', cursor: 'pointer',
+            display: 'inline-block',
+          }}>
+            <span style={{
+              position: 'absolute', top: 3, left: needsDoc ? 23 : 3,
+              width: 18, height: 18, borderRadius: '50%', background: '#fff',
+              transition: 'left 150ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: needsDoc ? 'var(--ink-1)' : 'var(--ink-3)' }}>
+            {needsDoc ? 'ต้องออกเอกสารสำคัญ (หนังสือจ้างเหมา / ภ.ง.ด.3)' : 'ไม่ต้องออกเอกสารสำคัญ'}
+          </span>
+        </label>
+      </div>
+
+      {/* ฟิลด์เอกสาร — แสดงเฉพาะเมื่อ needsDoc=true */}
+      {needsDoc && (
+        <>
+          <div className="field">
+            <label className="field-label">ชื่อจริง-นามสกุลจริง <span className="req">*</span></label>
+            <input className="input" placeholder="นายสมชาย ใจดี"
+              value={fullName} onChange={e => setFullName(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field-label">เลขบัตรประชาชน</label>
+            <input className="input mono" placeholder="0-0000-00000-00-0" maxLength={17}
+              value={idCard} onChange={e => setIdCard(e.target.value)} />
+            <div className="field-hint">เลข 13 หลัก</div>
+          </div>
+          <div className="field full">
+            <label className="field-label">ที่อยู่ตามบัตรประชาชน</label>
+            <textarea className="textarea" rows={2}
+              placeholder="เลขที่ หมู่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"
+              value={address} onChange={e => setAddress(e.target.value)} />
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 // ---- Add worker team modal ----
 function AddWorkerTeamModal({ open, onClose, onAdd }) {
-  const [name, setName] = useState('');
-  const [leader, setLeader] = useState('');
-  const [phone, setPhone] = useState('');
-  const [size, setSize] = useState(1);
+  const [name,      setName]      = useState('');
+  const [leader,    setLeader]    = useState('');
+  const [phone,     setPhone]     = useState('');
+  const [size,      setSize]      = useState(1);
   const [specialty, setSpecialty] = useState('');
-  const [note, setNote] = useState('');
-  const [images, setImages] = useState([]);
+  const [note,      setNote]      = useState('');
+  const [images,    setImages]    = useState([]);
+  // ── ข้อมูลเอกสาร ──
+  const [needsDoc,  setNeedsDoc]  = useState(false);
+  const [fullName,  setFullName]  = useState('');
+  const [idCard,    setIdCard]    = useState('');
+  const [address,   setAddress]   = useState('');
+
   useEffect(() => {
-    if (open) { setName(''); setLeader(''); setPhone(''); setSize(1); setSpecialty(''); setNote(''); setImages([]); }
+    if (open) {
+      setName(''); setLeader(''); setPhone(''); setSize(1);
+      setSpecialty(''); setNote(''); setImages([]);
+      setNeedsDoc(false); setFullName(''); setIdCard(''); setAddress('');
+    }
   }, [open]);
+
+  const handleAdd = () => {
+    if (!name.trim()) return;
+    onAdd({
+      name: name.trim(), leader: leader.trim(), phone: phone.trim(),
+      size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
+      needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(),
+    });
+  };
+
   return (
-    <Modal open={open} onClose={onClose} title="เพิ่มทีมช่างใหม่" width={560}
+    <Modal open={open} onClose={onClose} title="เพิ่มทีมช่างใหม่" width={600}
       footer={<>
         <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
-        <button className="btn btn-accent" onClick={() => name.trim() && onAdd({
-          name: name.trim(), leader: leader.trim(), phone: phone.trim(),
-          size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
-        })}>
+        <button className="btn btn-accent" onClick={handleAdd} disabled={!name.trim()}>
           <Icon name="plus" size={14} /> เพิ่มทีม
         </button>
       </>}>
       <div className="form-grid">
+        <FormSectionLabel>ข้อมูลทั่วไป</FormSectionLabel>
         <div className="field full">
           <label className="field-label">ชื่อทีม <span className="req">*</span></label>
           <input className="input" autoFocus placeholder="เช่น ทีมช่างประสิทธิ์" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field">
           <label className="field-label">หัวหน้าทีม</label>
-          <input className="input" placeholder="ชื่อ-นามสกุล" value={leader} onChange={(e) => setLeader(e.target.value)} />
+          <input className="input" placeholder="ชื่อ-นามสกุล (ชื่อเล่นก็ได้)" value={leader} onChange={(e) => setLeader(e.target.value)} />
         </div>
         <div className="field">
           <label className="field-label">เบอร์ติดต่อ</label>
@@ -205,15 +289,21 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
           <input className="input" placeholder="เช่น ก่อ-ฉาบ, ปูกระเบื้อง" value={specialty} onChange={(e) => setSpecialty(e.target.value)} />
         </div>
         <div className="field full">
-          <label className="field-label">หมายเหตุ / รายละเอียดเพิ่มเติม</label>
-          <textarea className="textarea" rows={3}
-            placeholder="เช่น ราคาต่อหน่วย, เงื่อนไขการจ้าง, ข้อตกลงพิเศษ"
-            value={note} onChange={(e) => setNote(e.target.value)} />
+          <label className="field-label">หมายเหตุ</label>
+          <textarea className="textarea" rows={2}
+            placeholder="เช่น ราคาต่อหน่วย, เงื่อนไขการจ้าง" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         <div className="field full">
           <label className="field-label"><Icon name="image" size={13} /> รูปภาพทีมช่าง <span style={{ fontWeight:400, color:'var(--ink-3)', fontSize:11 }}>(สูงสุด 5 รูป)</span></label>
           <window.ImageUploader images={images} onChange={setImages} max={5} />
         </div>
+
+        <DocFields
+          needsDoc={needsDoc} setNeedsDoc={setNeedsDoc}
+          fullName={fullName} setFullName={setFullName}
+          idCard={idCard}     setIdCard={setIdCard}
+          address={address}   setAddress={setAddress}
+        />
       </div>
     </Modal>
   );
@@ -229,8 +319,12 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
   const [specialty, setSpecialty] = useState('');
   const [note,      setNote]      = useState('');
   const [images,    setImages]    = useState([]);
+  // ── ข้อมูลเอกสาร ──
+  const [needsDoc,  setNeedsDoc]  = useState(false);
+  const [fullName,  setFullName]  = useState('');
+  const [idCard,    setIdCard]    = useState('');
+  const [address,   setAddress]   = useState('');
 
-  // Load existing team data whenever modal opens
   useEffect(() => {
     if (open && team) {
       setName(team.name || '');
@@ -240,6 +334,10 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
       setSpecialty(team.specialty || '');
       setNote(team.note || '');
       setImages(team.images || []);
+      setNeedsDoc(!!team.needsDoc);
+      setFullName(team.fullName || '');
+      setIdCard(team.idCard || '');
+      setAddress(team.address || '');
     }
   }, [open, team]);
 
@@ -248,11 +346,12 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
     onSave({
       name: name.trim(), leader: leader.trim(), phone: phone.trim(),
       size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
+      needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(),
     });
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="แก้ไขข้อมูลทีมช่าง" width={560}
+    <Modal open={open} onClose={onClose} title="แก้ไขข้อมูลทีมช่าง" width={600}
       footer={<>
         <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
         <button className="btn btn-accent" onClick={handleSave} disabled={!name.trim()}>
@@ -260,6 +359,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
         </button>
       </>}>
       <div className="form-grid">
+        <FormSectionLabel>ข้อมูลทั่วไป</FormSectionLabel>
         <div className="field full">
           <label className="field-label">ชื่อทีม <span className="req">*</span></label>
           <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
@@ -282,7 +382,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
         </div>
         <div className="field full">
           <label className="field-label">หมายเหตุ / รายละเอียดเพิ่มเติม</label>
-          <textarea className="textarea" rows={3}
+          <textarea className="textarea" rows={2}
             placeholder="เช่น ราคาต่อหน่วย, เงื่อนไขการจ้าง, ข้อตกลงพิเศษ"
             value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
@@ -293,6 +393,13 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
           </label>
           <window.ImageUploader images={images} onChange={setImages} max={5} />
         </div>
+
+        <DocFields
+          needsDoc={needsDoc} setNeedsDoc={setNeedsDoc}
+          fullName={fullName} setFullName={setFullName}
+          idCard={idCard}     setIdCard={setIdCard}
+          address={address}   setAddress={setAddress}
+        />
       </div>
     </Modal>
   );
