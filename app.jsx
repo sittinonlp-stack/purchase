@@ -148,37 +148,37 @@ function Shell() {
           {view === 'new-labor' && (
             <window.LaborForm
               key={'lab-' + (app.editingId || 'new')}
-              initial={initial && initial.type === 'labor' ? initial : null}
+              initial={initial && (initial.type === 'labor' || initial.type === 'lump-labor') ? initial : null}
               onSubmit={(rec) => {
                 if (app.editingId) {
                   app.updateRecord(app.editingId, rec);
-                  app.pushToast('แก้ไขรายการค่าแรงเรียบร้อย');
+                  app.pushToast(rec.type === 'lump-labor' ? 'แก้ไขและสลับเป็นเหมาจ่ายแล้ว' : 'แก้ไขรายการค่าแรงเรียบร้อย');
                 } else {
                   app.addRecord(rec);
                   app.pushToast('บันทึกค่าแรงแล้ว');
                 }
                 clearEditing();
-                app.setView('history');
+                app.setView('labor-history');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('labor-history'); }}
             />
           )}
           {view === 'new-lump-labor' && (
             <window.LumpLaborForm
               key={'ll-' + (app.editingId || 'new')}
-              initial={initial && initial.type === 'lump-labor' ? initial : null}
+              initial={initial && (initial.type === 'lump-labor' || initial.type === 'labor') ? initial : null}
               onSubmit={(rec) => {
                 if (app.editingId) {
                   app.updateRecord(app.editingId, rec);
-                  app.pushToast('แก้ไขรายการเหมาจ่ายเรียบร้อย');
+                  app.pushToast(rec.type === 'labor' ? 'แก้ไขและสลับเป็นค่าแรงแล้ว' : 'แก้ไขรายการเหมาจ่ายเรียบร้อย');
                 } else {
                   app.addRecord(rec);
                   app.pushToast('บันทึกค่าแรงเหมาจ่ายแล้ว');
                 }
                 clearEditing();
-                app.setView('history');
+                app.setView('labor-history');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('labor-history'); }}
             />
           )}
           {view === 'new-other' && (

@@ -543,14 +543,50 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
 
   const isEditing = !!initial;
 
+  // สลับ type labor ↔ lump-labor (admin เท่านั้น)
+  const switchType = () => {
+    const toType  = form.type === 'labor' ? 'lump-labor' : 'labor';
+    const fromPfx = form.type === 'labor' ? 'LB-' : 'LS-';
+    const toPfx   = toType   === 'labor' ? 'LB-' : 'LS-';
+    const newDocNo = form.docNo.startsWith(fromPfx)
+      ? toPfx + form.docNo.slice(fromPfx.length)
+      : form.docNo;
+    set({ type: toType, docNo: newDocNo });
+  };
+
+  const isLump = form.type === 'lump-labor';
+
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isEditing ? 'แก้ไขบันทึกค่าแรง' : 'บันทึกรายจ่ายค่าแรง'}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <h1 className="page-title" style={{ margin: 0 }}>
+              {isEditing
+                ? (isLump ? 'แก้ไขรายการเหมาจ่าย' : 'แก้ไขบันทึกค่าแรง')
+                : 'บันทึกรายจ่ายค่าแรง'}
+            </h1>
+            {/* badge ประเภทปัจจุบัน */}
+            <span style={{
+              padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+              background: isLump ? 'rgba(99,102,241,0.12)' : 'oklch(0.93 0.06 290)',
+              color: isLump ? '#6366f1' : 'oklch(0.45 0.14 290)',
+              border: `1px solid ${isLump ? 'rgba(99,102,241,0.3)' : 'oklch(0.84 0.08 290)'}`,
+            }}>
+              {isLump ? 'เหมาจ่าย' : 'ค่าแรงรายวัน'}
+            </span>
+          </div>
           <div className="page-sub">กรอกรายการงาน หักเงินที่เกี่ยวข้อง พร้อมแนบรูปและบันทึกรายละเอียดงาน</div>
         </div>
         <div className="row gap-8">
+          {/* ปุ่มสลับประเภท — admin + editing เท่านั้น */}
+          {isEditing && app.isAdmin && (
+            <button className="btn btn-ghost" onClick={switchType}
+              title={isLump ? 'เปลี่ยนเป็นค่าแรงรายวัน' : 'เปลี่ยนเป็นค่าแรงเหมาจ่าย'}
+              style={{ color: isLump ? '#6366f1' : 'oklch(0.45 0.14 290)' }}>
+              ⇄ {isLump ? 'สลับเป็นค่าแรง' : 'สลับเป็นเหมาจ่าย'}
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={onCancel}><Icon name="x" size={14} /> ยกเลิก</button>
           <button className="btn btn-accent" onClick={handleSubmit}>
             <Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}
@@ -968,14 +1004,48 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
 
   const isEditing = !!initial;
 
+  // สลับ type lump-labor ↔ labor (admin เท่านั้น)
+  const switchType = () => {
+    const toType  = form.type === 'lump-labor' ? 'labor' : 'lump-labor';
+    const fromPfx = form.type === 'lump-labor' ? 'LS-' : 'LB-';
+    const toPfx   = toType   === 'lump-labor' ? 'LS-' : 'LB-';
+    const newDocNo = form.docNo.startsWith(fromPfx)
+      ? toPfx + form.docNo.slice(fromPfx.length)
+      : form.docNo;
+    set({ type: toType, docNo: newDocNo });
+  };
+
+  const isLump = form.type === 'lump-labor';
+
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isEditing ? 'แก้ไขรายการเหมาจ่าย' : 'บันทึกค่าแรงเหมาจ่าย'}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <h1 className="page-title" style={{ margin: 0 }}>
+              {isEditing
+                ? (isLump ? 'แก้ไขรายการเหมาจ่าย' : 'แก้ไขบันทึกค่าแรง')
+                : 'บันทึกค่าแรงเหมาจ่าย'}
+            </h1>
+            <span style={{
+              padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+              background: isLump ? 'rgba(99,102,241,0.12)' : 'oklch(0.93 0.06 290)',
+              color: isLump ? '#6366f1' : 'oklch(0.45 0.14 290)',
+              border: `1px solid ${isLump ? 'rgba(99,102,241,0.3)' : 'oklch(0.84 0.08 290)'}`,
+            }}>
+              {isLump ? 'เหมาจ่าย' : 'ค่าแรงรายวัน'}
+            </span>
+          </div>
           <div className="page-sub">ตกลงราคาเป็นยอดรวมต่องาน — ระบุปริมาณ หน่วย และราคาต่อหน่วยได้</div>
         </div>
         <div className="row gap-8">
+          {isEditing && app.isAdmin && (
+            <button className="btn btn-ghost" onClick={switchType}
+              title={isLump ? 'เปลี่ยนเป็นค่าแรงรายวัน' : 'เปลี่ยนเป็นค่าแรงเหมาจ่าย'}
+              style={{ color: isLump ? '#6366f1' : 'oklch(0.45 0.14 290)' }}>
+              ⇄ {isLump ? 'สลับเป็นค่าแรง' : 'สลับเป็นเหมาจ่าย'}
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={onCancel}><Icon name="x" size={14} /> ยกเลิก</button>
           <button className="btn btn-accent" onClick={handleSubmit}>
             <Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}
