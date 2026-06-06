@@ -1746,6 +1746,27 @@ window.DetailDrawer = function DetailDrawer() {
             {Number(rec.vatRate) > 0 && <span className="badge gray">{rec.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>}
             {rec.whtEnabled && <span className="badge">หัก ณ ที่จ่าย {rec.whtRate}%</span>}
           </div>
+
+          {/* ข้อมูลผู้รับเงิน (สำหรับออกเอกสาร) — แสดงเมื่อมีข้อมูลที่กรอกไว้ */}
+          {rec.docInfo && (rec.docInfo.name || rec.docInfo.taxId || rec.docInfo.address) && (
+            <div style={{
+              marginBottom: 16, padding: '12px 14px', borderRadius: 10,
+              background: 'var(--surface-2)', border: '1px solid var(--line)',
+            }}>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                ข้อมูลผู้รับเงิน (สำหรับออกเอกสาร)
+              </div>
+              {rec.docInfo.name && (
+                <div className="detail-row"><div className="label">ชื่อ-นามสกุล</div><div className="value">{rec.docInfo.name}</div></div>
+              )}
+              {rec.docInfo.taxId && (
+                <div className="detail-row"><div className="label">เลขบัตร ปชช./ผู้เสียภาษี</div><div className="value mono">{rec.docInfo.taxId}</div></div>
+              )}
+              {rec.docInfo.address && (
+                <div className="detail-row"><div className="label">ที่อยู่</div><div className="value" style={{ whiteSpace: 'pre-wrap' }}>{rec.docInfo.address}</div></div>
+              )}
+            </div>
+          )}
           <div className="summary-rows" style={{ maxWidth: 380, marginLeft: 'auto' }}>
             <div className="summary-row"><span className="label">{rec.type === 'lump-labor' ? 'ยอดเหมารวม' : isLaborType ? 'ค่าแรงรวม' : 'ยอดก่อนภาษี'}</span><span className="value">{fmt(totals.subTotal)}</span></div>
             {Number(rec.vatRate) > 0 && <div className="summary-row"><span className="label">Vat {rec.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>}
