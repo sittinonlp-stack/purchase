@@ -1430,7 +1430,7 @@ window.TeamsView = function TeamsView() {
                 <div className="row gap-12 mb-12">
                   {/* Avatar — photo if available, else letter */}
                   {coverImg ? (
-                    <img src={coverImg.dataUrl} alt={t.name} style={{
+                    <img src={imgSrc(coverImg)} alt={t.name} style={{
                       width: 52, height: 52, borderRadius: 12, objectFit: 'cover', flexShrink: 0,
                       border: '2px solid var(--line)',
                     }} />
@@ -1990,7 +1990,7 @@ window.DepositsView = function DepositsView() {
                       </td>
                       <td>
                         {r.depositReturnImages && r.depositReturnImages.length > 0 ? (
-                          <img src={r.depositReturnImages[0].dataUrl} alt="สลิป"
+                          <img src={imgSrc(r.depositReturnImages[0])} alt="สลิป"
                             style={{ width:42, height:42, borderRadius:7, objectFit:'cover',
                               border:'1px solid var(--line)', display:'block' }} />
                         ) : (
@@ -3027,7 +3027,7 @@ window.QuickReceiptView = function QuickReceiptView() {
               <div className="qr-photo-grid">
                 {images.map(img => (
                   <div key={img.id} className="qr-photo-tile">
-                    <img src={img.dataUrl} alt={img.name} />
+                    <img src={imgSrc(img)} alt={img.name} />
                     <button className="qr-remove-btn" type="button" onClick={() => removeImage(img.id)} title="ลบรูปนี้">
                       <Icon name="x" size={11} stroke={2.5} />
                     </button>

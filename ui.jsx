@@ -158,16 +158,21 @@ function ImageUploader({ images, onChange, max = 10 }) {
   return (
     <div className="col gap-8">
       <div className="image-grid">
-        {images.map((img, idx) => (
-          <div key={img.id || idx} className="image-tile">
-            {img.dataUrl
-              ? <img src={img.dataUrl} alt={img.name} />
-              : <div style={{ width: '100%', height: '100%', background: img.color || '#d6d1c1' }}></div>}
-            <button type="button" className="remove" onClick={() => remove(idx)} aria-label="ลบ">
-              <Icon name="x" size={11} stroke={2.5} />
-            </button>
-          </div>
-        ))}
+        {images.map((img, idx) => {
+          // รองรับทั้ง object { dataUrl } (รูปที่เพิ่งแนบ) และ string URL (รูปที่โหลดจาก DB/Storage)
+          const src = typeof img === 'string' ? img : (img && (img.dataUrl || img.url)) || '';
+          const key = (img && img.id) || src || idx;
+          return (
+            <div key={key} className="image-tile">
+              {src
+                ? <img src={src} alt={(img && img.name) || ''} />
+                : <div style={{ width: '100%', height: '100%', background: (img && img.color) || '#d6d1c1' }}></div>}
+              <button type="button" className="remove" onClick={() => remove(idx)} aria-label="ลบ">
+                <Icon name="x" size={11} stroke={2.5} />
+              </button>
+            </div>
+          );
+        })}
         {images.length < max && (
           <div
             className={"image-tile upload" + (dragging ? " dragging" : "")}
