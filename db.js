@@ -426,15 +426,15 @@
         if (itemsErr) throw itemsErr;
       }
 
-      // 4. Insert work logs (labor records)
+      // 4. Insert work logs (labor records) — อัปโหลดรูปใน log ขึ้น Storage ด้วย
       if (rec.workLogs && rec.workLogs.length > 0) {
-        const dbLogs = rec.workLogs.map(log => ({
+        const dbLogs = await Promise.all(rec.workLogs.map(async (log) => ({
           id: log.id || window.newId(),
           record_id: rec.id,
           date: log.date,
           note: log.note || '',
-          images: log.images || [],
-        }));
+          images: await uploadImages(log.images || []),
+        })));
         const { error: logsErr } = await client.from('work_logs').insert(dbLogs);
         if (logsErr) throw logsErr;
       }
@@ -443,36 +443,65 @@
     // ── Records (update) ──────────────────────────
     async updateRecord(id, patch) {
       const client = window.supabaseClient;
+      const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
 
-      // Fast path: lightweight flag-only patch (e.g. accountingPosted, approved)
-      // หลีกเลี่ยงการ overwrite ข้อมูลจริงด้วย null ที่เกิดจาก jsRecordToDb(partial patch)
-      const LIGHTWEIGHT = new Set(['accountingPosted', 'approved']);
-      const patchKeys = Object.keys(patch);
-      if (patchKeys.length > 0 && patchKeys.every(k => LIGHTWEIGHT.has(k))) {
+      // ── สร้าง db patch แบบ "เฉพาะคอลัมน์ที่มีใน patch จริง ๆ" ──────────────
+      // สำคัญ: ห้ามใช้ jsRecordToDb() กับ partial patch เพราะมันจะเติม field อื่น
+      // ด้วย null/'' (เช่น project_id, vendor, worker_team_id) → ทับข้อมูลจริงหาย
+      // เช่น { workLogs } หรือ { depositStatus, ... } จะลบโครงการ/ผู้ขายทิ้ง
+      const dbPatch = {};
+      if (has('type'))               dbPatch.type = patch.type;
+      if (has('docNo'))              dbPatch.doc_no = patch.docNo || '';
+      if (has('date'))               dbPatch.date = patch.date;
+      if (has('projectId'))          dbPatch.project_id = patch.projectId || null;
+      if (has('vendor'))             dbPatch.vendor = patch.vendor || '';
+      if (has('workerTeamId'))       dbPatch.worker_team_id = patch.workerTeamId || null;
+      if (has('period'))             dbPatch.period = patch.period || '';
+      if (has('vatMode'))            dbPatch.vat_mode = patch.vatMode || 'exclusive';
+      if (has('vatRate'))            dbPatch.vat_rate = Number(patch.vatRate || 0);
+      if (has('whtEnabled'))         dbPatch.wht_enabled = Boolean(patch.whtEnabled);
+      if (has('whtRate'))            dbPatch.wht_rate = Number(patch.whtRate || 0);
+      if (has('advanceDeduction'))   dbPatch.advance_deduction = Number(patch.advanceDeduction || 0);
+      if (has('retentionDeduction')) dbPatch.retention_deduction = Number(patch.retentionDeduction || 0);
+      if (has('docs'))               dbPatch.docs = patch.docs || [];
+      if (has('note'))               dbPatch.note = patch.note || '';
+
+      // รูปแนบหลัก — อัปโหลดเฉพาะเมื่อ patch มี key 'images'
+      if (has('images')) dbPatch.images = await uploadImages(patch.images || []);
+
+      // เงินประกันสินค้า
+      if (has('depositAmount'))       dbPatch.deposit_amount = Number(patch.depositAmount || 0);
+      if (has('depositStatus'))       dbPatch.deposit_status = patch.depositStatus || 'none';
+      if (has('depositReturnDate'))   dbPatch.deposit_return_date = patch.depositReturnDate || null;
+      if (has('depositReturnImages')) dbPatch.deposit_return_images = await uploadImages(patch.depositReturnImages || []);
+      if (has('depositReturnNote'))   dbPatch.deposit_return_note = patch.depositReturnNote || '';
+
+      // meta JSONB — merge เข้ากับของเดิม (accountingPosted / approved / docInfo)
+      if (has('accountingPosted') || has('approved') || has('docInfo') || has('meta')) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();
-        const newMeta = { ...(row?.meta || {}), ...Object.fromEntries(patchKeys.map(k => [k, patch[k]])) };
-        const { error } = await client.from('records').update({ meta: newMeta }).eq('id', id);
-        if (error) throw error;
-        return;
+        const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
+        if (has('accountingPosted')) newMeta.accountingPosted = Boolean(patch.accountingPosted);
+        if (has('approved'))         newMeta.approved = Boolean(patch.approved);
+        if (has('docInfo'))          newMeta.docInfo = patch.docInfo;
+        dbPatch.meta = newMeta;
       }
 
-      // 1. Upload images (รูปแนบหลัก + รูปสลิปคืนเงินประกัน)
-      const [imageUrls, depositReturnImageUrls] = await Promise.all([
-        uploadImages(patch.images || []),
-        uploadImages(patch.depositReturnImages || []),
-      ]);
-
-      // 2. Update record row — auto-fallback ถ้าคอลัมน์ใหม่ยังไม่มีใน DB
-      const dbPatch = jsRecordToDb({ ...patch, id }, imageUrls, depositReturnImageUrls);
-      let { error: recErr } = await client.from('records').update(dbPatch).eq('id', id);
-      if (recErr && isMissingColumnError(recErr)) {
-        console.warn('[DB] missing optional columns — retry without deposit/meta (โปรดรัน migration ที่ค้าง)');
-        const fallback = stripMetaField(stripDepositFields(dbPatch));
-        ({ error: recErr } = await client.from('records').update(fallback).eq('id', id));
+      // อัปเดต record row — เฉพาะเมื่อมีคอลัมน์ให้อัปเดต + auto-fallback ถ้าคอลัมน์ใหม่ยังไม่มีใน DB
+      if (Object.keys(dbPatch).length > 0) {
+        let { error: recErr } = await client.from('records').update(dbPatch).eq('id', id);
+        if (recErr && isMissingColumnError(recErr)) {
+          console.warn('[DB] missing optional columns — retry without deposit/meta (โปรดรัน migration ที่ค้าง)');
+          const fallback = stripMetaField(stripDepositFields(dbPatch));
+          if (Object.keys(fallback).length > 0) {
+            ({ error: recErr } = await client.from('records').update(fallback).eq('id', id));
+          } else {
+            recErr = null;
+          }
+        }
+        if (recErr) throw recErr;
       }
-      if (recErr) throw recErr;
 
-      // 3. Replace items (delete old → insert new)
+      // Replace items (delete old → insert new) — เฉพาะเมื่อ patch มี items
       if (patch.items !== undefined) {
         await client.from('record_items').delete().eq('record_id', id);
         if (patch.items.length > 0) {
@@ -491,17 +520,17 @@
         }
       }
 
-      // 4. Replace work logs
+      // Replace work logs — อัปโหลดรูปใน log ขึ้น Storage ด้วย (กันการเก็บ base64 object ลง TEXT[])
       if (patch.workLogs !== undefined) {
         await client.from('work_logs').delete().eq('record_id', id);
         if (patch.workLogs.length > 0) {
-          const dbLogs = patch.workLogs.map(log => ({
+          const dbLogs = await Promise.all(patch.workLogs.map(async (log) => ({
             id: log.id || window.newId(),
             record_id: id,
             date: log.date,
             note: log.note || '',
-            images: log.images || [],
-          }));
+            images: await uploadImages(log.images || []),
+          })));
           const { error: logsErr } = await client.from('work_logs').insert(dbLogs);
           if (logsErr) throw logsErr;
         }
