@@ -365,7 +365,20 @@ window.AppProvider = function AppProvider({ children }) {
       loadedUserIdRef.current = userId; // ✓ data loaded — mark for skip on next SIGNED_IN
     } catch (err) {
       console.error('[DB] โหลดข้อมูลไม่สำเร็จ:', err);
-      pushToast('โหลดข้อมูลไม่สำเร็จ — แสดงข้อมูลตัวอย่าง', 'error');
+      // ── ถ้าเป็น auth error (token หมดอายุ/ถูกล้าง) → ออกจากระบบเพื่อให้ล็อกอินใหม่ ──
+      // แทนที่จะค้างอยู่ที่ "ข้อมูลตัวอย่าง" ซึ่งชวนสับสน
+      const msg = (err?.message || '').toLowerCase();
+      const isAuthErr = err?.status === 401 || err?.code === 'PGRST301'
+        || msg.includes('jwt') || msg.includes('refresh token')
+        || msg.includes('not authenticated') || msg.includes('invalid token');
+      if (isAuthErr) {
+        pushToast('เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่', 'error');
+        loadedUserIdRef.current = null;
+        try { await window.supabaseClient.auth.signOut(); } catch (_) { /* ignore */ }
+        setSession(null);
+      } else {
+        pushToast('โหลดข้อมูลไม่สำเร็จ — แสดงข้อมูลตัวอย่าง', 'error');
+      }
     } finally {
       setDbReady(true);
       setAuthChecked(true);
