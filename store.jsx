@@ -622,6 +622,63 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteRecord(id), 'deleteRecord');
   }, [dbOnline, dbSync]);
 
+  // ── Background cleanup: บีบอัดรูป base64 เก่าที่ทำให้ DB บวม/โหลดช้า ──
+  // ทำงานครั้งเดียวหลังโหลดข้อมูล — ค่อย ๆ ย่อรูปทีละรายการเบื้องหลัง
+  const optimizedRef = useRef(false);
+  useEffect(() => {
+    if (!dbOnline || optimizedRef.current || !records.length) return;
+    if (typeof window.compressDataUrl !== 'function') return;
+    optimizedRef.current = true;
+
+    const BIG = 400000; // ~400KB ขึ้นไป (base64) ถือว่าใหญ่ ควรบีบอัด
+    const b64of = (im) => (typeof im === 'string' ? im : (im && im.dataUrl)) || '';
+    const isBig = (im) => { const s = b64of(im); return s.startsWith('data:') && s.length > BIG; };
+    const shrink = async (arr) => {
+      if (!Array.isArray(arr) || !arr.length) return null;
+      let changed = false;
+      const out = [];
+      for (const im of arr) {
+        if (isBig(im)) {
+          const small = await window.compressDataUrl(b64of(im));
+          if (small && small.length < b64of(im).length) { out.push(small); changed = true; continue; }
+        }
+        out.push(im);
+      }
+      return changed ? out : null;
+    };
+
+    (async () => {
+      const snapshot = records.slice();
+      for (const rec of snapshot) {
+        try {
+          const hasBig = (rec.images || []).some(isBig)
+            || (rec.workLogs || []).some(l => (l.images || []).some(isBig));
+          if (!hasBig) continue;
+
+          const patch = {};
+          const ni = await shrink(rec.images);
+          if (ni) patch.images = ni;
+
+          if (Array.isArray(rec.workLogs) && rec.workLogs.length) {
+            let logsChanged = false;
+            const newLogs = [];
+            for (const l of rec.workLogs) {
+              const li = await shrink(l.images);
+              if (li) { logsChanged = true; newLogs.push({ ...l, images: li }); }
+              else newLogs.push(l);
+            }
+            if (logsChanged) patch.workLogs = newLogs;
+          }
+
+          if (Object.keys(patch).length) {
+            updateRecord(rec.id, patch);
+            await new Promise(r => setTimeout(r, 1800)); // throttle กัน DB หนัก
+          }
+        } catch (e) { /* non-fatal */ }
+      }
+    })();
+  }, [dbOnline, records, updateRecord]);
+
   // ── Projects ─────────────────────────────────────────
   const addProject = useCallback((p) => {
     const np = { ...p, id: newId() };

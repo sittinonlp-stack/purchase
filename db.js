@@ -170,16 +170,17 @@
 
     const urls = [];
     for (const img of images) {
+      // normalize: รองรับทั้ง string ("http..." / "data:...") และ object { dataUrl, file, name }
+      const strImg   = typeof img === 'string' ? img : null;
+      const objUrl   = (img && typeof img.dataUrl === 'string') ? img.dataUrl : null;
+      const httpUrl  = (strImg && strImg.startsWith('http')) ? strImg
+                     : (objUrl && objUrl.startsWith('http')) ? objUrl : null;
+      const b64      = (strImg && strImg.startsWith('data:')) ? strImg
+                     : (objUrl && objUrl.startsWith('data:')) ? objUrl : null;
+      const name     = (img && img.name) || '';
       try {
         // ── กรณีที่ 1: URL สาธารณะอยู่แล้ว → เก็บไว้ตามเดิม
-        if (typeof img === 'string' && img.startsWith('http')) {
-          urls.push(img);
-          continue;
-        }
-        if (img && typeof img.dataUrl === 'string' && img.dataUrl.startsWith('http')) {
-          urls.push(img.dataUrl);
-          continue;
-        }
+        if (httpUrl) { urls.push(httpUrl); continue; }
 
         let file = null;
 
@@ -189,19 +190,19 @@
         } else if (img && img.file instanceof File) {
           file = img.file;
         }
-        // ── กรณีที่ 3: base64 dataUrl จาก FileReader (เช่น quick-receipt)
+        // ── กรณีที่ 3: base64 data URL (string ตรง ๆ หรือใน { dataUrl })
         //    แปลงเป็น Blob แล้ว upload ขึ้น Storage
-        else if (img && typeof img.dataUrl === 'string' && img.dataUrl.startsWith('data:')) {
+        else if (b64) {
           try {
-            const res  = await fetch(img.dataUrl);
+            const res  = await fetch(b64);
             const blob = await res.blob();
             const mime = blob.type || 'image/jpeg';
             const ext  = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-            file = new File([blob], (img.name || `photo.${ext}`), { type: mime });
+            file = new File([blob], (name || `photo.${ext}`), { type: mime });
           } catch (convErr) {
             console.warn('[Image upload] base64→Blob failed:', convErr);
-            // Fallback: เก็บ dataUrl โดยตรงในกรณี Storage ไม่พร้อม
-            urls.push(img.dataUrl);
+            // Fallback: เก็บ base64 ไว้ตามเดิมในกรณี Storage ไม่พร้อม
+            urls.push(b64);
             continue;
           }
         }
@@ -217,15 +218,15 @@
         });
         if (error) {
           console.warn('[Image upload] Storage error:', error.message, '→ falling back to dataUrl');
-          // Fallback: เก็บ dataUrl โดยตรงถ้า Storage ล้มเหลว
-          if (img && img.dataUrl) urls.push(img.dataUrl);
+          // Fallback: เก็บ base64 โดยตรงถ้า Storage ล้มเหลว (เช่น bucket ยังไม่ถูกสร้าง)
+          if (b64) urls.push(b64);
           continue;
         }
         const { data } = client.storage.from(bucket).getPublicUrl(path);
         if (data?.publicUrl) urls.push(data.publicUrl);
       } catch (e) {
         console.warn('[Image upload] unexpected error:', e);
-        if (img && img.dataUrl) urls.push(img.dataUrl); // fallback
+        if (b64) urls.push(b64); // fallback
       }
     }
     return urls;
@@ -238,43 +239,65 @@
   const db = {
 
     // ── Load all data on startup ──────────────────
+    // มี retry — กันกรณีโหลดช้า/หลุดเป็นบางครั้ง (intermittent timeout)
     async loadAll() {
       const client = window.supabaseClient;
       if (!client) throw new Error('No Supabase client');
 
-      const [
-        { data: projects,    error: e1 },
-        { data: matCats,     error: e2 },
-        { data: machCats,    error: e3 },
-        { data: labCats,     error: e4 },
-        { data: lumpLabCats, error: e7 },
-        { data: otherCats,   error: e8 },
-        { data: teams,       error: e5 },
-        { data: recs,        error: e6 },
-      ] = await Promise.all([
-        client.from('projects').select('*').order('created_at'),
-        client.from('material_categories').select('*').order('created_at'),
-        client.from('machinery_categories').select('*').order('created_at'),
-        client.from('labor_categories').select('*').order('created_at'),
-        client.from('lump_labor_categories').select('*').order('created_at'),
-        client.from('other_categories').select('*').order('created_at'),
-        client.from('worker_teams').select('*').order('created_at'),
-        client.from('records').select('*, record_items(*), work_logs(*)').order('created_at', { ascending: false }),
-      ]);
+      const attempt = async () => {
+        // ดึงข้อมูลหลัก (เบา) แยกจาก records (หนักเพราะ join + รูป) เพื่อลดโอกาส timeout รวม
+        const [
+          { data: projects,    error: e1 },
+          { data: matCats,     error: e2 },
+          { data: machCats,    error: e3 },
+          { data: labCats,     error: e4 },
+          { data: lumpLabCats, error: e7 },
+          { data: otherCats,   error: e8 },
+          { data: teams,       error: e5 },
+        ] = await Promise.all([
+          client.from('projects').select('*').order('created_at'),
+          client.from('material_categories').select('*').order('created_at'),
+          client.from('machinery_categories').select('*').order('created_at'),
+          client.from('labor_categories').select('*').order('created_at'),
+          client.from('lump_labor_categories').select('*').order('created_at'),
+          client.from('other_categories').select('*').order('created_at'),
+          client.from('worker_teams').select('*').order('created_at'),
+        ]);
+        const lightErr = e1 || e2 || e3 || e4 || e7 || e8 || e5;
+        if (lightErr) throw lightErr;
 
-      const firstErr = e1 || e2 || e3 || e4 || e7 || e8 || e5 || e6;
-      if (firstErr) throw firstErr;
+        const { data: recs, error: e6 } = await client
+          .from('records')
+          .select('*, record_items(*), work_logs(*)')
+          .order('created_at', { ascending: false });
+        if (e6) throw e6;
 
-      return {
-        projects:        (projects    || []).map(dbProject),
-        matCats:         (matCats     || []).map(dbCat),
-        machCats:        (machCats    || []).map(dbCat),
-        laborCats:       (labCats     || []).map(dbCat),
-        lumpLaborCats:   (lumpLabCats || []).map(dbCat),
-        otherCats:       (otherCats   || []).map(dbCat),
-        workerTeams:     (teams       || []).map(dbTeam),
-        records:         (recs        || []).map(dbRecord),
+        return {
+          projects:        (projects    || []).map(dbProject),
+          matCats:         (matCats     || []).map(dbCat),
+          machCats:        (machCats    || []).map(dbCat),
+          laborCats:       (labCats     || []).map(dbCat),
+          lumpLaborCats:   (lumpLabCats || []).map(dbCat),
+          otherCats:       (otherCats   || []).map(dbCat),
+          workerTeams:     (teams       || []).map(dbTeam),
+          records:         (recs        || []).map(dbRecord),
+        };
       };
+
+      let lastErr;
+      for (let i = 0; i < 3; i++) {
+        try {
+          return await attempt();
+        } catch (err) {
+          lastErr = err;
+          // auth error — ไม่ต้อง retry (ให้ caller จัดการ signOut)
+          const msg = (err?.message || '').toLowerCase();
+          if (err?.status === 401 || msg.includes('jwt') || msg.includes('refresh token')) throw err;
+          console.warn(`[DB] loadAll attempt ${i + 1} failed, retrying…`, err?.message || err);
+          await new Promise(r => setTimeout(r, 800 * (i + 1)));
+        }
+      }
+      throw lastErr;
     },
 
     // ── Projects ─────────────────────────────────

@@ -130,6 +130,80 @@ function ToastStack() {
 }
 window.ToastStack = ToastStack;
 
+// ---- Image helpers ----
+function readFileAsDataUrl(file) {
+  return new Promise((resolve) => {
+    try {
+      const r = new FileReader();
+      r.onerror = () => resolve('');
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(file);
+    } catch (e) { resolve(''); }
+  });
+}
+
+// ---- Image compression ----
+// บีบอัด/ย่อรูปก่อนเก็บ — กันไฟล์ใหญ่ทำให้ DB บวมและโหลดช้า
+// คืน data-URL (JPEG) ขนาดเล็ก; ถ้าทำไม่ได้ fallback เป็นไฟล์เดิม
+window.compressImageFile = function compressImageFile(file, maxDim = 1600, quality = 0.72) {
+  return new Promise((resolve) => {
+    try {
+      if (!file || !(file.type || '').startsWith('image/')) { resolve(null); return; }
+      const reader = new FileReader();
+      reader.onerror = () => resolve(null);
+      reader.onload = () => {
+        const original = reader.result;
+        const img = new Image();
+        img.onerror = () => resolve(original); // ใช้ไฟล์เดิมถ้า decode ไม่ได้
+        img.onload = () => {
+          try {
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+              else                 { width  = Math.round(width  * maxDim / height); height = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const out = canvas.toDataURL('image/jpeg', quality);
+            // ใช้ผลที่เล็กกว่าเสมอ
+            resolve(out && out.length < original.length ? out : original);
+          } catch (e) { resolve(original); }
+        };
+        img.src = original;
+      };
+      reader.readAsDataURL(file);
+    } catch (e) { resolve(null); }
+  });
+};
+
+// บีบอัดจาก data-URL ที่มีอยู่แล้ว (ใช้ตอนล้างข้อมูล base64 เก่าให้เล็กลง)
+window.compressDataUrl = function compressDataUrl(dataUrl, maxDim = 1600, quality = 0.72) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) { resolve(dataUrl); return; }
+      const img = new Image();
+      img.onerror = () => resolve(dataUrl);
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+            else                 { width  = Math.round(width  * maxDim / height); height = maxDim; }
+          }
+          const c = document.createElement('canvas');
+          c.width = width; c.height = height;
+          c.getContext('2d').drawImage(img, 0, 0, width, height);
+          const out = c.toDataURL('image/jpeg', quality);
+          resolve(out && out.length < dataUrl.length ? out : dataUrl);
+        } catch (e) { resolve(dataUrl); }
+      };
+      img.src = dataUrl;
+    } catch (e) { resolve(dataUrl); }
+  });
+};
+
 // ---- Image uploader ----
 // Stores base64 data-URIs (synthetic) in record.images.
 // Generates a placeholder colored swatch on "pick file" to avoid touching disk.
@@ -142,11 +216,10 @@ function ImageUploader({ images, onChange, max = 10 }) {
 
   const fromFiles = (fileList) => {
     const files = Array.from(fileList).slice(0, max - images.length);
-    Promise.all(files.map((f) => new Promise((res) => {
-      const r = new FileReader();
-      r.onload = () => res({ id: newId(), name: f.name, dataUrl: r.result });
-      r.readAsDataURL(f);
-    }))).then((arr) => onChange([...images, ...arr]));
+    Promise.all(files.map(async (f) => {
+      const dataUrl = await window.compressImageFile(f);
+      return { id: newId(), name: f.name, dataUrl: dataUrl || await readFileAsDataUrl(f) };
+    })).then((arr) => onChange([...images, ...arr.filter(a => a && a.dataUrl)]));
   };
 
   const onDrop = (e) => {

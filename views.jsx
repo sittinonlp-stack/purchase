@@ -2881,15 +2881,14 @@ window.QuickReceiptView = function QuickReceiptView() {
   const cameraRef  = useRef(null);
   const galleryRef = useRef(null);
 
-  // โหลดรูปจาก FileList → base64
+  // โหลดรูปจาก FileList → บีบอัด → base64
   const fromFiles = (fileList) => {
     const files = Array.from(fileList).slice(0, 20 - images.length);
     if (!files.length) return;
-    Promise.all(files.map(f => new Promise(res => {
-      const reader = new FileReader();
-      reader.onload = () => res({ id: newId(), name: f.name, dataUrl: reader.result });
-      reader.readAsDataURL(f);
-    }))).then(arr => setImages(prev => [...prev, ...arr]));
+    Promise.all(files.map(async (f) => {
+      const dataUrl = await window.compressImageFile(f);
+      return { id: newId(), name: f.name, dataUrl: dataUrl || '' };
+    })).then(arr => setImages(prev => [...prev, ...arr.filter(a => a.dataUrl)]));
   };
 
   const removeImage = (id) => setImages(prev => prev.filter(img => img.id !== id));
