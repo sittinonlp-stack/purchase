@@ -859,6 +859,20 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
   const addItem = () => set({ items: [...form.items, { id: newId(), name: '', categoryId: '', qty: 1, unit: 'รายการ', price: 0 }] });
   const removeItem = (id) => set({ items: form.items.length > 1 ? form.items.filter(it => it.id !== id) : form.items });
 
+  // เลือกโครงการ → ดึงชื่อลูกค้าของโครงการมาใส่ "ผู้จ่าย/แหล่งรายรับ" อัตโนมัติ
+  // (เติมเมื่อช่องยังว่าง หรือยังเป็นชื่อลูกค้าของโครงการเดิม — ไม่ทับสิ่งที่ผู้ใช้พิมพ์เอง)
+  const setProject = (projectId) => {
+    const p = app.projects.find(x => x.id === projectId);
+    const patch = { projectId };
+    if (p && p.client) {
+      const prevProj = app.projects.find(x => x.id === form.projectId);
+      if (!form.vendor.trim() || (prevProj && form.vendor === prevProj.client)) {
+        patch.vendor = p.client;
+      }
+    }
+    set(patch);
+  };
+
   const handleSubmit = () => {
     if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.vendor.trim()) return app.pushToast('โปรดระบุแหล่งที่มาของรายรับ / ผู้จ่าย', 'error');
@@ -905,11 +919,17 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
                 </div>
                 <div className="field full">
                   <label className="field-label">โครงการ <span className="req">*</span></label>
-                  <ProjectPicker value={form.projectId} onChange={(v) => set({ projectId: v })} projects={app.projects} onAdd={() => setProjModalOpen(true)} />
+                  <ProjectPicker value={form.projectId} onChange={setProject} projects={app.projects} onAdd={() => setProjModalOpen(true)} />
                 </div>
                 <div className="field full">
                   <label className="field-label">ผู้จ่าย / แหล่งรายรับ <span className="req">*</span></label>
                   <input className="input" placeholder="เช่น ลูกค้า บจก. ABC, เงินงวดที่ 1, เงินมัดจำ" value={form.vendor} onChange={(e) => set({ vendor: e.target.value })} />
+                  {(() => {
+                    const p = app.projects.find(x => x.id === form.projectId);
+                    return p && p.client
+                      ? <div className="text-small text-muted" style={{ marginTop: 4 }}>ลูกค้าของโครงการ: <strong>{p.client}</strong> (ดึงมาให้อัตโนมัติ — แก้ไขได้)</div>
+                      : null;
+                  })()}
                 </div>
               </div>
             </div>
