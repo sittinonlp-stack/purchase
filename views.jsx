@@ -32,7 +32,12 @@ window.DashboardView = function DashboardView() {
     const otherCount = exp.filter(r => r.type === 'other').length;
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
     const retentionTotal = exp.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
-    return { totalAmount, matCount, machCount, laborCount, otherCount, whtTotal, retentionTotal };
+    // ── รายรับ (income) ──
+    const incomeRecs  = app.records.filter(r => window.isIncome(r));
+    const incomeTotal = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+    const incomeCount = incomeRecs.length;
+    const netTotal    = incomeTotal - totalAmount; // คงเหลือสุทธิ (รับ − จ่าย)
+    return { totalAmount, matCount, machCount, laborCount, otherCount, whtTotal, retentionTotal, incomeTotal, incomeCount, netTotal };
   }, [app.records]);
 
   // by-project chart (รายจ่ายเท่านั้น)
@@ -158,18 +163,9 @@ window.DashboardView = function DashboardView() {
           <div className="page-sub">ภาพรวมการจัดซื้อและการเช่าเครื่องจักรของทุกโครงการ</div>
         </div>
         <div className="row gap-8 dash-actions">
-          <button className="btn btn-ghost dash-export" onClick={() => setExportOpen(true)}
+          <button className="btn btn-accent dash-export" onClick={() => setExportOpen(true)}
             title="ส่งออกรายงาน Excel สำหรับผู้บริหาร">
             <Icon name="download" size={14} /> ส่งออกรายงาน
-          </button>
-          <button className="btn btn-ghost dash-labor" onClick={() => app.setView('new-labor')}>
-            <Icon name="hammer" size={14} /> บันทึกค่าแรง
-          </button>
-          <button className="btn btn-ghost dash-machine" onClick={() => app.setView('new-machine')}>
-            <Icon name="truck" size={14} /> เช่าเครื่องจักร
-          </button>
-          <button className="btn btn-accent dash-accent" onClick={() => app.setView('new-material')}>
-            <Icon name="plus" size={14} stroke={2.5} /> จัดซื้อวัสดุ
           </button>
         </div>
       </div>
@@ -218,10 +214,29 @@ window.DashboardView = function DashboardView() {
 
       <div className="stat-grid">
         <div className="stat">
+          <div className="stat-label">ยอดรับทั้งหมด</div>
+          <div className="stat-value mono" style={{ color:'#059669' }}>฿{fmt(stats.incomeTotal)}</div>
+          <div className="stat-delta"><Icon name="money" size={11} stroke={2.5} /> {fmtInt(stats.incomeCount)} รายการรายรับ</div>
+          <div className="stat-icon green"><Icon name="money" size={18} /></div>
+        </div>
+        <div className="stat">
           <div className="stat-label">ยอดจ่ายทั้งหมด</div>
           <div className="stat-value mono">฿{fmt(stats.totalAmount)}</div>
-          <div className="stat-delta"><Icon name="arrowUp" size={11} stroke={2.5} /> +12.4% จากเดือนก่อน</div>
+          <div className="stat-delta"><Icon name="cart" size={11} stroke={2.5} /> รวมทุกประเภทรายจ่าย</div>
           <div className="stat-icon"><Icon name="money" size={18} /></div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">คงเหลือสุทธิ (รับ − จ่าย)</div>
+          <div className="stat-value mono" style={{ color: stats.netTotal >= 0 ? '#059669' : '#dc2626' }}>
+            {stats.netTotal < 0 ? '−' : ''}฿{fmt(Math.abs(stats.netTotal))}
+          </div>
+          <div className="stat-delta">
+            <Icon name={stats.netTotal >= 0 ? 'arrowUp' : 'arrowDown'} size={11} stroke={2.5} />
+            {stats.netTotal >= 0 ? ' เกินดุล (รับมากกว่าจ่าย)' : ' ขาดดุล (จ่ายมากกว่ารับ)'}
+          </div>
+          <div className="stat-icon" style={{ background: stats.netTotal >= 0 ? 'rgba(5,150,105,0.12)' : 'rgba(220,38,38,0.12)', color: stats.netTotal >= 0 ? '#059669' : '#dc2626' }}>
+            <Icon name="percent" size={18} />
+          </div>
         </div>
         <div className="stat">
           <div className="stat-label">บิลวัสดุ</div>
