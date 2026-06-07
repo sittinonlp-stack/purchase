@@ -385,9 +385,9 @@ function Sidebar() {
           </button>
           <button className={"nav-item nav-item--quick" + (view === 'receipts' ? " active" : "")} onClick={() => go('receipts')}>
             <Icon name="camera" /> รูปถ่ายใบเสร็จ
-            {records.filter(r => r.type === 'quick-receipt').length > 0 && (
+            {records.filter(r => r.type === 'quick-receipt' && !r.accountingPosted).length > 0 && (
               <span className="badge" style={{ background:'rgba(14,165,233,0.15)', color:'#0ea5e9', border:'1px solid rgba(14,165,233,0.3)' }}>
-                {records.filter(r => r.type === 'quick-receipt').length}
+                {records.filter(r => r.type === 'quick-receipt' && !r.accountingPosted).length}
               </span>
             )}
           </button>
