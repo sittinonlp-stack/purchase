@@ -2295,9 +2295,14 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const getProj  = id => projects.find(p => p.id === id);
-  const typeLabel = t => t === 'material' ? 'วัสดุ/อุปกรณ์'
+  const isInc = r => window.isIncome(r);
+  const expenseRecs = filtered.filter(r => !isInc(r));
+  const incomeRecs  = filtered.filter(isInc);
+  const typeLabelByKey = t => t === 'material' ? 'วัสดุ/อุปกรณ์'
     : t === 'machine' ? 'เช่าเครื่องจักร'
-    : t === 'lump-labor' ? 'ค่าแรงเหมาจ่าย' : 'ค่าแรงรายวัน';
+    : t === 'lump-labor' ? 'ค่าแรงเหมาจ่าย'
+    : t === 'other' ? 'ค่าใช้จ่ายอื่นๆ' : 'ค่าแรงรายวัน';
+  const rowLabel = r => isInc(r) ? 'รายรับ' : typeLabelByKey(r.type);
   const n = v => Number(v || 0);
   const now = new Date().toLocaleString('th-TH', { dateStyle:'short', timeStyle:'short' });
   const projName = projId && projId !== 'all'
@@ -2308,12 +2313,12 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
   // ──────────────────────────────────────────
   // Sheet 1: สรุปภาพรวม
   // ──────────────────────────────────────────
-  const typeKeys = ['material', 'machine', 'labor', 'lump-labor'];
+  const typeKeys = ['material', 'machine', 'labor', 'lump-labor', 'other'];
   let grandNet = 0, grandSub = 0, grandVat = 0, grandWht = 0, grandCount = 0;
 
   const typeRows = [];
   typeKeys.forEach(t => {
-    const recs = filtered.filter(r => r.type === t);
+    const recs = expenseRecs.filter(r => r.type === t);
     if (!recs.length) return;
     const tots = recs.map(r => computeTotals(r));
     const sub = tots.reduce((s, x) => s + x.subTotal, 0);
@@ -2322,12 +2327,15 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
     const net = tots.reduce((s, x) => s + x.total, 0);
     grandSub += sub; grandVat += vat; grandWht += wht;
     grandNet += net; grandCount += recs.length;
-    typeRows.push([typeLabel(t), recs.length, sub, vat, wht, net]);
+    typeRows.push([typeLabelByKey(t), recs.length, sub, vat, wht, net]);
   });
 
-  // By-project block
+  // รายรับรวม
+  const incomeNet = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+
+  // By-project block (รายจ่ายเท่านั้น)
   const byP = {};
-  filtered.forEach(r => {
+  expenseRecs.forEach(r => {
     if (!byP[r.projectId]) byP[r.projectId] = { mat:0, mach:0, labor:0, count:0 };
     const tot = computeTotals(r).total;
     if (r.type === 'material') byP[r.projectId].mat += tot;
@@ -2348,12 +2356,21 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
     [`ช่วงเวลา: ${fromDate}  ถึง  ${toDate}     โครงการ: ${projName}`],
     [`จำนวนรายการในรายงาน: ${filtered.length} รายการ     สร้างรายงานเมื่อ: ${now}`],
     [],
-    ['สรุปยอดแยกตามประเภท'],
+    ['สรุปยอดรายจ่ายแยกตามประเภท'],
     ['ประเภทรายการ', 'จำนวน (บิล)', 'ยอดก่อน VAT (฿)', 'VAT (฿)', 'หัก ณ ที่จ่าย (฿)', 'ยอดสุทธิ (฿)'],
     ...typeRows,
-    ['รวมทั้งหมด', grandCount, grandSub, grandVat, grandWht, grandNet],
+    ['รวมรายจ่ายทั้งหมด', grandCount, grandSub, grandVat, grandWht, grandNet],
     [],
-    ['สรุปยอดแยกตามโครงการ'],
+    ['สรุปรายรับ'],
+    ['ประเภท', 'จำนวน (รายการ)', 'ยอดรวม (฿)'],
+    ['รายรับ', incomeRecs.length, incomeNet],
+    [],
+    ['สรุปสุทธิ (รับ − จ่าย)'],
+    ['รายรับรวม (฿)', incomeNet],
+    ['รายจ่ายรวม (฿)', grandNet],
+    ['คงเหลือสุทธิ (฿)', incomeNet - grandNet],
+    [],
+    ['สรุปยอดแยกตามโครงการ (รายจ่าย)'],
     ['ชื่อโครงการ', 'รหัส', 'วัสดุ (฿)', 'เครื่องจักร (฿)', 'ค่าแรง (฿)', 'รวม (฿)', 'จำนวน (บิล)'],
     ...projRows,
   ];
@@ -2375,7 +2392,7 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
       const t = computeTotals(r);
       const p = getProj(r.projectId);
       return [
-        r.docNo, r.date, typeLabel(r.type),
+        r.docNo, r.date, rowLabel(r),
         p?.name || '—', p?.code || '—',
         r.vendor || '—',
         t.subTotal, t.vat, t.wht,
@@ -2396,7 +2413,7 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
   // Sheet 3: สรุปรายสัปดาห์
   // ──────────────────────────────────────────
   const byWeek = {};
-  filtered.forEach(r => {
+  expenseRecs.forEach(r => {
     const d = new Date(r.date);
     const dow = d.getDay();
     const mon = new Date(d); mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
@@ -2435,9 +2452,15 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const getProj   = id => projects.find(p => p.id === id);
-  const typeLbl   = t => t==='material'?'วัสดุ/อุปกรณ์':t==='machine'?'เช่าเครื่องจักร':t==='lump-labor'?'ค่าแรงเหมาจ่าย':'ค่าแรงรายวัน';
-  const typeClr   = t => t==='material'?'#d97706':t==='machine'?'#0ea5e9':'#8b5cf6';
-  const typeBg    = t => t==='material'?'#fef3c7':t==='machine'?'#e0f2fe':'#ede9fe';
+  const isInc       = r => window.isIncome(r);
+  const expenseRecs = filtered.filter(r => !isInc(r));
+  const incomeRecs  = filtered.filter(isInc);
+  const typeLbl   = t => t==='material'?'วัสดุ/อุปกรณ์':t==='machine'?'เช่าเครื่องจักร':t==='lump-labor'?'ค่าแรงเหมาจ่าย':t==='other'?'ค่าใช้จ่ายอื่นๆ':'ค่าแรงรายวัน';
+  const rowLbl    = r => isInc(r) ? 'รายรับ' : typeLbl(r.type);
+  const typeClr   = t => t==='material'?'#d97706':t==='machine'?'#0ea5e9':t==='other'?'#6366f1':'#8b5cf6';
+  const typeBg    = t => t==='material'?'#fef3c7':t==='machine'?'#e0f2fe':t==='other'?'#e0e7ff':'#ede9fe';
+  const rowClr    = r => isInc(r) ? '#059669' : typeClr(r.type);
+  const rowBg     = r => isInc(r) ? '#d1fae5' : typeBg(r.type);
   const fmtN      = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtI      = v => Number(v||0).toLocaleString('th-TH');
   const fmtD      = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
@@ -2446,11 +2469,11 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
   const projName  = projId&&projId!=='all'?(getProj(projId)?.name||'ไม่ระบุ'):'ทุกโครงการ';
 
   // ── Compute summaries ──
-  const typeKeys = ['material','machine','labor','lump-labor'];
+  const typeKeys = ['material','machine','labor','lump-labor','other'];
   let gSub=0, gVat=0, gWht=0, gNet=0;
 
   const typeSummary = typeKeys.map(t => {
-    const recs = filtered.filter(r=>r.type===t);
+    const recs = expenseRecs.filter(r=>r.type===t);
     if(!recs.length) return null;
     const tots = recs.map(r=>computeTotals(r));
     const sub=tots.reduce((s,x)=>s+x.subTotal,0);
@@ -2461,8 +2484,12 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
     return {t,label:typeLbl(t),count:recs.length,sub,vat,wht,net};
   }).filter(Boolean);
 
+  // รายรับรวม + คงเหลือสุทธิ
+  const incomeNet = incomeRecs.reduce((s,r)=>s+computeTotals(r).total,0);
+  const netBalance = incomeNet - gNet;
+
   const byP = {};
-  filtered.forEach(r=>{
+  expenseRecs.forEach(r=>{
     if(!byP[r.projectId]) byP[r.projectId]={mat:0,mach:0,labor:0,count:0};
     const tot=computeTotals(r).total;
     if(r.type==='material') byP[r.projectId].mat+=tot;
@@ -2472,7 +2499,7 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
   });
 
   const byWeek = {};
-  filtered.forEach(r=>{
+  expenseRecs.forEach(r=>{
     const d=new Date(r.date+'T00:00:00');
     const dow=d.getDay();
     const mon=new Date(d); mon.setDate(d.getDate()-(dow===0?6:dow-1));
@@ -2536,7 +2563,7 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
     return `<tr class="${i%2===0?'alt':''}">
       <td class="mono" style="font-size:10px">${r.docNo}</td>
       <td style="white-space:nowrap">${fmtD(r.date)}</td>
-      <td><span class="badge" style="background:${typeBg(r.type)};color:${typeClr(r.type)};font-size:9px">${typeLbl(r.type)}</span></td>
+      <td><span class="badge" style="background:${rowBg(r)};color:${rowClr(r)};font-size:9px">${rowLbl(r)}</span></td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p?.name||'—'}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.vendor||'—'}</td>
       <td class="r bold">฿${fmtN(tot)}</td>
@@ -2624,22 +2651,25 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 
 <!-- KPI -->
 <div class="kpi-grid">
+  <div class="kpi" style="background:#ecfdf5;border-color:#a7f3d0">
+    <div class="kpi-label" style="color:#059669">ยอดรับรวม</div>
+    <div class="kpi-value" style="color:#059669">฿${fmtN(incomeNet)}</div>
+    <div class="kpi-sub">${incomeRecs.length} รายการรายรับ</div>
+  </div>
   <div class="kpi accent">
     <div class="kpi-label">ยอดจ่ายสุทธิรวม</div>
     <div class="kpi-value">฿${fmtN(gNet)}</div>
-    <div class="kpi-sub">${filtered.length} รายการทั้งหมด</div>
+    <div class="kpi-sub">${expenseRecs.length} รายการรายจ่าย</div>
+  </div>
+  <div class="kpi" style="background:${netBalance>=0?'#ecfdf5':'#fef2f2'};border-color:${netBalance>=0?'#a7f3d0':'#fecaca'}">
+    <div class="kpi-label" style="color:${netBalance>=0?'#059669':'#dc2626'}">คงเหลือสุทธิ (รับ−จ่าย)</div>
+    <div class="kpi-value" style="color:${netBalance>=0?'#059669':'#dc2626'}">${netBalance<0?'−':''}฿${fmtN(Math.abs(netBalance))}</div>
+    <div class="kpi-sub">${netBalance>=0?'เกินดุล':'ขาดดุล'}</div>
   </div>
   <div class="kpi">
-    <div class="kpi-label">ยอดก่อน VAT</div>
-    <div class="kpi-value">฿${fmtN(gSub)}</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">ภาษีมูลค่าเพิ่ม (VAT)</div>
+    <div class="kpi-label">VAT / หัก ณ ที่จ่าย</div>
     <div class="kpi-value">฿${fmtN(gVat)}</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">หัก ณ ที่จ่าย (WHT)</div>
-    <div class="kpi-value">฿${fmtN(gWht)}</div>
+    <div class="kpi-sub">WHT ฿${fmtN(gWht)} · ก่อน VAT ฿${fmtN(gSub)}</div>
   </div>
 </div>
 
@@ -2660,8 +2690,8 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
     </tr></thead>
     <tbody>${typeRows}</tbody>
     <tfoot><tr>
-      <td>รวมทั้งหมด</td>
-      <td class="r">${fmtI(filtered.length)}</td>
+      <td>รวมรายจ่ายทั้งหมด</td>
+      <td class="r">${fmtI(expenseRecs.length)}</td>
       <td class="r">฿${fmtN(gSub)}</td>
       <td class="r">฿${fmtN(gVat)}</td>
       <td class="r">฿${fmtN(gWht)}</td>
