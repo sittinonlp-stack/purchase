@@ -32,12 +32,14 @@ window.DashboardView = function DashboardView() {
     const otherCount = exp.filter(r => r.type === 'other').length;
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
     const retentionTotal = exp.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
-    // ── รายรับ (income) ──
+    // ── รายรับ (income) — หักค่าดำเนินการ 15% (เหลือ 85%) ──
     const incomeRecs  = app.records.filter(r => window.isIncome(r));
-    const incomeTotal = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+    const incomeGross = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+    const incomeFee   = incomeGross * 0.15;          // ค่าดำเนินการ 15%
+    const incomeTotal = incomeGross - incomeFee;      // ยอดรับสุทธิหลังหัก
     const incomeCount = incomeRecs.length;
-    const netTotal    = incomeTotal - totalAmount; // คงเหลือสุทธิ (รับ − จ่าย)
-    return { totalAmount, matCount, machCount, laborCount, otherCount, whtTotal, retentionTotal, incomeTotal, incomeCount, netTotal };
+    const netTotal    = incomeTotal - totalAmount;    // คงเหลือสุทธิ (รับหลังหัก − จ่าย)
+    return { totalAmount, matCount, machCount, laborCount, otherCount, whtTotal, retentionTotal, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
   }, [app.records]);
 
   // by-project chart (รายจ่ายเท่านั้น)
@@ -214,9 +216,9 @@ window.DashboardView = function DashboardView() {
 
       <div className="stat-grid">
         <div className="stat">
-          <div className="stat-label">ยอดรับทั้งหมด</div>
+          <div className="stat-label">ยอดรับทั้งหมด (หักค่าดำเนินการ 15%)</div>
           <div className="stat-value mono" style={{ color:'#059669' }}>฿{fmt(stats.incomeTotal)}</div>
-          <div className="stat-delta"><Icon name="money" size={11} stroke={2.5} /> {fmtInt(stats.incomeCount)} รายการรายรับ</div>
+          <div className="stat-delta"><Icon name="money" size={11} stroke={2.5} /> รับจริง ฿{fmt(stats.incomeGross)} − ค่าดำเนินการ ฿{fmt(stats.incomeFee)}</div>
           <div className="stat-icon green"><Icon name="money" size={18} /></div>
         </div>
         <div className="stat">
