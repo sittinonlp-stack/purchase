@@ -1624,7 +1624,7 @@ window.DetailDrawer = function DetailDrawer() {
               <div className="row gap-8" style={{ marginBottom: 4 }}>
                 {typeBadge}
                 <span className="mono text-small text-muted">{rec.docNo}</span>
-                {isLaborType && rec.period && <span className="badge gray">{rec.period}</span>}
+                {(isLaborType || window.isIncome(rec)) && rec.period && <span className="badge gray">{rec.period}</span>}
               </div>
               <h2 style={{ fontSize: 20 }}>{rec.vendor}</h2>
             </div>

@@ -840,6 +840,7 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
     date: todayStr(),
     projectId: '',
     vendor: '',
+    period: 'งวดงานตามสัญญา', // ประเภทงวดงาน: งวดงานตามสัญญา | งวดงานเพิ่ม
     items: [{ id: newId(), name: '', categoryId: '', qty: 1, unit: 'รายการ', price: 0 }],
     vatMode: 'exclusive',
     vatRate: 0,
@@ -852,7 +853,7 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
   });
 
   const [form, setForm] = useState(() => initial
-    ? { ...initial, meta: { ...(initial.meta || {}), kind: 'income' } }
+    ? { ...initial, meta: { ...(initial.meta || {}), kind: 'income' }, period: initial.period || 'งวดงานตามสัญญา' }
     : blank());
   const [projModalOpen, setProjModalOpen] = useState(false);
 
@@ -934,6 +935,19 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
                       ? <div className="text-small text-muted" style={{ marginTop: 4 }}>ลูกค้าของโครงการ: <strong>{p.client}</strong> (ดึงมาให้อัตโนมัติ — แก้ไขได้)</div>
                       : null;
                   })()}
+                </div>
+                <div className="field full">
+                  <label className="field-label">ประเภทงวดงาน <span className="req">*</span></label>
+                  <div className="option-row">
+                    {['งวดงานตามสัญญา', 'งวดงานเพิ่ม'].map((opt) => (
+                      <button key={opt} type="button"
+                        className={"option-pill" + (form.period === opt ? " selected" : "")}
+                        onClick={() => set({ period: opt })}>
+                        <span className="pill-radio"></span>
+                        <span>{opt}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
