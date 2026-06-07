@@ -320,6 +320,9 @@ function Sidebar() {
           <button className={"nav-item" + (view === 'new-other' ? " active" : "")} onClick={() => go('new-other')}>
             <Icon name="sparkle" /> ค่าใช้จ่ายอื่นๆ
           </button>
+          <button className={"nav-item" + (view === 'new-income' ? " active" : "")} onClick={() => go('new-income')}>
+            <Icon name="money" /> บันทึกรายรับ
+          </button>
           <button className={"nav-item" + (view === 'new-receipt' ? " active" : "")} onClick={() => go('new-receipt')}>
             <Icon name="receipt" /> ออกใบเสร็จรับเงิน
           </button>
@@ -345,6 +348,14 @@ function Sidebar() {
             {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length > 0 && (
               <span className="badge" style={{ background:'oklch(0.93 0.06 290)', color:'oklch(0.45 0.14 290)', border:'1px solid oklch(0.84 0.08 290)' }}>
                 {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length}
+              </span>
+            )}
+          </button>
+          <button className={"nav-item" + (view === 'income-history' ? " active" : "")} onClick={() => go('income-history')}>
+            <Icon name="money" /> ประวัติบันทึกรายรับ
+            {records.filter(r => r.type==='income' && !r.accountingPosted).length > 0 && (
+              <span className="badge" style={{ background:'rgba(5,150,105,0.15)', color:'#059669', border:'1px solid rgba(5,150,105,0.3)' }}>
+                {records.filter(r => r.type==='income' && !r.accountingPosted).length}
               </span>
             )}
           </button>

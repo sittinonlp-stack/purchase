@@ -72,6 +72,8 @@ function Shell() {
   if (view === 'new-labor')      { title = 'บันทึกค่าแรง'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-lump-labor') { title = 'ค่าแรงเหมาจ่าย'; sub = 'บันทึก / แก้ไข'; }
   if (view === 'new-other')     { title = 'ค่าใช้จ่ายอื่นๆ'; sub = 'บันทึก / แก้ไข'; }
+  if (view === 'new-income')    { title = 'บันทึกรายรับ'; sub = 'บันทึก / แก้ไข'; }
+  if (view === 'income-history'){ title = 'ประวัติบันทึกรายรับ'; sub = 'เงินรับเข้าโครงการ'; }
   if (view === 'new-receipt')    { title = 'ใบเสร็จรับเงิน'; sub = 'ออก / แก้ไข'; }
   if (view === 'new-tax-invoice'){ title = 'ใบเสร็จรับเงิน/ใบกำกับภาษี'; sub = 'ออก / แก้ไข (มี VAT)'; }
   if (view === 'new-invoice')    { title = 'ใบแจ้งหนี้'; sub = 'ตั้งเบิกงวดงานกับลูกค้า'; }
@@ -199,6 +201,25 @@ function Shell() {
               onCancel={() => { clearEditing(); app.setView('dashboard'); }}
             />
           )}
+          {view === 'new-income' && (
+            <window.IncomeForm
+              key={'income-' + (app.editingId || 'new')}
+              initial={initial && initial.type === 'income' ? initial : null}
+              onSubmit={(rec) => {
+                if (app.editingId) {
+                  app.updateRecord(app.editingId, rec);
+                  app.pushToast('แก้ไขบันทึกรายรับเรียบร้อย');
+                } else {
+                  app.addRecord(rec);
+                  app.pushToast('บันทึกรายรับแล้ว');
+                }
+                clearEditing();
+                app.setView('income-history');
+              }}
+              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+            />
+          )}
+          {view === 'income-history' && <window.IncomeHistoryView />}
           {view === 'new-receipt' && (
             <window.ReceiptForm
               key={'rcpt-' + (app.editingId || 'new')}

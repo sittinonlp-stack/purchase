@@ -828,6 +828,213 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
   );
 };
 
+// ---- IncomeForm (บันทึกรายรับ) ----
+window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
+  const app = window.useApp();
+
+  const blank = () => ({
+    type: 'income',
+    docNo: 'IN-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
+    date: todayStr(),
+    projectId: '',
+    vendor: '',
+    items: [{ id: newId(), name: '', categoryId: '', qty: 1, unit: 'รายการ', price: 0 }],
+    vatMode: 'exclusive',
+    vatRate: 0,
+    whtEnabled: false,
+    whtRate: 0,
+    docs: [],
+    note: '',
+    images: [],
+    accountingPosted: false,
+  });
+
+  const [form, setForm] = useState(() => initial ? { ...initial } : blank());
+  const [projModalOpen, setProjModalOpen] = useState(false);
+
+  const totals = useMemo(() => computeTotals(form), [form]);
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+
+  const setItem = (id, patch) => set({ items: form.items.map(it => it.id === id ? { ...it, ...patch } : it) });
+  const addItem = () => set({ items: [...form.items, { id: newId(), name: '', categoryId: '', qty: 1, unit: 'รายการ', price: 0 }] });
+  const removeItem = (id) => set({ items: form.items.length > 1 ? form.items.filter(it => it.id !== id) : form.items });
+
+  const handleSubmit = () => {
+    if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
+    if (!form.vendor.trim()) return app.pushToast('โปรดระบุแหล่งที่มาของรายรับ / ผู้จ่าย', 'error');
+    if (!form.items.some(it => it.name.trim() && Number(it.price) > 0)) return app.pushToast('โปรดเพิ่มรายการรายรับอย่างน้อย 1 รายการ', 'error');
+    onSubmit(form);
+  };
+
+  const isEditing = !!initial;
+  const posted = !!form.accountingPosted;
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{isEditing ? 'แก้ไขบันทึกรายรับ' : 'บันทึกรายรับ'}</h1>
+          <div className="page-sub">เงินที่ได้รับเข้าโครงการ เช่น เงินงวดจากลูกค้า เงินมัดจำ หรือรายรับอื่นๆ</div>
+        </div>
+        <div className="row gap-8">
+          <button className="btn btn-ghost" onClick={onCancel}><Icon name="x" size={14} /> ยกเลิก</button>
+          <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึกรายการ</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
+        <div className="col gap-16" style={{ minWidth: 0 }}>
+          {/* Card 1: header */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">ข้อมูลรายรับ</div>
+                <div className="card-sub">เลขที่เอกสาร โครงการ และแหล่งที่มา</div>
+              </div>
+              <span className="badge" style={{ background:'rgba(5,150,105,0.15)', color:'#059669', border:'1px solid rgba(5,150,105,0.3)' }}>รายรับ</span>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <div className="field">
+                  <label className="field-label">เลขที่เอกสาร <span className="req">*</span></label>
+                  <input className="input mono" value={form.docNo} onChange={(e) => set({ docNo: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label className="field-label">วันที่รับเงิน <span className="req">*</span></label>
+                  <input className="input" type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">โครงการ <span className="req">*</span></label>
+                  <ProjectPicker value={form.projectId} onChange={(v) => set({ projectId: v })} projects={app.projects} onAdd={() => setProjModalOpen(true)} />
+                </div>
+                <div className="field full">
+                  <label className="field-label">ผู้จ่าย / แหล่งรายรับ <span className="req">*</span></label>
+                  <input className="input" placeholder="เช่น ลูกค้า บจก. ABC, เงินงวดที่ 1, เงินมัดจำ" value={form.vendor} onChange={(e) => set({ vendor: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: รายการรายรับ */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รายการรายรับ</div>
+                <div className="card-sub">ระบุรายละเอียดและจำนวนเงินที่ได้รับ</div>
+              </div>
+              <span className="badge gray mono">{form.items.length} รายการ</span>
+            </div>
+            <div className="card-body">
+              <table className="items-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>รายละเอียด</th>
+                    <th style={{ width: 160, textAlign: 'right' }}>จำนวนเงิน (บาท)</th>
+                    <th style={{ width: 44 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.items.map((it) => (
+                    <tr key={it.id}>
+                      <td>
+                        <input className="cell-input" placeholder="เช่น เงินงวดที่ 1 งานโครงสร้าง"
+                          value={it.name} onChange={(e) => setItem(it.id, { name: e.target.value })} />
+                      </td>
+                      <td>
+                        <input className="cell-input mono" type="number" step="0.01" style={{ textAlign: 'right' }}
+                          value={it.price} onChange={(e) => setItem(it.id, { price: e.target.value, qty: 1 })} placeholder="0.00" />
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบ">
+                          <Icon name="trash" size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={addItem} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+                <Icon name="plus" size={13} /> เพิ่มรายการรายรับ
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: บัญชี (เครื่องหมายถูกสีเขียว) */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">สถานะบัญชี</div>
+                <div className="card-sub">ทำเครื่องหมายเมื่อบันทึกรายรับนี้ลงบัญชีแล้ว</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <button type="button" onClick={() => set({ accountingPosted: !posted })}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                  padding: '10px 16px', borderRadius: 10, fontFamily: 'inherit', fontSize: 14,
+                  border: posted ? '2px solid #059669' : '2px solid #d1d5db',
+                  background: posted ? 'rgba(5,150,105,0.1)' : '#fff',
+                  color: posted ? '#059669' : 'var(--ink-3)', fontWeight: posted ? 600 : 400,
+                }}>
+                <span style={{
+                  width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                  border: posted ? 'none' : '2px solid #d1d5db',
+                  background: posted ? '#059669' : 'transparent',
+                  color: '#fff', fontSize: 14, fontWeight: 700,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>{posted ? '✓' : ''}</span>
+                {posted ? 'ลงบัญชีแล้ว' : 'ยังไม่ลงบัญชี — คลิกเพื่อทำเครื่องหมาย'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: images + note */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">รูปภาพและหมายเหตุ</div>
+                <div className="card-sub">แนบสลิป / หลักฐานการรับเงิน (สูงสุด 10 รูป)</div>
+              </div>
+            </div>
+            <div className="card-body col gap-16">
+              <ImageUploader images={form.images} onChange={(imgs) => set({ images: imgs })} max={10} />
+              <div className="field">
+                <label className="field-label">หมายเหตุ</label>
+                <textarea className="textarea" placeholder="เช่น โอนผ่านธนาคาร, เช็คเลขที่..." value={form.note} onChange={(e) => set({ note: e.target.value })} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: summary */}
+        <div className="form-summary-sticky" style={{ position: 'sticky', top: 84 }}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">สรุปยอดรายรับ</div>
+              {posted && <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>✓ ลงบัญชีแล้ว</span>}
+            </div>
+            <div className="card-body">
+              <div className="summary-rows">
+                <div className="summary-row total"><span className="label">ยอดรายรับรวม</span><span className="value" style={{ color: '#059669' }}>{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span></div>
+              </div>
+              <div className="row gap-8 mt-16">
+                <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
+                <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
+
+      <style>{`
+        @media (max-width: 860px) { .form-layout { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </>
+  );
+};
+
 // ---- Add category modal ----
 function AddCategoryModal({ open, onClose, onAdd, title }) {
   const [name, setName] = useState('');

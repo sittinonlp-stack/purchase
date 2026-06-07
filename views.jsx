@@ -665,6 +665,8 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
                     ? <span className="badge green dot">เหมาจ่าย</span>
                     : r.type === 'other'
                     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>อื่นๆ</span>
+                    : r.type === 'income'
+                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
                     : r.type === 'quick-receipt'
                     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
                     : r.type === 'receipt'
@@ -1574,6 +1576,8 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge green dot">เหมาจ่าย</span>
     : rec.type === 'other'
     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>ค่าใช้จ่ายอื่นๆ</span>
+    : rec.type === 'income'
+    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
     : rec.type === 'quick-receipt'
     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
     : rec.type === 'receipt'
@@ -1627,6 +1631,7 @@ window.DetailDrawer = function DetailDrawer() {
                 : rec.type === 'labor' ? 'new-labor'
                 : rec.type === 'lump-labor' ? 'new-lump-labor'
                 : rec.type === 'other' ? 'new-other'
+                : rec.type === 'income' ? 'new-income'
                 : rec.type === 'quick-receipt' ? 'quick-receipt'
                 : rec.type === 'receipt' ? 'new-receipt'
                 : rec.type === 'tax-invoice' ? 'new-tax-invoice'
@@ -4139,6 +4144,122 @@ window.LaborHistoryView = function LaborHistoryView() {
           </div>
         ) : (
           <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} showApprove={true}/>
+        )}
+      </div>
+    </>
+  );
+};
+
+// ---- Income History (ประวัติบันทึกรายรับ) ----
+window.IncomeHistoryView = function IncomeHistoryView() {
+  const app = window.useApp();
+  const [q,          setQ]          = useState('');
+  const [projFilter, setProjFilter] = useState('all');
+  const [accFilter,  setAccFilter]  = useState('all');
+  const [sortKey,    setSortKey]    = useState('date-desc');
+
+  const allIncome = useMemo(() => app.records.filter(r => r.type === 'income'), [app.records]);
+
+  const filtered = useMemo(() => {
+    let arr = allIncome.slice();
+    if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    if (accFilter === 'unposted') arr = arr.filter(r => !r.accountingPosted);
+    if (accFilter === 'posted')   arr = arr.filter(r =>  r.accountingPosted);
+    if (q.trim()) {
+      const s = q.toLowerCase();
+      arr = arr.filter(r =>
+        (r.docNo  || '').toLowerCase().includes(s) ||
+        (r.vendor || '').toLowerCase().includes(s) ||
+        (r.items  || []).some(i => (i.name || '').toLowerCase().includes(s))
+      );
+    }
+    arr.sort((a, b) => {
+      if (sortKey === 'date-desc')   return (b.date || '').localeCompare(a.date || '');
+      if (sortKey === 'date-asc')    return (a.date || '').localeCompare(b.date || '');
+      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
+      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
+      return 0;
+    });
+    return arr;
+  }, [allIncome, projFilter, accFilter, sortKey, q]);
+
+  const sum         = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
+  const postedSum   = filtered.filter(r => r.accountingPosted).reduce((s, r) => s + computeTotals(r).total, 0);
+  const unpostedCnt = allIncome.filter(r => !r.accountingPosted).length;
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">ประวัติบันทึกรายรับ</h1>
+          <div className="page-sub">เงินรับเข้าโครงการทั้งหมด — รายการย้อนหลัง</div>
+        </div>
+        <div className="row gap-8 dash-actions">
+          <button className="btn btn-accent" onClick={() => app.setView('new-income')}>
+            <Icon name="money" size={14} /> บันทึกรายรับ
+          </button>
+        </div>
+      </div>
+
+      <div className="stat-grid" style={{ marginBottom: 20 }}>
+        <div className="stat">
+          <div className="stat-label">รายการทั้งหมด</div>
+          <div className="stat-value mono">{fmtInt(allIncome.length)}</div>
+          <div className="stat-icon" style={{ background:'rgba(5,150,105,0.12)', color:'#059669' }}><Icon name="money" size={18} /></div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">ยอดรวมรายรับ</div>
+          <div className="stat-value mono">{"฿"+fmt(sum)}</div>
+          <div className="stat-icon" style={{ background:'rgba(5,150,105,0.12)', color:'#059669' }}><Icon name="money" size={18} /></div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">ลงบัญชีแล้ว</div>
+          <div className="stat-value mono">{"฿"+fmt(postedSum)}</div>
+          <div className="stat-icon" style={{ background:'rgba(5,150,105,0.12)', color:'#059669' }}><Icon name="check" size={18} /></div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">ยังไม่ลงบัญชี</div>
+          <div className="stat-value mono">{fmtInt(unpostedCnt)}</div>
+          <div className="stat-icon" style={{ background:'rgba(234,179,8,0.12)', color:'#b45309' }}><Icon name="bell" size={18} /></div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="filter-bar">
+          <div className="topbar-search" style={{ width:240, margin:0 }}>
+            <Icon name="search" size={14}/>
+            <input placeholder="ค้นหา: เลขที่, แหล่งที่มา, รายการ" value={q} onChange={e => setQ(e.target.value)}/>
+          </div>
+          <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
+            <option value="all">ทุกโครงการ</option>
+            {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select className="select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
+            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
+            <option value="date-asc">วันที่ เก่า → ใหม่</option>
+            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
+            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
+          </select>
+          <select className="select" value={accFilter} onChange={e => setAccFilter(e.target.value)}
+            style={{ borderColor:accFilter!=='all'?'#059669':undefined, color:accFilter!=='all'?'#059669':undefined }}>
+            <option value="all">สถานะบัญชี: ทั้งหมด</option>
+            <option value="unposted">ยังไม่ลงบัญชี</option>
+            <option value="posted">ลงบัญชีแล้ว</option>
+          </select>
+          <div className="spacer"/>
+          <div className="text-small text-muted">
+            พบ <strong style={{ color:'var(--ink-1)' }} className="mono">{filtered.length}</strong> รายการ
+            {" · "}ยอดรวม <strong className="mono" style={{ color:'#059669' }}>{"฿"+fmt(sum)}</strong>
+          </div>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="money" size={28}/></div>
+            <div className="empty-title">ยังไม่มีรายการรายรับ</div>
+            <div className="empty-sub">เริ่มบันทึกรายรับรายการแรกได้เลย</div>
+          </div>
+        ) : (
+          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} />
         )}
       </div>
     </>
