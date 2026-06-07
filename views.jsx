@@ -2332,8 +2332,10 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
     typeRows.push([typeLabelByKey(t), recs.length, sub, vat, wht, net]);
   });
 
-  // รายรับรวม
-  const incomeNet = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+  // รายรับ — หักค่าดำเนินการ 15%
+  const incomeGross = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+  const incomeFee   = incomeGross * 0.15;
+  const incomeNet   = incomeGross - incomeFee;
 
   // By-project block (รายจ่ายเท่านั้น)
   const byP = {};
@@ -2363,12 +2365,15 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
     ...typeRows,
     ['รวมรายจ่ายทั้งหมด', grandCount, grandSub, grandVat, grandWht, grandNet],
     [],
-    ['สรุปรายรับ'],
-    ['ประเภท', 'จำนวน (รายการ)', 'ยอดรวม (฿)'],
-    ['รายรับ', incomeRecs.length, incomeNet],
+    ['สรุปรายรับ (หักค่าดำเนินการ 15%)'],
+    ['รายการ', 'จำนวน / ยอด (฿)'],
+    ['จำนวนรายการรายรับ', incomeRecs.length],
+    ['ยอดรับจริง (฿)', incomeGross],
+    ['หักค่าดำเนินการ 15% (฿)', incomeFee],
+    ['ยอดรับสุทธิหลังหัก (฿)', incomeNet],
     [],
-    ['สรุปสุทธิ (รับ − จ่าย)'],
-    ['รายรับรวม (฿)', incomeNet],
+    ['สรุปสุทธิ (รับหลังหัก − จ่าย)'],
+    ['รายรับสุทธิ (฿)', incomeNet],
     ['รายจ่ายรวม (฿)', grandNet],
     ['คงเหลือสุทธิ (฿)', incomeNet - grandNet],
     [],
@@ -2486,9 +2491,11 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
     return {t,label:typeLbl(t),count:recs.length,sub,vat,wht,net};
   }).filter(Boolean);
 
-  // รายรับรวม + คงเหลือสุทธิ
-  const incomeNet = incomeRecs.reduce((s,r)=>s+computeTotals(r).total,0);
-  const netBalance = incomeNet - gNet;
+  // รายรับ — หักค่าดำเนินการ 15% + คงเหลือสุทธิ
+  const incomeGross = incomeRecs.reduce((s,r)=>s+computeTotals(r).total,0);
+  const incomeFee   = incomeGross * 0.15;
+  const incomeNet   = incomeGross - incomeFee;
+  const netBalance  = incomeNet - gNet;
 
   const byP = {};
   expenseRecs.forEach(r=>{
@@ -2654,9 +2661,9 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 <!-- KPI -->
 <div class="kpi-grid">
   <div class="kpi" style="background:#ecfdf5;border-color:#a7f3d0">
-    <div class="kpi-label" style="color:#059669">ยอดรับรวม</div>
+    <div class="kpi-label" style="color:#059669">ยอดรับสุทธิ (หักค่าดำเนินการ 15%)</div>
     <div class="kpi-value" style="color:#059669">฿${fmtN(incomeNet)}</div>
-    <div class="kpi-sub">${incomeRecs.length} รายการรายรับ</div>
+    <div class="kpi-sub">รับจริง ฿${fmtN(incomeGross)} − ค่าดำเนินการ ฿${fmtN(incomeFee)}</div>
   </div>
   <div class="kpi accent">
     <div class="kpi-label">ยอดจ่ายสุทธิรวม</div>
