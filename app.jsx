@@ -186,7 +186,7 @@ function Shell() {
           {view === 'new-other' && (
             <window.OtherExpenseForm
               key={'other-' + (app.editingId || 'new')}
-              initial={initial && initial.type === 'other' ? initial : null}
+              initial={initial && initial.type === 'other' && !window.isIncome(initial) ? initial : null}
               onSubmit={(rec) => {
                 if (app.editingId) {
                   app.updateRecord(app.editingId, rec);
@@ -204,7 +204,7 @@ function Shell() {
           {view === 'new-income' && (
             <window.IncomeForm
               key={'income-' + (app.editingId || 'new')}
-              initial={initial && initial.type === 'income' ? initial : null}
+              initial={initial && window.isIncome(initial) ? initial : null}
               onSubmit={(rec) => {
                 if (app.editingId) {
                   app.updateRecord(app.editingId, rec);

@@ -833,7 +833,9 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
   const app = window.useApp();
 
   const blank = () => ({
-    type: 'income',
+    // เก็บเป็น type 'other' + meta.kind='income' เพื่อไม่ต้องแก้ schema (DB เดิมรับได้ทันที)
+    type: 'other',
+    meta: { kind: 'income' },
     docNo: 'IN-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
     date: todayStr(),
     projectId: '',
@@ -849,7 +851,9 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
     accountingPosted: false,
   });
 
-  const [form, setForm] = useState(() => initial ? { ...initial } : blank());
+  const [form, setForm] = useState(() => initial
+    ? { ...initial, meta: { ...(initial.meta || {}), kind: 'income' } }
+    : blank());
   const [projModalOpen, setProjModalOpen] = useState(false);
 
   const totals = useMemo(() => computeTotals(form), [form]);

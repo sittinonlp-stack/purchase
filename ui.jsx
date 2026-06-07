@@ -339,8 +339,8 @@ function Sidebar() {
           <div className="nav-section-label">เรียกดู</div>
           <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => go('history')}>
             <Icon name="history" /> ประวัติทั้งหมด
-            {records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted).length > 0 && (
-              <span className="badge">{records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted).length}</span>
+            {records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted && !window.isIncome(r)).length > 0 && (
+              <span className="badge">{records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted && !window.isIncome(r)).length}</span>
             )}
           </button>
           <button className={"nav-item" + (view === 'labor-history' ? " active" : "")} onClick={() => go('labor-history')}>
@@ -353,9 +353,9 @@ function Sidebar() {
           </button>
           <button className={"nav-item" + (view === 'income-history' ? " active" : "")} onClick={() => go('income-history')}>
             <Icon name="money" /> ประวัติบันทึกรายรับ
-            {records.filter(r => r.type==='income' && !r.accountingPosted).length > 0 && (
+            {records.filter(r => window.isIncome(r) && !r.accountingPosted).length > 0 && (
               <span className="badge" style={{ background:'rgba(5,150,105,0.15)', color:'#059669', border:'1px solid rgba(5,150,105,0.3)' }}>
-                {records.filter(r => r.type==='income' && !r.accountingPosted).length}
+                {records.filter(r => window.isIncome(r) && !r.accountingPosted).length}
               </span>
             )}
           </button>

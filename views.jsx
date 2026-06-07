@@ -22,21 +22,24 @@ function imgAlt(img, fallback) {
 window.DashboardView = function DashboardView() {
   const app = window.useApp();
   const stats = useMemo(() => {
-    const allTotals = app.records.map((r) => computeTotals(r));
+    // รายจ่ายเท่านั้น — ไม่รวมรายรับ (income)
+    const exp = app.records.filter(r => !window.isIncome(r));
+    const allTotals = exp.map((r) => computeTotals(r));
     const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
-    const matCount = app.records.filter(r => r.type === 'material').length;
-    const machCount = app.records.filter(r => r.type === 'machine').length;
-    const laborCount = app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor').length;
-    const otherCount = app.records.filter(r => r.type === 'other').length;
+    const matCount = exp.filter(r => r.type === 'material').length;
+    const machCount = exp.filter(r => r.type === 'machine').length;
+    const laborCount = exp.filter(r => r.type === 'labor' || r.type === 'lump-labor').length;
+    const otherCount = exp.filter(r => r.type === 'other').length;
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
-    const retentionTotal = app.records.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
+    const retentionTotal = exp.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
     return { totalAmount, matCount, machCount, laborCount, otherCount, whtTotal, retentionTotal };
   }, [app.records]);
 
-  // by-project chart
+  // by-project chart (รายจ่ายเท่านั้น)
   const byProject = useMemo(() => {
     const m = {};
     app.records.forEach((r) => {
+      if (window.isIncome(r)) return;
       const t = computeTotals(r).total;
       m[r.projectId] = (m[r.projectId] || 0) + t;
     });
@@ -53,6 +56,7 @@ window.DashboardView = function DashboardView() {
       months.push({ key: d.toISOString().slice(0, 7), label: d.toLocaleDateString('th-TH', { month: 'short' }), mat: 0, mach: 0, labor: 0 });
     }
     app.records.forEach((r) => {
+      if (window.isIncome(r)) return;
       const k = (r.date || '').slice(0, 7);
       const m = months.find(x => x.key === k);
       if (!m) return;
@@ -663,10 +667,10 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
                     ? <span className="badge blue dot">เครื่องจักร</span>
                     : r.type === 'lump-labor'
                     ? <span className="badge green dot">เหมาจ่าย</span>
+                    : window.isIncome(r)
+                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
                     : r.type === 'other'
                     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>อื่นๆ</span>
-                    : r.type === 'income'
-                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
                     : r.type === 'quick-receipt'
                     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
                     : r.type === 'receipt'
@@ -708,10 +712,12 @@ window.HistoryView = function HistoryView() {
 
   const filtered = useMemo(() => {
     // แสดงเฉพาะ material, machine, other — labor/lump-labor ย้ายไป LaborHistoryView
+    // และไม่รวมรายรับ (income) ซึ่งมีหน้าประวัติของตัวเอง
     let arr = app.records.filter(r =>
       r.type !== 'quick-receipt' && r.type !== 'receipt' &&
       r.type !== 'tax-invoice'   && r.type !== 'invoice' &&
-      r.type !== 'labor'         && r.type !== 'lump-labor'
+      r.type !== 'labor'         && r.type !== 'lump-labor' &&
+      !window.isIncome(r)
     );
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
@@ -755,7 +761,7 @@ window.HistoryView = function HistoryView() {
       <div className="card">
         <div className="filter-bar">
           <div className="tabs">
-            <button className={"tab" + (typeFilter === 'all'      ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => r.type==='material'||r.type==='machine'||r.type==='other').length}</span></button>
+            <button className={"tab" + (typeFilter === 'all'      ? ' active' : '')} onClick={() => setTypeFilter('all')}>ทั้งหมด <span className="badge gray mono">{app.records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !window.isIncome(r)).length}</span></button>
             <button className={"tab" + (typeFilter === 'material' ? ' active' : '')} onClick={() => setTypeFilter('material')}><Icon name="cart"    size={13} /> วัสดุ</button>
             <button className={"tab" + (typeFilter === 'machine'  ? ' active' : '')} onClick={() => setTypeFilter('machine')} ><Icon name="truck"   size={13} /> เครื่องจักร</button>
             <button className={"tab" + (typeFilter === 'other'    ? ' active' : '')} onClick={() => setTypeFilter('other')}   ><Icon name="sparkle" size={13} /> อื่นๆ</button>
@@ -1574,10 +1580,10 @@ window.DetailDrawer = function DetailDrawer() {
     ? <span className="badge blue dot">เช่าเครื่องจักร</span>
     : rec.type === 'lump-labor'
     ? <span className="badge green dot">เหมาจ่าย</span>
+    : window.isIncome(rec)
+    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
     : rec.type === 'other'
     ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>ค่าใช้จ่ายอื่นๆ</span>
-    : rec.type === 'income'
-    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
     : rec.type === 'quick-receipt'
     ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
     : rec.type === 'receipt'
@@ -1627,11 +1633,11 @@ window.DetailDrawer = function DetailDrawer() {
             )}
             <button className="btn btn-accent btn-sm" onClick={() => {
               app.setEditingId(rec.id);
-              const v = rec.type === 'machine' ? 'new-machine'
+              const v = window.isIncome(rec) ? 'new-income'
+                : rec.type === 'machine' ? 'new-machine'
                 : rec.type === 'labor' ? 'new-labor'
                 : rec.type === 'lump-labor' ? 'new-lump-labor'
                 : rec.type === 'other' ? 'new-other'
-                : rec.type === 'income' ? 'new-income'
                 : rec.type === 'quick-receipt' ? 'quick-receipt'
                 : rec.type === 'receipt' ? 'new-receipt'
                 : rec.type === 'tax-invoice' ? 'new-tax-invoice'
@@ -4158,7 +4164,7 @@ window.IncomeHistoryView = function IncomeHistoryView() {
   const [accFilter,  setAccFilter]  = useState('all');
   const [sortKey,    setSortKey]    = useState('date-desc');
 
-  const allIncome = useMemo(() => app.records.filter(r => r.type === 'income'), [app.records]);
+  const allIncome = useMemo(() => app.records.filter(r => window.isIncome(r)), [app.records]);
 
   const filtered = useMemo(() => {
     let arr = allIncome.slice();

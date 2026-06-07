@@ -839,5 +839,9 @@ window.AppProvider = function AppProvider({ children }) {
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 };
 
+// รายรับ (income) เก็บเป็น type 'other' + meta.kind='income' เพื่อไม่ต้องแก้ schema
+// (รองรับ type 'income' โดยตรงด้วย เผื่อมีการรัน migration-income.sql)
+const isIncome = (r) => !!(r && (r.type === 'income' || (r.meta && r.meta.kind === 'income')));
+
 // expose helpers
-Object.assign(window, { fmt, fmtInt, todayStr, fmtDate, newId, DOC_TYPES, computeTotals });
+Object.assign(window, { fmt, fmtInt, todayStr, fmtDate, newId, DOC_TYPES, computeTotals, isIncome });
