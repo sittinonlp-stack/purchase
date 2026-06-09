@@ -26,10 +26,14 @@ window.DashboardView = function DashboardView() {
     const exp = app.records.filter(r => !window.isIncome(r));
     const allTotals = exp.map((r) => computeTotals(r));
     const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
-    const matCount = exp.filter(r => r.type === 'material').length;
+    const matRecs   = exp.filter(r => r.type === 'material');
+    const laborRecs = exp.filter(r => r.type === 'labor' || r.type === 'lump-labor');
+    const matCount  = matRecs.length;
     const machCount = exp.filter(r => r.type === 'machine').length;
-    const laborCount = exp.filter(r => r.type === 'labor' || r.type === 'lump-labor').length;
+    const laborCount = laborRecs.length;
     const otherCount = exp.filter(r => r.type === 'other').length;
+    const matTotal   = matRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+    const laborTotal = laborRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
     const retentionTotal = exp.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
     // ── รายรับ (income) — หักค่าดำเนินการ 15% (เหลือ 85%) ──
@@ -39,7 +43,7 @@ window.DashboardView = function DashboardView() {
     const incomeTotal = incomeGross - incomeFee;      // ยอดรับสุทธิหลังหัก
     const incomeCount = incomeRecs.length;
     const netTotal    = incomeTotal - totalAmount;    // คงเหลือสุทธิ (รับหลังหัก − จ่าย)
-    return { totalAmount, matCount, machCount, laborCount, otherCount, whtTotal, retentionTotal, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
+    return { totalAmount, matCount, machCount, laborCount, otherCount, matTotal, laborTotal, whtTotal, retentionTotal, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
   }, [app.records]);
 
   // by-project chart (รายจ่ายเท่านั้น)
@@ -242,14 +246,14 @@ window.DashboardView = function DashboardView() {
         </div>
         <div className="stat">
           <div className="stat-label">บิลวัสดุ</div>
-          <div className="stat-value mono">{fmtInt(stats.matCount)}</div>
-          <div className="stat-delta"><Icon name="arrowUp" size={11} stroke={2.5} /> +3 บิลสัปดาห์นี้</div>
+          <div className="stat-value mono">฿{fmt(stats.matTotal)}</div>
+          <div className="stat-delta"><Icon name="cart" size={11} stroke={2.5} /> {fmtInt(stats.matCount)} บิล</div>
           <div className="stat-icon blue"><Icon name="cart" size={18} /></div>
         </div>
         <div className="stat">
           <div className="stat-label">บิลค่าแรง</div>
-          <div className="stat-value mono">{fmtInt(stats.laborCount)}</div>
-          <div className="stat-delta"><Icon name="hammer" size={11} stroke={2.5} /> {app.workerTeams.length} ทีมช่าง</div>
+          <div className="stat-value mono">฿{fmt(stats.laborTotal)}</div>
+          <div className="stat-delta"><Icon name="hammer" size={11} stroke={2.5} /> {fmtInt(stats.laborCount)} บิล · {app.workerTeams.length} ทีมช่าง</div>
           <div className="stat-icon" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)' }}><Icon name="hammer" size={18} /></div>
         </div>
         <div className="stat">
