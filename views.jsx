@@ -373,12 +373,38 @@ window.DashboardView = function DashboardView() {
                   {focusRecords.slice(0,6).map(r => {
                     const proj  = app.projects.find(p => p.id === r.projectId);
                     const total = computeTotals(r).total;
-                    const typeColor = r.type === 'material' ? 'var(--accent)' :
-                                      r.type === 'machine'  ? 'oklch(0.55 0.16 235)' :
-                                      'oklch(0.55 0.14 290)';
-                    const typeLabel = r.type === 'material' ? 'วัสดุ' :
-                                      r.type === 'machine'  ? 'เครื่องจักร' :
-                                      r.type === 'lump-labor' ? 'เหมาจ่าย' : 'ค่าแรง';
+                    const isInc = window.isIncome(r);
+                    const typeColor =
+                      r.type === 'material'              ? 'var(--accent)' :
+                      r.type === 'machine'               ? 'oklch(0.55 0.16 235)' :
+                      r.type === 'labor'                 ? 'oklch(0.55 0.14 290)' :
+                      r.type === 'lump-labor'            ? '#16a34a' :
+                      r.type === 'receipt' || r.type === 'tax-invoice' ? '#059669' :
+                      r.type === 'invoice'               ? '#1d4ed8' :
+                      r.type === 'quick-receipt'         ? '#0ea5e9' :
+                      isInc                              ? '#059669' :
+                      '#6366f1';
+                    const typeLabel =
+                      r.type === 'material'              ? 'วัสดุ' :
+                      r.type === 'machine'               ? 'เครื่องจักร' :
+                      r.type === 'labor'                 ? 'ค่าแรง' :
+                      r.type === 'lump-labor'            ? 'เหมาจ่าย' :
+                      r.type === 'receipt'               ? 'ใบเสร็จ' :
+                      r.type === 'tax-invoice'           ? 'ใบกำกับภาษี' :
+                      r.type === 'invoice'               ? 'ใบแจ้งหนี้' :
+                      r.type === 'quick-receipt'         ? 'บิลด่วน' :
+                      isInc                              ? 'รายรับ' :
+                      'อื่นๆ';
+                    const typeBg =
+                      r.type === 'material'              ? 'rgba(217,119,6,0.12)' :
+                      r.type === 'machine'               ? 'rgba(14,165,233,0.12)' :
+                      r.type === 'labor'                 ? 'rgba(124,58,237,0.12)' :
+                      r.type === 'lump-labor'            ? 'rgba(22,163,74,0.12)' :
+                      r.type === 'receipt' || r.type === 'tax-invoice' ? 'rgba(5,150,105,0.12)' :
+                      r.type === 'invoice'               ? 'rgba(29,78,216,0.12)' :
+                      r.type === 'quick-receipt'         ? 'rgba(14,165,233,0.12)' :
+                      isInc                              ? 'rgba(5,150,105,0.12)' :
+                      'rgba(99,102,241,0.12)';
                     return (
                       <div key={r.id}
                         onClick={() => app.setDetailId(r.id)}
@@ -411,10 +437,8 @@ window.DashboardView = function DashboardView() {
                         {/* Type badge */}
                         <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px',
                           borderRadius:20, flexShrink:0,
-                          background: r.type==='material' ? 'rgba(217,119,6,0.12)'
-                                    : r.type==='machine'  ? 'rgba(14,165,233,0.12)'
-                                    : 'rgba(124,58,237,0.12)',
-                          color:typeColor }}>
+                          background: typeBg,
+                          color: typeColor }}>
                           {typeLabel}
                         </span>
                         {/* Amount */}
