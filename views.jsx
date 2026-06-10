@@ -26,12 +26,11 @@ window.DashboardView = function DashboardView() {
     const exp = app.records.filter(r => !window.isIncome(r));
     const allTotals = exp.map((r) => computeTotals(r));
     const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
-    const matRecs   = exp.filter(r => r.type === 'material');
+    // matRecs = material + machine + other (เหมือนกับ HistoryView "ทั้งหมด")
+    const matRecs   = exp.filter(r => r.type === 'material' || r.type === 'machine' || r.type === 'other');
     const laborRecs = exp.filter(r => r.type === 'labor' || r.type === 'lump-labor');
     const matCount  = matRecs.length;
-    const machCount = exp.filter(r => r.type === 'machine').length;
     const laborCount = laborRecs.length;
-    const otherCount = exp.filter(r => r.type === 'other').length;
     const matTotal   = matRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const laborTotal = laborRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
@@ -43,7 +42,7 @@ window.DashboardView = function DashboardView() {
     const incomeTotal = incomeGross - incomeFee;      // ยอดรับสุทธิหลังหัก
     const incomeCount = incomeRecs.length;
     const netTotal    = incomeTotal - totalAmount;    // คงเหลือสุทธิ (รับหลังหัก − จ่าย)
-    return { totalAmount, matCount, machCount, laborCount, otherCount, matTotal, laborTotal, whtTotal, retentionTotal, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
+    return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, retentionTotal, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
   }, [app.records]);
 
   // by-project chart (รายจ่ายเท่านั้น)
@@ -245,7 +244,7 @@ window.DashboardView = function DashboardView() {
           </div>
         </div>
         <div className="stat">
-          <div className="stat-label">บิลวัสดุ</div>
+          <div className="stat-label">บิลวัสดุ / เครื่องจักร / อื่นๆ</div>
           <div className="stat-value mono">฿{fmt(stats.matTotal)}</div>
           <div className="stat-delta"><Icon name="cart" size={11} stroke={2.5} /> {fmtInt(stats.matCount)} บิล</div>
           <div className="stat-icon blue"><Icon name="cart" size={18} /></div>
