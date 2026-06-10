@@ -19,13 +19,17 @@ function imgAlt(img, fallback) {
 
 
 // ---- Dashboard ----
+// รายจ่ายจริง = type ที่เป็นบิลค่าใช้จ่าย และต้องไม่ใช่รายรับ (income)
+// หมายเหตุ: รายรับเก็บเป็น type 'other' + meta.kind='income' จึงต้องเช็ค !isIncome ด้วย
+//          มิฉะนั้นรายรับจะถูกนับเป็นรายจ่าย
+const EXPENSE_TYPES = new Set(['material', 'machine', 'other', 'labor', 'lump-labor']);
+const isExpense = (r) => EXPENSE_TYPES.has(r.type) && !window.isIncome(r);
+
 window.DashboardView = function DashboardView() {
   const app = window.useApp();
   const stats = useMemo(() => {
-    // รายจ่ายจริงเท่านั้น — เฉพาะ type ที่เป็นบิลค่าใช้จ่าย
-    // ไม่รวม income, quick-receipt, receipt, tax-invoice, invoice (เป็นเอกสารออกให้ลูกค้า ไม่ใช่รายจ่าย)
-    const EXPENSE_TYPES = new Set(['material', 'machine', 'other', 'labor', 'lump-labor']);
-    const exp = app.records.filter(r => EXPENSE_TYPES.has(r.type));
+    // รายจ่ายจริงเท่านั้น — ไม่รวม income, quick-receipt, receipt, tax-invoice, invoice
+    const exp = app.records.filter(isExpense);
     const allTotals = exp.map((r) => computeTotals(r));
     const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
     // matRecs = material + machine + other (เหมือนกับ HistoryView "ทั้งหมด")
@@ -47,12 +51,11 @@ window.DashboardView = function DashboardView() {
     return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, retentionTotal, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
   }, [app.records]);
 
-  // by-project chart (รายจ่ายจริงเท่านั้น — material/machine/other/labor/lump-labor)
-  const EXPENSE_TYPES_SET = new Set(['material', 'machine', 'other', 'labor', 'lump-labor']);
+  // by-project chart (รายจ่ายจริงเท่านั้น)
   const byProject = useMemo(() => {
     const m = {};
     app.records.forEach((r) => {
-      if (!EXPENSE_TYPES_SET.has(r.type)) return;
+      if (!isExpense(r)) return;
       const t = computeTotals(r).total;
       m[r.projectId] = (m[r.projectId] || 0) + t;
     });
@@ -69,7 +72,7 @@ window.DashboardView = function DashboardView() {
       months.push({ key: d.toISOString().slice(0, 7), label: d.toLocaleDateString('th-TH', { month: 'short' }), mat: 0, mach: 0, labor: 0 });
     }
     app.records.forEach((r) => {
-      if (!EXPENSE_TYPES_SET.has(r.type)) return;
+      if (!isExpense(r)) return;
       const k = (r.date || '').slice(0, 7);
       const m = months.find(x => x.key === k);
       if (!m) return;
@@ -108,7 +111,7 @@ window.DashboardView = function DashboardView() {
         isToday: key === todayKey, mat: 0, mach: 0, labor: 0, count: 0 });
     }
     app.records.forEach(r => {
-      if (!EXPENSE_TYPES_SET.has(r.type)) return;
+      if (!isExpense(r)) return;
       const d = days.find(x => x.key === r.date); if (!d) return;
       const total = computeTotals(r).total;
       if (r.type === 'material') d.mat += total;
@@ -134,7 +137,7 @@ window.DashboardView = function DashboardView() {
           : `${mon.getDate()} ${mon.toLocaleDateString('th-TH', { month: 'short' })}` });
     }
     app.records.forEach(r => {
-      if (!r.date || !EXPENSE_TYPES_SET.has(r.type)) return;
+      if (!r.date || !isExpense(r)) return;
       const w = weeks.find(x => r.date >= x.start && r.date <= x.end); if (!w) return;
       const total = computeTotals(r).total;
       if (r.type === 'material') w.mat += total;
