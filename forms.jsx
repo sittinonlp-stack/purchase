@@ -288,7 +288,7 @@ function DocInfoSection({ docInfo, onChange, autoFilled }) {
 }
 window.DocInfoSection = DocInfoSection;
 
-function VatModeRow({ value, onChange }) {
+function VatModeRow({ value, onChange, allowCash }) {
   return (
     <div className="option-row">
       <button type="button" className={"option-pill" + (value === 'exclusive' ? ' selected' : '')} onClick={() => onChange('exclusive')}>
@@ -299,6 +299,12 @@ function VatModeRow({ value, onChange }) {
         <span className="pill-radio"></span>
         <span>ราคา <strong>รวม</strong> Vat แล้ว</span>
       </button>
+      {allowCash && (
+        <button type="button" className={"option-pill" + (value === 'cash' ? ' selected' : '')} onClick={() => onChange('cash')}>
+          <span className="pill-radio"></span>
+          <span>บิล<strong>เงินสด</strong> (ไม่มี Vat)</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -481,14 +487,20 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
 
               <div className="field">
                 <label className="field-label"><Icon name="money" size={14} /> เงื่อนไข Vat</label>
-                <VatModeRow value={form.vatMode} onChange={(v) => set({ vatMode: v })} />
-                <div className="row gap-8 mt-12">
-                  <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา Vat</span>
-                  <div className="input-affix" style={{ width: 110 }}>
-                    <input className="input mono" type="number" step="0.5" value={form.vatRate} onChange={(e) => set({ vatRate: e.target.value })} />
-                    <div className="input-affix-suffix">%</div>
+                <VatModeRow value={form.vatMode} allowCash onChange={(v) => set(v === 'cash' ? { vatMode: v, vatRate: 0 } : { vatMode: v })} />
+                {form.vatMode === 'cash' ? (
+                  <div className="mt-12" style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
+                    บิลเงินสด — ไม่คิด Vat (อัตรา Vat = 0%)
                   </div>
-                </div>
+                ) : (
+                  <div className="row gap-8 mt-12">
+                    <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา Vat</span>
+                    <div className="input-affix" style={{ width: 110 }}>
+                      <input className="input mono" type="number" step="0.5" value={form.vatRate} onChange={(e) => set({ vatRate: e.target.value })} />
+                      <div className="input-affix-suffix">%</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="field">
@@ -542,7 +554,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
           <div className="card">
             <div className="card-header">
               <div className="card-title">สรุปยอด</div>
-              <span className="badge amber dot">{form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
+              <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
             </div>
             <div className="card-body">
               <div className="summary-rows">
@@ -551,7 +563,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                   <span className="value">{fmt(totals.subTotal)}</span>
                 </div>
                 <div className="summary-row">
-                  <span className="label">Vat {form.vatRate}%</span>
+                  <span className="label">Vat {form.vatMode === 'cash' ? 0 : form.vatRate}%</span>
                   <span className="value">{fmt(totals.vat)}</span>
                 </div>
                 <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
@@ -732,14 +744,20 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
               </div>
               <div className="field">
                 <label className="field-label"><Icon name="money" size={14} /> เงื่อนไข Vat</label>
-                <VatModeRow value={form.vatMode} onChange={(v) => set({ vatMode: v })} />
-                <div className="row gap-8 mt-12">
-                  <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา Vat</span>
-                  <div className="input-affix" style={{ width: 110 }}>
-                    <input className="input mono" type="number" step="0.5" value={form.vatRate} onChange={(e) => set({ vatRate: e.target.value })} />
-                    <div className="input-affix-suffix">%</div>
+                <VatModeRow value={form.vatMode} allowCash onChange={(v) => set(v === 'cash' ? { vatMode: v, vatRate: 0 } : { vatMode: v })} />
+                {form.vatMode === 'cash' ? (
+                  <div className="mt-12" style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
+                    บิลเงินสด — ไม่คิด Vat (อัตรา Vat = 0%)
                   </div>
-                </div>
+                ) : (
+                  <div className="row gap-8 mt-12">
+                    <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>อัตรา Vat</span>
+                    <div className="input-affix" style={{ width: 110 }}>
+                      <input className="input mono" type="number" step="0.5" value={form.vatRate} onChange={(e) => set({ vatRate: e.target.value })} />
+                      <div className="input-affix-suffix">%</div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="field">
                 <label className="field-label"><Icon name="percent" size={14} /> หัก ณ ที่จ่าย</label>
@@ -789,12 +807,12 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
           <div className="card">
             <div className="card-header">
               <div className="card-title">สรุปยอด</div>
-              <span className="badge amber dot">{form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
+              <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
             </div>
             <div className="card-body">
               <div className="summary-rows">
                 <div className="summary-row"><span className="label">ยอดก่อนภาษี</span><span className="value">{fmt(totals.subTotal)}</span></div>
-                <div className="summary-row"><span className="label">Vat {form.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>
+                <div className="summary-row"><span className="label">Vat {form.vatMode === 'cash' ? 0 : form.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>
                 <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
                   <span className="label">รวมก่อนหัก ณ ที่จ่าย</span><span className="value">{fmt(totals.beforeWht)}</span>
                 </div>

@@ -1805,7 +1805,9 @@ window.DetailDrawer = function DetailDrawer() {
               const doc = DOC_TYPES.find(x => x.id === d);
               return <span key={d} className="badge amber">{doc?.label}</span>;
             })}
-            {Number(rec.vatRate) > 0 && <span className="badge gray">{rec.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>}
+            {rec.vatMode === 'cash'
+              ? <span className="badge gray">บิลเงินสด</span>
+              : Number(rec.vatRate) > 0 && <span className="badge gray">{rec.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>}
             {rec.whtEnabled && <span className="badge">หัก ณ ที่จ่าย {rec.whtRate}%</span>}
           </div>
 

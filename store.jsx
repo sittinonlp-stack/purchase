@@ -221,7 +221,12 @@ const computeTotals = (rec) => {
   const whtRate = rec.whtEnabled ? Number(rec.whtRate || 0) / 100 : 0;
 
   let subTotal, vat, beforeWht, wht, total;
-  if (rec.vatMode === 'inclusive') {
+  if (rec.vatMode === 'cash') {
+    // บิลเงินสด — ไม่มี VAT
+    subTotal = subTotalRaw;
+    vat = 0;
+    beforeWht = subTotal;
+  } else if (rec.vatMode === 'inclusive') {
     // entered prices already include VAT
     const gross = subTotalRaw;
     subTotal = gross / (1 + vatRate);
