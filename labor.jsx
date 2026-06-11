@@ -173,7 +173,7 @@ function FormSectionLabel({ children }) {
 }
 
 // ---- Shared: fields สำหรับออกเอกสาร ----
-function DocFields({ needsDoc, setNeedsDoc, fullName, setFullName, idCard, setIdCard, address, setAddress }) {
+function DocFields({ needsDoc, setNeedsDoc, fullName, setFullName, idCard, setIdCard, address, setAddress, docImages, setDocImages }) {
   return (
     <>
       <FormSectionLabel>ข้อมูลสำหรับออกเอกสาร</FormSectionLabel>
@@ -220,6 +220,15 @@ function DocFields({ needsDoc, setNeedsDoc, fullName, setFullName, idCard, setId
               placeholder="เลขที่ หมู่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"
               value={address} onChange={e => setAddress(e.target.value)} />
           </div>
+          {setDocImages && (
+            <div className="field full">
+              <label className="field-label">
+                <Icon name="image" size={13} /> รูปภาพเอกสาร
+                <span style={{ fontWeight: 400, color: 'var(--ink-3)', fontSize: 11, marginLeft: 6 }}>(สำเนาบัตรประชาชน / หนังสือสัญญา — สูงสุด 5 รูป)</span>
+              </label>
+              <window.ImageUploader images={docImages} onChange={setDocImages} max={5} />
+            </div>
+          )}
         </>
       )}
     </>
@@ -240,12 +249,13 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
   const [fullName,  setFullName]  = useState('');
   const [idCard,    setIdCard]    = useState('');
   const [address,   setAddress]   = useState('');
+  const [docImages, setDocImages] = useState([]);
 
   useEffect(() => {
     if (open) {
       setName(''); setLeader(''); setPhone(''); setSize(1);
       setSpecialty(''); setNote(''); setImages([]);
-      setNeedsDoc(false); setFullName(''); setIdCard(''); setAddress('');
+      setNeedsDoc(false); setFullName(''); setIdCard(''); setAddress(''); setDocImages([]);
     }
   }, [open]);
 
@@ -254,7 +264,7 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
     onAdd({
       name: name.trim(), leader: leader.trim(), phone: phone.trim(),
       size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
-      needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(),
+      needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(), docImages,
     });
   };
 
@@ -303,6 +313,7 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
           fullName={fullName} setFullName={setFullName}
           idCard={idCard}     setIdCard={setIdCard}
           address={address}   setAddress={setAddress}
+          docImages={docImages} setDocImages={setDocImages}
         />
       </div>
     </Modal>
@@ -324,6 +335,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
   const [fullName,  setFullName]  = useState('');
   const [idCard,    setIdCard]    = useState('');
   const [address,   setAddress]   = useState('');
+  const [docImages, setDocImages] = useState([]);
 
   useEffect(() => {
     if (open && team) {
@@ -338,6 +350,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
       setFullName(team.fullName || '');
       setIdCard(team.idCard || '');
       setAddress(team.address || '');
+      setDocImages(team.docImages || []);
     }
   }, [open, team]);
 
@@ -346,7 +359,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
     onSave({
       name: name.trim(), leader: leader.trim(), phone: phone.trim(),
       size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
-      needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(),
+      needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(), docImages,
     });
   };
 
@@ -399,6 +412,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
           fullName={fullName} setFullName={setFullName}
           idCard={idCard}     setIdCard={setIdCard}
           address={address}   setAddress={setAddress}
+          docImages={docImages} setDocImages={setDocImages}
         />
       </div>
     </Modal>

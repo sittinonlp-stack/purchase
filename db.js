@@ -33,9 +33,11 @@
       fullName: row.full_name || '',
       idCard:   row.id_card   || '',
       address:  row.address   || '',
+      // ── รูปภาพเอกสาร (migration-worker-team-doc-images.sql) ──
+      docImages: row.doc_images || [],
     };
   }
-  function jsTeam(t, imageUrls) {
+  function jsTeam(t, imageUrls, docImageUrls) {
     return {
       id: t.id, name: t.name,
       leader: t.leader || '', phone: t.phone || '',
@@ -45,6 +47,7 @@
       full_name: t.fullName || '',
       id_card:   t.idCard   || '',
       address:   t.address  || '',
+      doc_images: docImageUrls !== undefined ? docImageUrls : (t.docImages || []),
     };
   }
 
@@ -400,24 +403,26 @@
 
     // ── Worker teams ──────────────────────────────
     async insertWorkerTeam(t) {
-      // อัปโหลดรูปทีมช่าง (base64 → Storage URL) ก่อนบันทึก
-      const imageUrls = await uploadImages(t.images || []);
-      const full = jsTeam(t, imageUrls);
+      // อัปโหลดรูปทีมช่าง + รูปเอกสาร (base64 → Storage URL) ก่อนบันทึก
+      const imageUrls    = await uploadImages(t.images || []);
+      const docImageUrls = await uploadImages(t.docImages || []);
+      const full = jsTeam(t, imageUrls, docImageUrls);
       let { error } = await window.supabaseClient.from('worker_teams').insert(full);
       if (error && isMissingColumnError(error)) {
-        // migration ใหม่ยังไม่ได้รัน (images / doc fields) → retry ไม่รวมคอลัมน์ใหม่
-        const { images, needs_doc, full_name, id_card, address, ...base } = full;
+        // migration ใหม่ยังไม่ได้รัน (images / doc_images / doc fields) → retry ไม่รวมคอลัมน์ใหม่
+        const { images, doc_images, needs_doc, full_name, id_card, address, ...base } = full;
         ({ error } = await window.supabaseClient.from('worker_teams').insert(base));
       }
       if (error) throw error;
     },
     async updateWorkerTeam(id, patch) {
-      const imageUrls = await uploadImages(patch.images || []);
-      const full = jsTeam({ ...patch, id }, imageUrls);
+      const imageUrls    = await uploadImages(patch.images || []);
+      const docImageUrls = await uploadImages(patch.docImages || []);
+      const full = jsTeam({ ...patch, id }, imageUrls, docImageUrls);
       let { error } = await window.supabaseClient.from('worker_teams').update(full).eq('id', id);
       if (error && isMissingColumnError(error)) {
-        // migration ใหม่ยังไม่ได้รัน (images / doc fields) → retry ไม่รวมคอลัมน์ใหม่
-        const { images, needs_doc, full_name, id_card, address, ...base } = full;
+        // migration ใหม่ยังไม่ได้รัน (images / doc_images / doc fields) → retry ไม่รวมคอลัมน์ใหม่
+        const { images, doc_images, needs_doc, full_name, id_card, address, ...base } = full;
         ({ error } = await window.supabaseClient.from('worker_teams').update(base).eq('id', id));
       }
       if (error) throw error;

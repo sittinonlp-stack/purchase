@@ -1520,7 +1520,7 @@ window.TeamsView = function TeamsView() {
                 </div>
 
                 {/* ข้อมูลเอกสาร — แสดงเมื่อ needsDoc */}
-                {t.needsDoc && (t.fullName || t.idCard || t.address) && (
+                {t.needsDoc && (t.fullName || t.idCard || t.address || (t.docImages && t.docImages.length > 0)) && (
                   <div style={{
                     padding: '10px 12px', borderRadius: 8, marginBottom: 12,
                     background: 'rgba(37,99,235,0.05)', border: '1px solid rgba(37,99,235,0.18)',
@@ -1529,6 +1529,21 @@ window.TeamsView = function TeamsView() {
                     {t.fullName && <div><span style={{ color:'#6b7280' }}>ชื่อจริง:</span> <strong>{t.fullName}</strong></div>}
                     {t.idCard   && <div><span style={{ color:'#6b7280' }}>บัตรประชาชน:</span> <span className="mono">{t.idCard}</span></div>}
                     {t.address  && <div><span style={{ color:'#6b7280' }}>ที่อยู่:</span> {t.address}</div>}
+                    {t.docImages && t.docImages.length > 0 && (
+                      <>
+                        <div style={{ color:'#6b7280', marginTop: 6, marginBottom: 4 }}>เอกสารแนบ ({t.docImages.length}):</div>
+                        <div className="row gap-6" style={{ flexWrap: 'wrap' }}>
+                          {t.docImages.map((img, i) => (
+                            <a key={i} href={imgSrc(img)} target="_blank" rel="noreferrer">
+                              <img src={imgSrc(img)} alt="เอกสาร" style={{
+                                width: 46, height: 46, borderRadius: 6, objectFit: 'cover',
+                                border: '1px solid rgba(37,99,235,0.3)', cursor: 'pointer', display: 'block',
+                              }} />
+                            </a>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
