@@ -96,6 +96,8 @@
       // ── lightweight flags stored inside meta ──────
       accountingPosted: Boolean((row.meta || {}).accountingPosted),
       approved:         Boolean((row.meta || {}).approved),
+      // ── ผู้สร้างเอกสาร (เก็บใน meta) ──────────────
+      createdBy:        (row.meta || {}).createdBy || null,
       // ── ข้อมูลผู้รับเงิน (labor / lump-labor) ────
       docInfo: (row.meta || {}).docInfo || { name: '', taxId: '', address: '' },
     };
@@ -128,8 +130,8 @@
                                ? depositReturnImageUrls
                                : (rec.depositReturnImages || []),
       deposit_return_note:   rec.depositReturnNote || '',
-      // ── meta JSONB (รวม lightweight flags เช่น accountingPosted, approved) ──
-      meta: { ...(rec.meta || {}), accountingPosted: Boolean(rec.accountingPosted), approved: Boolean(rec.approved), ...(rec.docInfo ? { docInfo: rec.docInfo } : {}) },
+      // ── meta JSONB (รวม lightweight flags เช่น accountingPosted, approved, createdBy) ──
+      meta: { ...(rec.meta || {}), accountingPosted: Boolean(rec.accountingPosted), approved: Boolean(rec.approved), ...(rec.docInfo ? { docInfo: rec.docInfo } : {}), ...(rec.createdBy ? { createdBy: rec.createdBy } : {}) },
     };
   }
 

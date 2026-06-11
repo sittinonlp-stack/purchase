@@ -1661,6 +1661,12 @@ window.DetailDrawer = function DetailDrawer() {
                 {(isLaborType || window.isIncome(rec)) && rec.period && <span className="badge gray">{rec.period}</span>}
               </div>
               <h2 style={{ fontSize: 20 }}>{rec.vendor}</h2>
+              {rec.createdBy?.name && (
+                <div className="text-small text-muted" style={{ marginTop: 3, fontSize: 11.5 }}>
+                  บันทึกโดย {rec.createdBy.name}
+                  {rec.createdBy.at && ` · ${fmtDate(rec.createdBy.at)}`}
+                </div>
+              )}
             </div>
             {app.isAdmin && (
               <button className="btn btn-ghost btn-sm" onClick={() => {

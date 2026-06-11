@@ -611,11 +611,15 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── Records ─────────────────────────────────────────
   const addRecord = useCallback((rec) => {
-    const newRec = { ...rec, id: newId() };
+    // บันทึกผู้สร้างเอกสาร (snapshot ชื่อ ณ ตอนสร้าง) — ถ้ามีโปรไฟล์ผู้ใช้
+    const creator = userProfile
+      ? { id: userProfile.id, name: userProfile.full_name || userProfile.email || '', at: new Date().toISOString() }
+      : (rec.createdBy || null);
+    const newRec = { ...rec, id: newId(), createdBy: creator };
     setRecords((r) => [newRec, ...r]);
     if (dbOnline) dbSync(window.db.insertRecord(newRec), 'insertRecord');
     return newRec;
-  }, [dbOnline, dbSync]);
+  }, [dbOnline, dbSync, userProfile]);
 
   const updateRecord = useCallback((id, patch) => {
     setRecords((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
