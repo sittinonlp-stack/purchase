@@ -35,6 +35,10 @@ ALTER TABLE records
   ADD COLUMN IF NOT EXISTS deposit_return_images JSONB   NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS deposit_return_note   TEXT    NOT NULL DEFAULT '';
 
+-- เพิ่มคอลัมน์รูปภาพทีมช่าง
+ALTER TABLE worker_teams
+  ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}';
+
 DO $$
 BEGIN
   IF NOT EXISTS (

@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS worker_teams (
   size        INTEGER          DEFAULT 1,
   specialty   TEXT             DEFAULT '',
   note        TEXT             DEFAULT '',
+  images      TEXT[]           DEFAULT '{}',
   created_at  TIMESTAMPTZ      DEFAULT NOW()
 );
 
