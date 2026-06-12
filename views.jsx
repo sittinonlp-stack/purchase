@@ -25,11 +25,38 @@ function imgAlt(img, fallback) {
 const EXPENSE_TYPES = new Set(['material', 'machine', 'other', 'labor', 'lump-labor']);
 const isExpense = (r) => EXPENSE_TYPES.has(r.type) && !window.isIncome(r);
 
+// 'YYYY-MM' → ป้ายเดือนภาษาไทย เช่น "มิถุนายน 2569"
+function monthLabelTH(ym) {
+  if (!ym) return '';
+  const [y, mo] = ym.split('-');
+  return new Date(Number(y), Number(mo) - 1, 1)
+    .toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+}
+
 window.DashboardView = function DashboardView() {
   const app = window.useApp();
+
+  // ── ตัวเลือกช่วงเวลา: เดือนล่าสุด (ค่าเริ่มต้น) / เลือกเดือน / ทั้งหมด ──
+  const monthsAvailable = useMemo(() => {
+    const set = new Set();
+    app.records.forEach(r => { const k = (r.date || '').slice(0, 7); if (k) set.add(k); });
+    return [...set].sort().reverse(); // เดือนล่าสุดอยู่หน้าสุด
+  }, [app.records]);
+  const [periodMode, setPeriodMode] = useState('month'); // 'month' | 'all'
+  const [selMonth, setSelMonth] = useState('');
+  // ตั้งค่าเริ่มต้นเป็นเดือนล่าสุดที่มีข้อมูล
+  useEffect(() => {
+    if (periodMode === 'month' && !selMonth && monthsAvailable.length) setSelMonth(monthsAvailable[0]);
+  }, [monthsAvailable, periodMode, selMonth]);
+  const activeMonth = selMonth || (monthsAvailable[0] || '');
+  const periodRecords = useMemo(() => {
+    if (periodMode === 'all' || !activeMonth) return app.records;
+    return app.records.filter(r => (r.date || '').slice(0, 7) === activeMonth);
+  }, [app.records, periodMode, activeMonth]);
+
   const stats = useMemo(() => {
     // รายจ่ายจริงเท่านั้น — ไม่รวม income, quick-receipt, receipt, tax-invoice, invoice
-    const exp = app.records.filter(isExpense);
+    const exp = periodRecords.filter(isExpense);
     const allTotals = exp.map((r) => computeTotals(r));
     const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
     // matRecs = material + machine + other (เหมือนกับ HistoryView "ทั้งหมด")
@@ -48,14 +75,14 @@ window.DashboardView = function DashboardView() {
     const depositTotal = depositRecs.reduce((s, r) => s + Number(r.depositAmount), 0);
     const depositCount = depositRecs.length;
     // ── รายรับ (income) — หักค่าดำเนินการ 15% (เหลือ 85%) ──
-    const incomeRecs  = app.records.filter(r => window.isIncome(r));
+    const incomeRecs  = periodRecords.filter(r => window.isIncome(r));
     const incomeGross = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const incomeFee   = incomeGross * 0.15;          // ค่าดำเนินการ 15%
     const incomeTotal = incomeGross - incomeFee;      // ยอดรับสุทธิหลังหัก
     const incomeCount = incomeRecs.length;
     const netTotal    = incomeTotal - totalAmount;    // คงเหลือสุทธิ (รับหลังหัก − จ่าย)
     return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, depositTotal, depositCount, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
-  }, [app.records]);
+  }, [periodRecords]);
 
   // by-project chart (รายจ่ายจริงเท่านั้น)
   const byProject = useMemo(() => {
@@ -181,11 +208,29 @@ window.DashboardView = function DashboardView() {
           <div className="page-sub">ภาพรวมการจัดซื้อและการเช่าเครื่องจักรของทุกโครงการ</div>
         </div>
         <div className="row gap-8 dash-actions">
+          <select className="select" value={periodMode === 'all' ? 'all' : activeMonth}
+            onChange={(e) => {
+              if (e.target.value === 'all') setPeriodMode('all');
+              else { setPeriodMode('month'); setSelMonth(e.target.value); }
+            }}
+            title="เลือกช่วงเวลาที่ต้องการแสดงยอดรับ-จ่าย">
+            {monthsAvailable.map((m, i) => (
+              <option key={m} value={m}>{monthLabelTH(m)}{i === 0 ? ' (ล่าสุด)' : ''}</option>
+            ))}
+            <option value="all">ทั้งหมด</option>
+          </select>
           <button className="btn btn-accent dash-export" onClick={() => setExportOpen(true)}
             title="ส่งออกรายงาน Excel สำหรับผู้บริหาร">
             <Icon name="download" size={14} /> ส่งออกรายงาน
           </button>
         </div>
+      </div>
+
+      {/* ป้ายบอกช่วงเวลาที่กำลังแสดง */}
+      <div className="text-small text-muted" style={{ marginTop: -8, marginBottom: 16 }}>
+        แสดงยอดของ: <strong style={{ color: 'var(--ink-1)' }}>
+          {periodMode === 'all' ? 'ทุกช่วงเวลา' : (activeMonth ? monthLabelTH(activeMonth) : 'เดือนล่าสุด')}
+        </strong>
       </div>
 
       {/* Pending deposit alert banner */}
