@@ -40,7 +40,13 @@ window.DashboardView = function DashboardView() {
     const matTotal   = matRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const laborTotal = laborRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
-    const retentionTotal = exp.reduce((s, r) => s + Number(r.retentionDeduction || 0), 0);
+    // เงินประกันสินค้า (deposit) — เฉพาะวัสดุ/เครื่องจักร ที่ยังวางอยู่ (รอรับคืน)
+    const depositRecs = exp.filter(r =>
+      (r.type === 'material' || r.type === 'machine') &&
+      Number(r.depositAmount) > 0 &&
+      (!r.depositStatus || r.depositStatus === 'pending'));
+    const depositTotal = depositRecs.reduce((s, r) => s + Number(r.depositAmount), 0);
+    const depositCount = depositRecs.length;
     // ── รายรับ (income) — หักค่าดำเนินการ 15% (เหลือ 85%) ──
     const incomeRecs  = app.records.filter(r => window.isIncome(r));
     const incomeGross = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
@@ -48,7 +54,7 @@ window.DashboardView = function DashboardView() {
     const incomeTotal = incomeGross - incomeFee;      // ยอดรับสุทธิหลังหัก
     const incomeCount = incomeRecs.length;
     const netTotal    = incomeTotal - totalAmount;    // คงเหลือสุทธิ (รับหลังหัก − จ่าย)
-    return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, retentionTotal, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
+    return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, depositTotal, depositCount, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
   }, [app.records]);
 
   // by-project chart (รายจ่ายจริงเท่านั้น)
@@ -263,9 +269,9 @@ window.DashboardView = function DashboardView() {
           <div className="stat-icon" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)' }}><Icon name="hammer" size={18} /></div>
         </div>
         <div className="stat">
-          <div className="stat-label">เงินประกันสะสม</div>
-          <div className="stat-value mono">฿{fmt(stats.retentionTotal)}</div>
-          <div className="stat-delta"><Icon name="clipboard" size={11} stroke={2.5} /> หัก ณ ที่จ่ายสะสม ฿{fmt(stats.whtTotal)}</div>
+          <div className="stat-label">เงินประกันสินค้า (วัสดุ/เครื่องจักร)</div>
+          <div className="stat-value mono">฿{fmt(stats.depositTotal)}</div>
+          <div className="stat-delta"><Icon name="clipboard" size={11} stroke={2.5} /> {fmtInt(stats.depositCount)} รายการ รอรับคืน · หัก ณ ที่จ่ายสะสม ฿{fmt(stats.whtTotal)}</div>
           <div className="stat-icon green"><Icon name="percent" size={18} /></div>
         </div>
       </div>
@@ -4203,6 +4209,22 @@ window.LaborHistoryView = function LaborHistoryView() {
   const laborSum = filtered.filter(r => r.type === 'labor')     .reduce((s, r) => s + computeTotals(r).total, 0);
   const lumpSum  = filtered.filter(r => r.type === 'lump-labor').reduce((s, r) => s + computeTotals(r).total, 0);
 
+  // เงินประกันผลงานสะสม (retention) — แยกตามทีมช่าง (จากค่าแรงทั้งหมด ไม่ขึ้นกับตัวกรอง)
+  const retentionByTeam = useMemo(() => {
+    const m = {};
+    allLabor.forEach(r => {
+      const ret = Number(r.retentionDeduction || 0);
+      if (ret <= 0) return;
+      const tid = r.workerTeamId || '__none__';
+      if (!m[tid]) m[tid] = { total: 0, count: 0 };
+      m[tid].total += ret;
+      m[tid].count++;
+    });
+    return m;
+  }, [allLabor]);
+  const retentionTotal = Object.values(retentionByTeam).reduce((s, v) => s + v.total, 0);
+  const [retentionOpen, setRetentionOpen] = useState(false);
+
   const usedTeamIds = useMemo(() => new Set(allLabor.map(r => r.workerTeamId).filter(Boolean)), [allLabor]);
   const usedTeams   = useMemo(() => (app.teams || []).filter(t => usedTeamIds.has(t.id)), [app.teams, usedTeamIds]);
 
@@ -4252,7 +4274,51 @@ window.LaborHistoryView = function LaborHistoryView() {
             <Icon name="clipboard" size={18} />
           </div>
         </div>
+        {retentionTotal > 0 && (
+          <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setRetentionOpen(true)}
+            title="คลิกดูรายละเอียดเงินประกันผลงานแยกตามทีมช่าง">
+            <div className="stat-label">เงินประกันผลงานสะสม</div>
+            <div className="stat-value mono" style={{ color: 'var(--info)' }}>{"฿"+fmt(retentionTotal)}</div>
+            <div className="stat-delta"><Icon name="chevron" size={11} stroke={2.5} /> คลิกดูแยกตามทีมช่าง</div>
+            <div className="stat-icon green"><Icon name="percent" size={18} /></div>
+          </div>
+        )}
       </div>
+
+      {/* Modal: เงินประกันผลงานแยกตามทีมช่าง */}
+      {retentionOpen && (
+        <div className="modal-overlay" onClick={() => setRetentionOpen(false)}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">เงินประกันผลงาน แยกตามทีมช่าง</h2>
+              <button className="btn-icon" onClick={() => setRetentionOpen(false)}><Icon name="x" size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="text-small text-muted" style={{ marginBottom: 12 }}>
+                เงินที่หักไว้เป็นประกันผลงานจากค่าแรง — แยกตามทีมที่รับงาน
+              </div>
+              {Object.entries(retentionByTeam)
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([tid, info]) => {
+                  const team = (app.workerTeams || []).find(t => t.id === tid);
+                  return (
+                    <div key={tid} className="row between" style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{team ? team.name : 'ไม่ระบุทีมช่าง'}</div>
+                        <div className="text-small text-muted">{info.count} รายการ</div>
+                      </div>
+                      <div className="mono" style={{ fontWeight: 700, color: 'var(--info)' }}>฿{fmt(info.total)}</div>
+                    </div>
+                  );
+                })}
+              <div className="row between" style={{ paddingTop: 12, fontWeight: 700 }}>
+                <span>รวมทั้งหมด</span>
+                <span className="mono" style={{ color: 'var(--info)' }}>฿{fmt(retentionTotal)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="filter-bar">
