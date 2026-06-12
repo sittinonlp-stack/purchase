@@ -854,17 +854,27 @@ window.ProjectsView = function ProjectsView() {
   const app = window.useApp();
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // project obj | null
+  const [tab, setTab] = useState('active'); // active | archived
 
-  // compute spend per project
+  // เปิดแท็บเก็บถาวรครั้งแรก → โหลด record ของโครงการเก็บถาวรมาแสดงยอด
+  useEffect(() => {
+    if (tab === 'archived' && !app.archivedLoaded) app.loadArchivedRecords();
+  }, [tab, app.archivedLoaded]);
+
+  // compute spend per project — รวม record หลัก (active) + record เก็บถาวรที่โหลดมา
   const stats = useMemo(() => {
     const m = {};
-    app.records.forEach(r => {
+    [...app.records, ...app.archivedRecords].forEach(r => {
       m[r.projectId] = m[r.projectId] || { count: 0, total: 0 };
       m[r.projectId].count++;
       m[r.projectId].total += computeTotals(r).total;
     });
     return m;
-  }, [app.records]);
+  }, [app.records, app.archivedRecords]);
+
+  const shownProjects = app.projects.filter(p =>
+    tab === 'archived' ? p.status === 'archived' : p.status !== 'archived');
+  const archivedCount = app.projects.filter(p => p.status === 'archived').length;
 
   return (
     <>
@@ -878,8 +888,27 @@ window.ProjectsView = function ProjectsView() {
         </button>
       </div>
 
+      {/* แท็บ ดำเนินการ / เก็บถาวร */}
+      <div className="tabs" style={{ marginBottom: 18 }}>
+        <button className={"tab" + (tab === 'active' ? ' active' : '')} onClick={() => setTab('active')}>
+          ดำเนินการ
+        </button>
+        <button className={"tab" + (tab === 'archived' ? ' active' : '')} onClick={() => setTab('archived')}>
+          เก็บถาวร {archivedCount > 0 && <span className="badge gray mono">{archivedCount}</span>}
+        </button>
+      </div>
+
+      {tab === 'archived' && !app.archivedLoaded && (
+        <div className="text-small text-muted" style={{ marginBottom: 14 }}>กำลังโหลดข้อมูลโครงการที่เก็บถาวร…</div>
+      )}
+      {shownProjects.length === 0 && (
+        <div className="text-muted" style={{ padding: '40px 0', textAlign: 'center' }}>
+          {tab === 'archived' ? 'ยังไม่มีโครงการที่เก็บถาวร' : 'ยังไม่มีโครงการ — กดปุ่มเพิ่มโครงการเพื่อเริ่มต้น'}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-        {app.projects.map((p) => {
+        {shownProjects.map((p) => {
           const s = stats[p.id] || { count: 0, total: 0 };
           return (
             <div key={p.id} className="card" style={{ transition: 'transform 200ms, box-shadow 200ms' }}
@@ -892,6 +921,8 @@ window.ProjectsView = function ProjectsView() {
                   <span className="mono text-small text-muted">{p.code}</span>
                   {p.status === 'active'
                     ? <span className="badge green dot">ดำเนินการ</span>
+                    : p.status === 'archived'
+                    ? <span className="badge gray dot">เก็บถาวร</span>
                     : <span className="badge gray dot">ปิดแล้ว</span>}
                 </div>
                 <h3 style={{ fontSize: 16, marginBottom: 4 }}>{p.name}</h3>
@@ -907,9 +938,30 @@ window.ProjectsView = function ProjectsView() {
                   </div>
                 </div>
                 <div className="row gap-8 mt-16">
-                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => app.setView('history')}>
-                    <Icon name="eye" size={12} /> ดูรายการ
-                  </button>
+                  {p.status === 'archived' ? (
+                    app.isAdmin && (
+                      <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} title="นำกลับมาดำเนินการ — จะโหลดรายการกลับและแสดงในภาพรวมอีกครั้ง"
+                        onClick={() => { app.unarchiveProject(p.id); app.pushToast('นำโครงการกลับมาแล้ว'); }}>
+                        <Icon name="history" size={12} /> นำกลับมาดำเนินการ
+                      </button>
+                    )
+                  ) : (
+                    <>
+                      <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => app.setView('history')}>
+                        <Icon name="eye" size={12} /> ดูรายการ
+                      </button>
+                      {app.isAdmin && (
+                        <button className="btn btn-ghost btn-sm" title="เก็บโครงการเข้าคลัง (ข้อมูลยังอยู่ครบ)"
+                          onClick={() => {
+                            if (confirm(`เก็บโครงการ "${p.name}" เข้าคลัง?\n\nข้อมูลทั้งหมดยังอยู่ครบ แต่จะไม่แสดงในแดชบอร์ด/ภาพรวม และช่วยให้ระบบเร็วขึ้น (นำกลับมาได้ภายหลัง)`)) {
+                              app.archiveProject(p.id); app.pushToast('เก็บโครงการเข้าคลังแล้ว');
+                            }
+                          }}>
+                          <Icon name="folder" size={12} /> เก็บ
+                        </button>
+                      )}
+                    </>
+                  )}
                   {app.isAdmin && (
                     <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(p)}>
                       <Icon name="trash" size={12} />

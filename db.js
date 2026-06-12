@@ -274,10 +274,19 @@
         const lightErr = e1 || e2 || e3 || e4 || e7 || e8 || e5;
         if (lightErr) throw lightErr;
 
-        const { data: recs, error: e6 } = await client
+        // Lazy load: ดึงเฉพาะ record ของโครงการที่ยัง active (ไม่รวม archived)
+        // + record ที่ไม่ผูกโครงการ (project_id null) — โครงการ archived โหลด on-demand ภายหลัง
+        const activeIds = (projects || [])
+          .filter(p => (p.status || 'active') !== 'archived')
+          .map(p => p.id);
+        let recQuery = client
           .from('records')
           .select('*, record_items(*), work_logs(*)')
           .order('created_at', { ascending: false });
+        recQuery = activeIds.length
+          ? recQuery.or(`project_id.in.(${activeIds.join(',')}),project_id.is.null`)
+          : recQuery.is('project_id', null);
+        const { data: recs, error: e6 } = await recQuery;
         if (e6) throw e6;
 
         return {
@@ -329,6 +338,16 @@
     async updateProject(id, patch) {
       const { error } = await window.supabaseClient.from('projects').update(jsProject({ ...patch, id })).eq('id', id);
       if (error) throw error;
+    },
+    // โหลด record ของโครงการเดียว (สำหรับโครงการที่เก็บถาวร — โหลดเมื่อต้องการ)
+    async loadProjectRecords(projectId) {
+      const { data, error } = await window.supabaseClient
+        .from('records')
+        .select('*, record_items(*), work_logs(*)')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(dbRecord);
     },
 
     // ── Material categories ───────────────────────

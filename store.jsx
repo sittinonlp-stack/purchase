@@ -292,6 +292,9 @@ window.AppProvider = function AppProvider({ children }) {
   const [otherCats,     setOtherCats]     = useState(SEED_OTHER_CATEGORIES);
   const [workerTeams, setWorkerTeams] = useState(SEED_WORKER_TEAMS);
   const [records,     setRecords]     = useState(seedRecords());
+  // record ของโครงการที่เก็บถาวร — โหลดเมื่อเปิดแท็บ "เก็บถาวร" เท่านั้น (ไม่ปนกับ records หลัก)
+  const [archivedRecords, setArchivedRecords] = useState([]);
+  const [archivedLoaded,  setArchivedLoaded]  = useState(false);
   const [toasts,      setToasts]      = useState([]);
   const [detailId,    setDetailId]    = useState(null);
   const [editingId,   setEditingId]   = useState(null);
@@ -467,6 +470,11 @@ window.AppProvider = function AppProvider({ children }) {
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
 
+  // Ref ของ projects ล่าสุด — ใช้ใน realtime handler เพื่อเช็คสถานะโครงการ
+  // โดยไม่ต้อง re-register subscription ทุกครั้งที่ projects เปลี่ยน
+  const projectsRef = useRef(projects);
+  useEffect(() => { projectsRef.current = projects; }, [projects]);
+
   // When the tab is backgrounded for a long time, Supabase's auto-refresh timer
   // gets throttled by the browser. On returning we silently verify the token.
   // We do NOT call loadProfileAndData here — that sets setDbReady(false) which
@@ -539,7 +547,10 @@ window.AppProvider = function AppProvider({ children }) {
             next[idx] = rec;
             return next;
           }
-          return [rec, ...rs]; // ใหม่: เอาขึ้นบนสุด
+          // ใหม่: ข้ามถ้าเป็น record ของโครงการที่เก็บถาวร (ไม่ดึงเข้า memory หลัก)
+          const proj = projectsRef.current.find((p) => p.id === rec.projectId);
+          if (rec.projectId && proj && proj.status === 'archived') return rs;
+          return [rec, ...rs]; // เอาขึ้นบนสุด
         });
       },
       onRecordDelete: removeById(setRecords),
@@ -696,12 +707,56 @@ window.AppProvider = function AppProvider({ children }) {
   }, [dbOnline, dbSync]);
 
   const deleteProject = useCallback((id) => {
-    // ลบรายการทั้งหมดในโครงการออกจาก state ก่อน
+    // ลบรายการทั้งหมดในโครงการออกจาก state ก่อน (ทั้ง active และที่เก็บถาวร)
     setRecords((rs) => rs.filter((r) => r.projectId !== id));
+    setArchivedRecords((rs) => rs.filter((r) => r.projectId !== id));
     setProjects((ps) => ps.filter((p) => p.id !== id));
     // cascade ใน DB: ลบ records → record_items + work_logs → project
     if (dbOnline) dbSync(window.db.deleteProjectCascade(id), 'deleteProjectCascade');
   }, [dbOnline, dbSync]);
+
+  const updateProject = useCallback((id, patch) => {
+    setProjects((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    if (dbOnline) dbSync(window.db.updateProject(id, patch), 'updateProject');
+  }, [dbOnline, dbSync]);
+
+  // เก็บโครงการเข้าคลัง — เปลี่ยนสถานะ + เอา record ออกจาก memory (แดชบอร์ดเลิกนับ + เบาลง)
+  const archiveProject = useCallback((id) => {
+    updateProject(id, { status: 'archived' });
+    setRecords((rs) => rs.filter((r) => r.projectId !== id));
+    setArchivedLoaded(false); // ให้แท็บเก็บถาวรโหลดใหม่ครั้งหน้า
+  }, [updateProject]);
+
+  // นำกลับมา — เปลี่ยนสถานะ active + โหลด record กลับเข้า memory
+  const unarchiveProject = useCallback(async (id) => {
+    updateProject(id, { status: 'active' });
+    setArchivedRecords((rs) => rs.filter((r) => r.projectId !== id));
+    if (dbOnline) {
+      try {
+        const recs = await window.db.loadProjectRecords(id);
+        setRecords((rs) => {
+          const have = new Set(rs.map((r) => r.id));
+          return [...recs.filter((r) => !have.has(r.id)), ...rs];
+        });
+      } catch (err) {
+        console.warn('[DB] โหลด record โครงการที่นำกลับมาไม่สำเร็จ:', err);
+      }
+    }
+  }, [dbOnline, updateProject]);
+
+  // โหลด record ของโครงการที่เก็บถาวรทั้งหมด (เรียกเมื่อเปิดแท็บ "เก็บถาวร")
+  const loadArchivedRecords = useCallback(async () => {
+    if (!dbOnline) { setArchivedLoaded(true); return; }
+    const archived = projects.filter((p) => p.status === 'archived');
+    if (!archived.length) { setArchivedRecords([]); setArchivedLoaded(true); return; }
+    try {
+      const results = await Promise.all(archived.map((p) => window.db.loadProjectRecords(p.id)));
+      setArchivedRecords(results.flat());
+      setArchivedLoaded(true);
+    } catch (err) {
+      console.warn('[DB] โหลด record โครงการเก็บถาวรไม่สำเร็จ:', err);
+    }
+  }, [dbOnline, projects]);
 
   // ── Material categories ───────────────────────────────
   const addMatCat = useCallback((c) => {
@@ -818,7 +873,8 @@ window.AppProvider = function AppProvider({ children }) {
     view, setView,
     sidebarOpen, setSidebarOpen,
     session, userProfile, isAdmin, signOut, dbOnline, updateMyProfile,
-    projects, addProject, deleteProject,
+    projects, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
+    archivedRecords, archivedLoaded, loadArchivedRecords,
     matCats, addMatCat, updateMatCat, deleteMatCat,
     machCats, addMachCat, updateMachCat, deleteMachCat,
     laborCats, addLaborCat, updateLaborCat, deleteLaborCat,
@@ -831,7 +887,8 @@ window.AppProvider = function AppProvider({ children }) {
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, signOut, dbOnline,
        projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, records, toasts, detailId, editingId,
-       addRecord, updateRecord, deleteRecord, addProject, deleteProject,
+       archivedRecords, archivedLoaded, loadArchivedRecords,
+       addRecord, updateRecord, deleteRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
        addLaborCat, updateLaborCat, deleteLaborCat, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
        addOtherCat, updateOtherCat, deleteOtherCat,

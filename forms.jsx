@@ -10,12 +10,14 @@ function ProjectPicker({ value, onChange, projects, onAdd }) {
   const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 300 });
   const btnRef = useRef(null);
   const cur = projects.find((p) => p.id === value);
+  // ซ่อนโครงการที่เก็บถาวร — แต่คงโครงการปัจจุบันของบิลไว้ (เผื่อเปิดบิลเก่ามาดู)
+  const visibleProjects = projects.filter((p) => p.status !== 'archived' || p.id === value);
 
   const handleToggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
-      const dropH = Math.min(projects.length * 46 + 52, 340);
+      const dropH = Math.min(visibleProjects.length * 46 + 52, 340);
       const top = spaceBelow < dropH && r.top > dropH ? r.top - dropH - 2 : r.bottom + 4;
       setDropPos({ top, left: r.left, width: r.width });
     }
@@ -54,7 +56,7 @@ function ProjectPicker({ value, onChange, projects, onAdd }) {
             background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10,
             boxShadow: '0 8px 32px rgba(0,0,0,0.22)', overflow: 'hidden', maxHeight: 340, overflowY: 'auto'
           }}>
-            {projects.map((p) => (
+            {visibleProjects.map((p) => (
               <button key={p.id} type="button"
                 onClick={() => { onChange(p.id); setOpen(false); }}
                 style={{
