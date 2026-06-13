@@ -167,9 +167,70 @@ window.CategorySelect = CategorySelect;
 window.ProjectPicker = ProjectPicker;
 
 function ItemsTable({ items, setItems, cats, onAddCat, type }) {
+  const app = window.useApp();
   const updateItem = (id, patch) => setItems(items.map((i) => i.id === id ? { ...i, ...patch } : i));
   const removeItem = (id) => setItems(items.filter((i) => i.id !== id));
   const addItem = () => setItems([...items, { id: newId(), name: '', categoryId: '', qty: 1, unit: type === 'machine' ? 'วัน' : 'ชิ้น', price: 0 }]);
+
+  // ── สแกนรายการจากรูปด้วย AI ──────────────────────────
+  const [scanning, setScanning] = useState(false);
+  const scanInputRef = useRef(null);
+
+  // ย่อรูปด้วย canvas ก่อนส่ง (ลด payload + ค่า API + เลี่ยง body limit ของ Vercel)
+  const resizeToBase64 = (file) => new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const maxW = 1600;
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]); // เฉพาะส่วน base64
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('โหลดรูปไม่สำเร็จ')); };
+    img.src = url;
+  });
+
+  const handleScanFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // reset ให้เลือกไฟล์เดิมซ้ำได้
+    if (!file) return;
+    setScanning(true);
+    try {
+      const base64 = await resizeToBase64(file);
+      const resp = await fetch('/api/scan-receipt', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || 'อ่านรูปไม่สำเร็จ');
+      const scanned = (data.items || []).filter(it => (it.name || '').trim());
+      if (!scanned.length) { app.pushToast('ไม่พบรายการสินค้าในรูป ลองถ่ายให้ชัดขึ้น', 'error'); return; }
+      const newRows = scanned.map(it => ({
+        id: newId(),
+        name: String(it.name || '').trim(),
+        categoryId: '',
+        qty: Number(it.qty) > 0 ? Number(it.qty) : 1,
+        unit: String(it.unit || '').trim() || (type === 'machine' ? 'วัน' : 'ชิ้น'),
+        price: Number(it.price) >= 0 ? Number(it.price) : 0,
+      }));
+      // คงแถวที่กรอกชื่อไว้แล้ว แทนแถวว่าง แล้วต่อด้วยรายการที่สแกนได้
+      const nonEmpty = items.filter(it => (it.name || '').trim());
+      setItems([...nonEmpty, ...newRows]);
+      app.pushToast(`สแกนสำเร็จ — เพิ่ม ${newRows.length} รายการ`);
+    } catch (err) {
+      console.error('[scan] error:', err);
+      app.pushToast(err.message || 'อ่านรูปไม่สำเร็จ ลองใหม่อีกครั้ง', 'error');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   return (
     <div className="col gap-8" style={{ overflowX: 'auto' }}>
       <table className="items-table" style={{ minWidth: 780 }}>
@@ -217,9 +278,18 @@ function ItemsTable({ items, setItems, cats, onAddCat, type }) {
           ))}
         </tbody>
       </table>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={addItem} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
-        <Icon name="plus" size={13} /> เพิ่มรายการ
-      </button>
+      <div className="row gap-8" style={{ alignSelf: 'flex-start', marginTop: 4, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>
+          <Icon name="plus" size={13} /> เพิ่มรายการ
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={scanning}
+          onClick={() => scanInputRef.current && scanInputRef.current.click()}
+          title="ถ่าย/เลือกรูปใบสั่งซื้อหรือใบเสร็จ แล้วให้ AI กรอกรายการให้อัตโนมัติ">
+          <Icon name="camera" size={13} /> {scanning ? 'กำลังสแกน…' : 'สแกนจากรูป'}
+        </button>
+        <input ref={scanInputRef} type="file" accept="image/*" capture="environment"
+          style={{ display: 'none' }} onChange={handleScanFile} />
+      </div>
     </div>
   );
 }
