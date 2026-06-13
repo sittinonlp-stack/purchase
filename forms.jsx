@@ -402,6 +402,9 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
     vatRate: 7,
     whtEnabled: false,
     whtRate: 3,
+    discountEnabled: false,
+    discountType: 'baht',
+    discountValue: 0,
     docs: [],
     note: '',
     images: [],
@@ -602,6 +605,35 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                   )}
                 </div>
               </div>
+
+              <div className="field">
+                <label className="field-label"><Icon name="tag" size={14} /> ส่วนลด</label>
+                <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <Switch
+                      on={form.discountEnabled}
+                      onChange={(v) => set({ discountEnabled: v })}
+                      label={form.discountEnabled ? 'มีส่วนลด' : 'ไม่มีส่วนลด'}
+                      sub={form.discountEnabled ? 'หักจากยอดรวมก่อน Vat' : 'แตะเพื่อใส่ส่วนลด / คูปอง'}
+                    />
+                  </div>
+                  {form.discountEnabled && (
+                    <div className="col gap-8" style={{ minWidth: 220 }}>
+                      <div className="field-label" style={{ fontSize: 11.5 }}>รูปแบบส่วนลด</div>
+                      <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+                        <div className="option-row">
+                          <OptionPill mode="radio" selected={form.discountType === 'baht'} onClick={() => set({ discountType: 'baht' })}>฿ บาท</OptionPill>
+                          <OptionPill mode="radio" selected={form.discountType === 'percent'} onClick={() => set({ discountType: 'percent' })}>% เปอร์เซ็นต์</OptionPill>
+                        </div>
+                        <div className="input-affix" style={{ width: 150 }}>
+                          <input className="input mono" type="number" min="0" step="any" placeholder="0" value={form.discountValue} onChange={(e) => set({ discountValue: e.target.value })} />
+                          <div className="input-affix-suffix">{form.discountType === 'percent' ? '%' : '฿'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -627,6 +659,12 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
             <div className="card-body form-summary-bar">
               <div className="summary-chips">
                 <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
+                {form.discountEnabled && Number(form.discountValue) > 0 && (
+                  <div className="summary-chip">
+                    <span className="chip-label">ส่วนลด{form.discountType === 'percent' ? ` ${form.discountValue}%` : ''}</span>
+                    <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.discountAmt)}</span>
+                  </div>
+                )}
                 <div className="summary-chip">
                   <span className="chip-label">ยอดก่อนภาษี</span>
                   <span className="chip-value">{fmt(totals.subTotal)}</span>
@@ -693,6 +731,9 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
     vatRate: 7,
     whtEnabled: false,
     whtRate: 3,
+    discountEnabled: false,
+    discountType: 'baht',
+    discountValue: 0,
     docs: [],
     note: '',
     images: [],
@@ -824,6 +865,35 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
                   )}
                 </div>
               </div>
+
+              <div className="field">
+                <label className="field-label"><Icon name="tag" size={14} /> ส่วนลด</label>
+                <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <Switch
+                      on={form.discountEnabled}
+                      onChange={(v) => set({ discountEnabled: v })}
+                      label={form.discountEnabled ? 'มีส่วนลด' : 'ไม่มีส่วนลด'}
+                      sub={form.discountEnabled ? 'หักจากยอดรวมก่อน Vat' : 'แตะเพื่อใส่ส่วนลด / คูปอง'}
+                    />
+                  </div>
+                  {form.discountEnabled && (
+                    <div className="col gap-8" style={{ minWidth: 220 }}>
+                      <div className="field-label" style={{ fontSize: 11.5 }}>รูปแบบส่วนลด</div>
+                      <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+                        <div className="option-row">
+                          <OptionPill mode="radio" selected={form.discountType === 'baht'} onClick={() => set({ discountType: 'baht' })}>฿ บาท</OptionPill>
+                          <OptionPill mode="radio" selected={form.discountType === 'percent'} onClick={() => set({ discountType: 'percent' })}>% เปอร์เซ็นต์</OptionPill>
+                        </div>
+                        <div className="input-affix" style={{ width: 150 }}>
+                          <input className="input mono" type="number" min="0" step="any" placeholder="0" value={form.discountValue} onChange={(e) => set({ discountValue: e.target.value })} />
+                          <div className="input-affix-suffix">{form.discountType === 'percent' ? '%' : '฿'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -851,6 +921,12 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
             <div className="card-body form-summary-bar">
               <div className="summary-chips">
                 <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
+                {form.discountEnabled && Number(form.discountValue) > 0 && (
+                  <div className="summary-chip">
+                    <span className="chip-label">ส่วนลด{form.discountType === 'percent' ? ` ${form.discountValue}%` : ''}</span>
+                    <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.discountAmt)}</span>
+                  </div>
+                )}
                 <div className="summary-chip">
                   <span className="chip-label">ยอดก่อนภาษี</span>
                   <span className="chip-value">{fmt(totals.subTotal)}</span>

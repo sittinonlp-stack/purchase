@@ -217,23 +217,31 @@ const DOC_TYPES = [
 // ---- Compute totals ----
 const computeTotals = (rec) => {
   const subTotalRaw = (rec.items || []).reduce((s, it) => s + (Number(it.qty || 0) * Number(it.price || 0)), 0);
+
+  // ส่วนลด — คำนวณก่อน VAT (มาตรฐานใบกำกับภาษีไทย)
+  const discountValue = rec.discountEnabled ? Number(rec.discountValue || 0) : 0;
+  const discountAmt = rec.discountType === 'percent'
+    ? subTotalRaw * (discountValue / 100)
+    : discountValue;
+  const discountedRaw = Math.max(0, subTotalRaw - discountAmt);
+
   const vatRate = Number(rec.vatRate || 0) / 100;
   const whtRate = rec.whtEnabled ? Number(rec.whtRate || 0) / 100 : 0;
 
   let subTotal, vat, beforeWht, wht, total;
   if (rec.vatMode === 'cash') {
     // บิลเงินสด — ไม่มี VAT
-    subTotal = subTotalRaw;
+    subTotal = discountedRaw;
     vat = 0;
     beforeWht = subTotal;
   } else if (rec.vatMode === 'inclusive') {
     // entered prices already include VAT
-    const gross = subTotalRaw;
+    const gross = discountedRaw;
     subTotal = gross / (1 + vatRate);
     vat = gross - subTotal;
     beforeWht = gross;
   } else {
-    subTotal = subTotalRaw;
+    subTotal = discountedRaw;
     vat = subTotal * vatRate;
     beforeWht = subTotal + vat;
   }
@@ -244,7 +252,7 @@ const computeTotals = (rec) => {
   const retention = Number(rec.retentionDeduction || 0);
 
   total = beforeWht - wht - advance - retention;
-  return { subTotal, vat, beforeWht, wht, advance, retention, total };
+  return { subTotal, vat, beforeWht, wht, advance, retention, discountAmt, total };
 };
 
 // ---- Context ----

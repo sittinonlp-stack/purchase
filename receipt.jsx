@@ -1131,6 +1131,12 @@ window.TaxInvoiceForm = function TaxInvoiceForm({ initial, onSubmit, onCancel })
             </div>
             <div className="card-body">
               <div className="summary-rows">
+                {totals.discountAmt > 0 && (
+                  <div className="summary-row">
+                    <span className="label">ส่วนลด{form.discountType === 'percent' ? ` ${form.discountValue}%` : ''}</span>
+                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.discountAmt)}</span>
+                  </div>
+                )}
                 <div className="summary-row">
                   <span className="label">มูลค่าก่อนภาษี</span>
                   <span className="value">{fmt(totals.subTotal)}</span>
@@ -1336,6 +1342,12 @@ function PrintableTaxInvoice({ rec, company, app }) {
           </div>
         </div>
         <div className="rcpt-totals-right">
+          {totals.discountAmt > 0 && (
+            <div className="rcpt-total-row">
+              <span>ส่วนลด{rec.discountType === 'percent' ? ` ${rec.discountValue}%` : ''} / Discount</span>
+              <span className="rcpt-mono">−{fmt(totals.discountAmt)}</span>
+            </div>
+          )}
           <div className="rcpt-total-row">
             <span>มูลค่าก่อนภาษี / Sub-total</span>
             <span className="rcpt-mono">{fmt(totals.subTotal)}</span>
