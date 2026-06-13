@@ -207,8 +207,12 @@ function ItemsTable({ items, setItems, cats, onAddCat, type }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
       });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data.error || 'อ่านรูปไม่สำเร็จ');
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        const msg = (data && data.error) || `เรียก API ไม่สำเร็จ (HTTP ${resp.status}) — ตรวจสอบการ deploy และ ANTHROPIC_API_KEY`;
+        throw new Error(msg);
+      }
+      if (!data) throw new Error('ข้อมูลที่ได้รับไม่ถูกต้อง (ไม่ใช่ JSON) — ตรวจสอบการ deploy');
       const scanned = (data.items || []).filter(it => (it.name || '').trim());
       if (!scanned.length) { app.pushToast('ไม่พบรายการสินค้าในรูป ลองถ่ายให้ชัดขึ้น', 'error'); return; }
       const newRows = scanned.map(it => ({
