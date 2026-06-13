@@ -451,9 +451,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
-        {/* Left column: main form — min-width:0 บังคับให้ grid cell ยอม shrink แทนที่จะ overflow */}
-        <div className="col gap-16" style={{ minWidth: 0 }}>
+      <div className="col gap-16" style={{ minWidth: 0 }}>
           {/* Card 1: header info */}
           <div className="card">
             <div className="card-header">
@@ -623,86 +621,57 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Right column: summary */}
-        <div className="form-summary-sticky" style={{ position: 'sticky', top: 84 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">สรุปยอด</div>
-              <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
-            </div>
-            <div className="card-body">
-              <div className="summary-rows">
-                <div className="summary-row">
-                  <span className="label">ยอดก่อนภาษี</span>
-                  <span className="value">{fmt(totals.subTotal)}</span>
+          {/* Summary bar — full width, below all cards */}
+          <div className="card form-summary-bottom">
+            <div className="card-body form-summary-bar">
+              <div className="summary-chips">
+                <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
+                <div className="summary-chip">
+                  <span className="chip-label">ยอดก่อนภาษี</span>
+                  <span className="chip-value">{fmt(totals.subTotal)}</span>
                 </div>
-                <div className="summary-row">
-                  <span className="label">Vat {form.vatMode === 'cash' ? 0 : form.vatRate}%</span>
-                  <span className="value">{fmt(totals.vat)}</span>
-                </div>
-                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
-                  <span className="label">รวมก่อนหัก ณ ที่จ่าย</span>
-                  <span className="value">{fmt(totals.beforeWht)}</span>
+                <div className="summary-chip">
+                  <span className="chip-label">Vat {form.vatMode === 'cash' ? 0 : form.vatRate}%</span>
+                  <span className="chip-value">{fmt(totals.vat)}</span>
                 </div>
                 {form.whtEnabled && (
-                  <div className="summary-row">
-                    <span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span>
-                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
+                  <div className="summary-chip">
+                    <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                    <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
                   </div>
                 )}
-                <div className="summary-row total">
-                  <span className="label">ยอดสุทธิ</span>
-                  <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
-                </div>
                 {Number(form.depositAmount) > 0 && (
-                  <div className="summary-row" style={{ borderTop:'1px dashed rgba(59,130,246,0.4)', paddingTop:10, marginTop:4 }}>
-                    <span className="label" style={{ color:'#3b82f6', display:'flex', alignItems:'center', gap:5 }}>
-                      <Icon name="bell" size={11} /> เงินค่าประกัน (ติดตามแยก)
-                    </span>
-                    <span className="value" style={{ color:'#3b82f6' }}>฿{fmt(Number(form.depositAmount))}</span>
+                  <div className="summary-chip">
+                    <span className="chip-label"><Icon name="bell" size={10} /> เงินค่าประกัน</span>
+                    <span className="chip-value" style={{ color: '#3b82f6' }}>฿{fmt(Number(form.depositAmount))}</span>
                   </div>
                 )}
-              </div>
-
-              <div className="mt-20" style={{ padding: 14, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="sparkle" size={13} /> เคล็ดลับ
+                <div className="summary-chip total">
+                  <span className="chip-label">ยอดสุทธิ</span>
+                  <span className="chip-value">{fmt(totals.total)} <span className="chip-unit">บาท</span></span>
                 </div>
-                ระบบจะคำนวณ Vat และหัก ณ ที่จ่ายให้อัตโนมัติ — เลือก "ราคารวม Vat" ถ้าใบเสนอราคาบอกราคาท้ายที่สุดมาแล้ว
               </div>
-
-              {form.docs.length > 0 && (
-                <div className="mt-16">
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>เอกสารที่จะออก</div>
-                  <div className="row gap-8 wrap">
-                    {form.docs.map((d) => {
-                      const doc = DOC_TYPES.find(x => x.id === d);
-                      return <span key={d} className="badge amber">{doc?.label}</span>;
-                    })}
-                  </div>
-                </div>
-              )}
+              <div className="row gap-8 summary-bar-actions">
+                <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
+                <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+              </div>
             </div>
-          </div>
-
-          <div className="row gap-8 mt-16">
-            <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
-            <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+            {form.docs.length > 0 && (
+              <div style={{ padding: '0 20px 14px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>เอกสาร:</span>
+                {form.docs.map((d) => {
+                  const doc = DOC_TYPES.find(x => x.id === d);
+                  return <span key={d} className="badge amber">{doc?.label}</span>;
+                })}
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
       {/* Add category modal */}
       <AddCategoryModal open={catModalOpen} onClose={() => setCatModalOpen(false)} onAdd={(c) => { addCat(c); app.pushToast('เพิ่มหมวดหมู่แล้ว'); setCatModalOpen(false); }} title={type === 'machine' ? 'เพิ่มหมวดหมู่เครื่องจักร' : 'เพิ่มหมวดหมู่วัสดุ'} />
       <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
-
-      <style>{`
-        @media (max-width: 860px) {
-          .form-layout { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
     </>
   );
 };
@@ -757,9 +726,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
-        {/* Left column — min-width:0 บังคับให้ grid cell ยอม shrink แทนที่จะ overflow */}
-        <div className="col gap-16" style={{ minWidth: 0 }}>
+      <div className="col gap-16" style={{ minWidth: 0 }}>
           {/* Card 1: header */}
           <div className="card">
             <div className="card-header">
@@ -878,46 +845,41 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
           </div>
         </div>
 
-        {/* Right column: summary */}
-        <div className="form-summary-sticky" style={{ position: 'sticky', top: 84 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">สรุปยอด</div>
-              <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
-            </div>
-            <div className="card-body">
-              <div className="summary-rows">
-                <div className="summary-row"><span className="label">ยอดก่อนภาษี</span><span className="value">{fmt(totals.subTotal)}</span></div>
-                <div className="summary-row"><span className="label">Vat {form.vatMode === 'cash' ? 0 : form.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>
-                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
-                  <span className="label">รวมก่อนหัก ณ ที่จ่าย</span><span className="value">{fmt(totals.beforeWht)}</span>
+
+          {/* Summary bar — full width, below all cards */}
+          <div className="card form-summary-bottom">
+            <div className="card-body form-summary-bar">
+              <div className="summary-chips">
+                <span className="badge amber dot">{form.vatMode === 'cash' ? 'บิลเงินสด' : form.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>
+                <div className="summary-chip">
+                  <span className="chip-label">ยอดก่อนภาษี</span>
+                  <span className="chip-value">{fmt(totals.subTotal)}</span>
+                </div>
+                <div className="summary-chip">
+                  <span className="chip-label">Vat {form.vatMode === 'cash' ? 0 : form.vatRate}%</span>
+                  <span className="chip-value">{fmt(totals.vat)}</span>
                 </div>
                 {form.whtEnabled && (
-                  <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>
+                  <div className="summary-chip">
+                    <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                    <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
+                  </div>
                 )}
-                <div className="summary-row total"><span className="label">ยอดสุทธิ</span><span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span></div>
-              </div>
-              <div className="mt-20" style={{ padding: 14, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="sparkle" size={13} /> เคล็ดลับ
+                <div className="summary-chip total">
+                  <span className="chip-label">ยอดสุทธิ</span>
+                  <span className="chip-value">{fmt(totals.total)} <span className="chip-unit">บาท</span></span>
                 </div>
-                ใช้หมวด "ค่าสำรองจ่ายทั่วไป" สำหรับรายจ่ายเบ็ดเตล็ดที่ยังไม่มีหมวดชัดเจน — เพิ่มหมวดใหม่ได้ตลอดเวลา
               </div>
-              <div className="row gap-8 mt-16">
-                <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
+              <div className="row gap-8 summary-bar-actions">
+                <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
                 <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
       <AddCategoryModal open={catModalOpen} onClose={() => setCatModalOpen(false)} onAdd={(c) => { addCat(c); app.pushToast('เพิ่มหมวดหมู่แล้ว'); setCatModalOpen(false); }} title="เพิ่มหมวดหมู่ค่าใช้จ่าย" />
       <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
-
-      <style>{`
-        @media (max-width: 860px) { .form-layout { grid-template-columns: 1fr !important; } }
-      `}</style>
     </>
   );
 };
@@ -995,8 +957,7 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18, alignItems: 'start' }} className="form-layout">
-        <div className="col gap-16" style={{ minWidth: 0 }}>
+      <div className="col gap-16" style={{ minWidth: 0 }}>
           {/* Card 1: header */}
           <div className="card">
             <div className="card-header">
@@ -1138,31 +1099,26 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
           </div>
         </div>
 
-        {/* Right column: summary */}
-        <div className="form-summary-sticky" style={{ position: 'sticky', top: 84 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">สรุปยอดรายรับ</div>
-              {posted && <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>✓ ลงบัญชีแล้ว</span>}
-            </div>
-            <div className="card-body">
-              <div className="summary-rows">
-                <div className="summary-row total"><span className="label">ยอดรายรับรวม</span><span className="value" style={{ color: '#059669' }}>{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span></div>
+
+          {/* Summary bar — full width, below all cards */}
+          <div className="card form-summary-bottom">
+            <div className="card-body form-summary-bar">
+              <div className="summary-chips">
+                {posted && <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>✓ ลงบัญชีแล้ว</span>}
+                <div className="summary-chip total">
+                  <span className="chip-label">ยอดรายรับรวม</span>
+                  <span className="chip-value" style={{ color: '#059669' }}>{fmt(totals.total)} <span className="chip-unit">บาท</span></span>
+                </div>
               </div>
-              <div className="row gap-8 mt-16">
-                <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
+              <div className="row gap-8 summary-bar-actions">
+                <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
                 <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
       <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
-
-      <style>{`
-        @media (max-width: 860px) { .form-layout { grid-template-columns: 1fr !important; } }
-      `}</style>
     </>
   );
 };

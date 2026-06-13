@@ -719,6 +719,50 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 .summary-row.total .value { color: var(--ink-1); font-size: 22px; font-weight: 600; }
 
 /* ============================
+   Form Summary Bar (below cards)
+   ============================ */
+.form-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.summary-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px 20px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.summary-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.chip-label {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.chip-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+.summary-chip.total .chip-value { font-size: 22px; }
+.chip-unit { font-size: 12px; font-weight: 400; color: var(--ink-3); font-family: inherit; }
+.summary-bar-actions { flex-shrink: 0; display: flex; gap: 8px; }
+
+/* ============================
    Stat cards (dashboard)
    ============================ */
 .stat-grid {
@@ -1239,6 +1283,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   /* sticky summary → normal flow เมื่อ collapse เป็น single column */
   .form-summary-sticky { position: static !important; }
 
+  /* Summary bar: ยอดสุทธิตัวใหญ่ขึ้นนิดหน่อยบน tablet */
+  .summary-chip.total .chip-value { font-size: 20px; }
+
   /* Cat grid */
   .cat-grid { grid-template-columns: 1fr !important; }
 
@@ -1303,8 +1350,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   /* Form grid */
   .form-grid { gap: 12px; }
 
-  /* Summary in form */
+  /* Summary in form (legacy — labor/receipt) */
   .summary-row.total .value { font-size: 18px; }
+
+  /* Summary bar — stack vertically on mobile */
+  .form-summary-bar { flex-direction: column; align-items: stretch; gap: 14px; }
+  .summary-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .summary-chip.total { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line); }
+  .summary-chip.total .chip-value { font-size: 20px; }
+  .summary-bar-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+
+  /* Items table: ซ่อน col หมวดหมู่บนมือถือ */
+  .items-table th:nth-child(2),
+  .items-table td:nth-child(2) { display: none; }
+  .items-table { min-width: 500px !important; }
 
   /* Bar chart */
   .bar-chart { height: 140px; }
