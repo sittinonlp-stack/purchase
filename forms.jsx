@@ -876,7 +876,6 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
               </div>
             </div>
           </div>
-        </div>
 
       <AddCategoryModal open={catModalOpen} onClose={() => setCatModalOpen(false)} onAdd={(c) => { addCat(c); app.pushToast('เพิ่มหมวดหมู่แล้ว'); setCatModalOpen(false); }} title="เพิ่มหมวดหมู่ค่าใช้จ่าย" />
       <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
@@ -1116,7 +1115,6 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
               </div>
             </div>
           </div>
-        </div>
 
       <AddProjectModal open={projModalOpen} onClose={() => setProjModalOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setProjModalOpen(false); }} />
     </>
