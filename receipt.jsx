@@ -2059,7 +2059,8 @@ function PrintableInvoice({ rec, company, app }) {
         <div className="rcpt-signatures">
           <div className="rcpt-sig">
             {company?.preparedBySignature && (
-              <img src={company.preparedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้จัดทำ" />
+              <img src={company.preparedBySignature} alt="ลายเซ็นต์ผู้จัดทำ"
+                style={{ maxHeight: 54, maxWidth: 140, objectFit: 'contain', display: 'block', margin: '0 auto 4px' }} />
             )}
             <div className="rcpt-sig-line"></div>
             <div className="rcpt-sig-label">ผู้จัดทำ / Prepared by</div>
@@ -2069,7 +2070,8 @@ function PrintableInvoice({ rec, company, app }) {
           </div>
           <div className="rcpt-sig">
             {company?.approvedBySignature && (
-              <img src={company.approvedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้อนุมัติ" />
+              <img src={company.approvedBySignature} alt="ลายเซ็นต์ผู้อนุมัติ"
+                style={{ maxHeight: 54, maxWidth: 140, objectFit: 'contain', display: 'block', margin: '0 auto 4px' }} />
             )}
             <div className="rcpt-sig-line"></div>
             <div className="rcpt-sig-label">ผู้อนุมัติ / Approved by</div>
