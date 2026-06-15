@@ -648,6 +648,31 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 /* ============================
+   Signature image picker
+   ============================ */
+.sig-picker { margin-top: 10px; }
+.sig-picker-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border: 1.5px dashed var(--line); border-radius: 8px;
+  background: var(--bg-2); color: var(--ink-2); font-size: 12.5px;
+  cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.sig-picker-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+.sig-picker-preview {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2);
+}
+.sig-picker-img { max-height: 52px; max-width: 160px; object-fit: contain; border-radius: 4px; }
+.sig-picker-remove, .sig-picker-change {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; padding: 3px 8px; border-radius: 6px; cursor: pointer; border: none; background: none;
+}
+.sig-picker-remove { color: var(--danger); }
+.sig-picker-remove:hover { background: rgba(220,38,38,0.08); }
+.sig-picker-change { color: var(--ink-2); }
+.sig-picker-change:hover { background: var(--bg-3); }
+
+/* ============================
    Line items table
    ============================ */
 .items-table {

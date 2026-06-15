@@ -270,6 +270,41 @@ function ImageUploader({ images, onChange, max = 10 }) {
 }
 window.ImageUploader = ImageUploader;
 
+// ---- Signature image picker (single image, compact) ----
+function SignatureImagePicker({ value, onChange, label = 'ลายเซ็นต์' }) {
+  const inputRef = useRef(null);
+  const pick = () => inputRef.current?.click();
+  const onFile = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const dataUrl = await window.compressImageFile(f) || await readFileAsDataUrl(f);
+    if (dataUrl) onChange(dataUrl);
+    e.target.value = '';
+  };
+  return (
+    <div className="sig-picker">
+      {value ? (
+        <div className="sig-picker-preview">
+          <img src={value} alt={label} className="sig-picker-img" />
+          <button type="button" className="sig-picker-remove" onClick={() => onChange('')}>
+            <Icon name="x" size={11} stroke={2.5} /> ลบ
+          </button>
+          <button type="button" className="sig-picker-change" onClick={pick}>
+            <Icon name="upload" size={11} stroke={1.5} /> เปลี่ยน
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="sig-picker-btn" onClick={pick}>
+          <Icon name="pen" size={13} stroke={1.5} />
+          <span>อัพโหลด{label}</span>
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFile} />
+    </div>
+  );
+}
+window.SignatureImagePicker = SignatureImagePicker;
+
 // ---- Sidebar ----
 function Sidebar() {
   const app = window.useApp();

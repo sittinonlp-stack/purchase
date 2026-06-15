@@ -161,7 +161,8 @@ body{
 .rcpt-note{font-size:11px;color:#444;line-height:1.6}
 .rcpt-note-label{color:#666;font-weight:600}
 .rcpt-signatures{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.rcpt-sig{text-align:center;padding-top:26px}
+.rcpt-sig{text-align:center;padding-top:12px}
+.rcpt-sig-img{max-height:56px;max-width:150px;object-fit:contain;display:block;margin:0 auto 4px}
 .rcpt-sig-line{border-bottom:1px solid #000;margin-bottom:4px}
 .rcpt-sig-label{font-size:11px;color:#333}
 .rcpt-sig-name{font-size:11px;color:#000;margin-top:1px}
@@ -1450,8 +1451,10 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
         bankAccountName:  '',
         bankBranch:       '',
         paymentTerms:     'ชำระภายใน 30 วัน นับจากวันที่ออกใบแจ้งหนี้',
-        preparedBy:       '',
-        approvedBy:       '',
+        preparedBy:            '',
+        approvedBy:            '',
+        preparedBySignature:   '',
+        approvedBySignature:   '',
       },
     };
   };
@@ -1701,12 +1704,22 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
                   <input className="input" value={form.meta?.preparedBy || ''}
                     onChange={(e) => setMeta({ preparedBy: e.target.value })}
                     placeholder="ชื่อ-นามสกุล" />
+                  <SignatureImagePicker
+                    value={form.meta?.preparedBySignature || ''}
+                    onChange={(v) => setMeta({ preparedBySignature: v })}
+                    label="ลายเซ็นต์ผู้จัดทำ"
+                  />
                 </div>
                 <div className="field">
                   <label className="field-label">ผู้อนุมัติ</label>
                   <input className="input" value={form.meta?.approvedBy || ''}
                     onChange={(e) => setMeta({ approvedBy: e.target.value })}
                     placeholder="ชื่อ-นามสกุล" />
+                  <SignatureImagePicker
+                    value={form.meta?.approvedBySignature || ''}
+                    onChange={(v) => setMeta({ approvedBySignature: v })}
+                    label="ลายเซ็นต์ผู้อนุมัติ"
+                  />
                 </div>
                 <div className="field full">
                   <label className="field-label">หมายเหตุ</label>
@@ -2024,11 +2037,17 @@ function PrintableInvoice({ rec, company, app }) {
         </div>
         <div className="rcpt-signatures">
           <div className="rcpt-sig">
+            {meta.preparedBySignature && (
+              <img src={meta.preparedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้จัดทำ" />
+            )}
             <div className="rcpt-sig-line"></div>
             <div className="rcpt-sig-label">ผู้จัดทำ / Prepared by</div>
             {meta.preparedBy && <div className="rcpt-sig-name">({meta.preparedBy})</div>}
           </div>
           <div className="rcpt-sig">
+            {meta.approvedBySignature && (
+              <img src={meta.approvedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้อนุมัติ" />
+            )}
             <div className="rcpt-sig-line"></div>
             <div className="rcpt-sig-label">ผู้อนุมัติ / Approved by</div>
             {meta.approvedBy && <div className="rcpt-sig-name">({meta.approvedBy})</div>}
