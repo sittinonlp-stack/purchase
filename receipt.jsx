@@ -77,6 +77,10 @@ const DEFAULT_COMPANY = {
   email:      '',
   taxId:      '',
   logoDataUrl: '',
+  preparedByName:      '',
+  preparedBySignature: '',
+  approvedByName:      '',
+  approvedBySignature: '',
 };
 
 function getCompanySettings() {
@@ -306,6 +310,33 @@ function CompanySettingsModal({ open, onClose, onSaved }) {
                 )}
               </div>
               <div className="field-hint">รูปขนาดไม่เกิน 500KB · แนะนำสี่เหลี่ยมจัตุรัส</div>
+            </div>
+
+            {/* ── ลายเซ็นต์ผู้จัดทำ / ผู้อนุมัติ ── */}
+            <div className="field full" style={{ borderTop: '1px dashed var(--line)', paddingTop: 16, marginTop: 4 }}>
+              <label className="field-label" style={{ fontSize: 13, fontWeight: 600 }}>
+                <Icon name="pen" size={13} /> ลายเซ็นต์ (ใช้กับใบแจ้งหนี้ทุกฉบับ)
+              </label>
+              <div className="form-grid" style={{ marginTop: 12 }}>
+                <div className="field">
+                  <label className="field-label">ชื่อผู้จัดทำเอกสาร</label>
+                  <input className="input" value={c.preparedByName || ''} onChange={(e) => setC({ ...c, preparedByName: e.target.value })} placeholder="ชื่อ-นามสกุล" />
+                  <SignatureImagePicker
+                    value={c.preparedBySignature || ''}
+                    onChange={(v) => setC({ ...c, preparedBySignature: v })}
+                    label="ลายเซ็นต์ผู้จัดทำ"
+                  />
+                </div>
+                <div className="field">
+                  <label className="field-label">ชื่อผู้อนุมัติ</label>
+                  <input className="input" value={c.approvedByName || ''} onChange={(e) => setC({ ...c, approvedByName: e.target.value })} placeholder="ชื่อ-นามสกุล" />
+                  <SignatureImagePicker
+                    value={c.approvedBySignature || ''}
+                    onChange={(v) => setC({ ...c, approvedBySignature: v })}
+                    label="ลายเซ็นต์ผู้อนุมัติ"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1451,10 +1482,8 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
         bankAccountName:  '',
         bankBranch:       '',
         paymentTerms:     'ชำระภายใน 30 วัน นับจากวันที่ออกใบแจ้งหนี้',
-        preparedBy:            '',
-        approvedBy:            '',
-        preparedBySignature:   '',
-        approvedBySignature:   '',
+        preparedBy:  getCompanySettings().preparedByName  || '',
+        approvedBy:  getCompanySettings().approvedByName  || '',
       },
     };
   };
@@ -1704,22 +1733,14 @@ window.InvoiceForm = function InvoiceForm({ initial, onSubmit, onCancel }) {
                   <input className="input" value={form.meta?.preparedBy || ''}
                     onChange={(e) => setMeta({ preparedBy: e.target.value })}
                     placeholder="ชื่อ-นามสกุล" />
-                  <SignatureImagePicker
-                    value={form.meta?.preparedBySignature || ''}
-                    onChange={(v) => setMeta({ preparedBySignature: v })}
-                    label="ลายเซ็นต์ผู้จัดทำ"
-                  />
+                  <div className="field-hint" style={{ marginTop: 6 }}>ลายเซ็นต์ใช้จากการตั้งค่าข้อมูลบริษัท</div>
                 </div>
                 <div className="field">
                   <label className="field-label">ผู้อนุมัติ</label>
                   <input className="input" value={form.meta?.approvedBy || ''}
                     onChange={(e) => setMeta({ approvedBy: e.target.value })}
                     placeholder="ชื่อ-นามสกุล" />
-                  <SignatureImagePicker
-                    value={form.meta?.approvedBySignature || ''}
-                    onChange={(v) => setMeta({ approvedBySignature: v })}
-                    label="ลายเซ็นต์ผู้อนุมัติ"
-                  />
+                  <div className="field-hint" style={{ marginTop: 6 }}>ลายเซ็นต์ใช้จากการตั้งค่าข้อมูลบริษัท</div>
                 </div>
                 <div className="field full">
                   <label className="field-label">หมายเหตุ</label>
@@ -2037,20 +2058,24 @@ function PrintableInvoice({ rec, company, app }) {
         </div>
         <div className="rcpt-signatures">
           <div className="rcpt-sig">
-            {meta.preparedBySignature && (
-              <img src={meta.preparedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้จัดทำ" />
+            {company?.preparedBySignature && (
+              <img src={company.preparedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้จัดทำ" />
             )}
             <div className="rcpt-sig-line"></div>
             <div className="rcpt-sig-label">ผู้จัดทำ / Prepared by</div>
-            {meta.preparedBy && <div className="rcpt-sig-name">({meta.preparedBy})</div>}
+            {(meta.preparedBy || company?.preparedByName) && (
+              <div className="rcpt-sig-name">({meta.preparedBy || company.preparedByName})</div>
+            )}
           </div>
           <div className="rcpt-sig">
-            {meta.approvedBySignature && (
-              <img src={meta.approvedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้อนุมัติ" />
+            {company?.approvedBySignature && (
+              <img src={company.approvedBySignature} className="rcpt-sig-img" alt="ลายเซ็นต์ผู้อนุมัติ" />
             )}
             <div className="rcpt-sig-line"></div>
             <div className="rcpt-sig-label">ผู้อนุมัติ / Approved by</div>
-            {meta.approvedBy && <div className="rcpt-sig-name">({meta.approvedBy})</div>}
+            {(meta.approvedBy || company?.approvedByName) && (
+              <div className="rcpt-sig-name">({meta.approvedBy || company.approvedByName})</div>
+            )}
           </div>
         </div>
       </div>
