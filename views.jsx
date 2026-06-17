@@ -1821,7 +1821,10 @@ window.DetailDrawer = function DetailDrawer() {
               app.setView(v);
               close();
             }}><Icon name="edit" size={13} /> แก้ไข</button>
-            <button className="topbar-icon-btn" onClick={close}><Icon name="x" /></button>
+            <button className="btn btn-ghost btn-sm" onClick={close}>
+              <span style={{ display:'inline-block', transform:'rotate(180deg)', lineHeight:0 }}><Icon name="chevron" size={13} /></span>
+              ย้อนกลับ
+            </button>
           </div>
         </div>
 
