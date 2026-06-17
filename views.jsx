@@ -724,12 +724,12 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
                 <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>อนุมัติ</span>
               </th>
             )}
-            <th style={{ width: 130 }}>เลขที่</th>
-            <th style={{ width: 90 }}>วันที่</th>
-            <th>โครงการ</th>
-            <th>ผู้ขาย</th>
-            <th style={{ width: 100 }}>ประเภท</th>
-            <th style={{ width: 160 }}>เอกสาร</th>
+            <th className="hide-mobile" style={{ width: 130 }}>เลขที่</th>
+            <th className="hide-mobile" style={{ width: 90 }}>วันที่</th>
+            <th className="hide-mobile">โครงการ</th>
+            <th>ผู้ขาย / รายการ</th>
+            <th className="hide-mobile" style={{ width: 100 }}>ประเภท</th>
+            <th className="hide-mobile" style={{ width: 160 }}>เอกสาร</th>
             <th style={{ width: 130 }} className="num">ยอดสุทธิ</th>
           </tr>
         </thead>
@@ -753,16 +753,23 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
                     <ApproveCheckbox record={r} />
                   </td>
                 )}
-                <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
-                <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
-                <td>
+                <td className="mono hide-mobile" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
+                <td className="hide-mobile" style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
+                <td className="hide-mobile">
                   <div className="row gap-8">
                     <span className="proj-chip-dot" style={{ background: proj?.color || '#999' }}></span>
                     <span style={{ fontSize: 13 }}>{proj?.name || '—'}</span>
                   </div>
                 </td>
-                <td style={{ color: 'var(--ink-2)' }}>{r.vendor}</td>
-                <td>
+                <td style={{ color: 'var(--ink-2)' }}>
+                  <div>{r.vendor}</div>
+                  <div className="tbl-sub show-mobile">
+                    <span className="mono">{r.docNo}</span>
+                    {proj && <><span className="proj-chip-dot" style={{ background: proj.color, width: 6, height: 6, display: 'inline-block', borderRadius: '50%', margin: '0 3px 0 6px' }}></span>{proj.name}</>}
+                    {' · '}{fmtDate(r.date)}
+                  </div>
+                </td>
+                <td className="hide-mobile">
                   {r.type === 'material'
                     ? <span className="badge amber dot">วัสดุ</span>
                     : r.type === 'machine'
@@ -783,7 +790,7 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
                     ? <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>📋 ใบแจ้งหนี้</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
-                <td>
+                <td className="hide-mobile">
                   <div className="doc-mini">
                     {r.docs.map((d) => {
                       const doc = DOC_TYPES.find(x => x.id === d);
@@ -1771,8 +1778,8 @@ window.DetailDrawer = function DetailDrawer() {
       <div className="drawer-backdrop" onClick={close}></div>
       <aside className="drawer">
         <div style={{ position: 'sticky', top: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line)', zIndex: 2 }}>
-          <div className="row gap-12" style={{ padding: '18px 24px', alignItems: 'center' }}>
-            <div style={{ flex: 1 }}>
+          <div className="drawer-header-row">
+            <div className="drawer-header-info">
               <div className="row gap-8" style={{ marginBottom: 4 }}>
                 {typeBadge}
                 <span className="mono text-small text-muted">{rec.docNo}</span>
@@ -1894,11 +1901,12 @@ window.DetailDrawer = function DetailDrawer() {
         {/* Items table — ซ่อนสำหรับ quick-receipt */}
         {!isQuickReceipt && <div className="detail-section">
           <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{isLaborType ? `รายการงาน (${rec.items.length})` : `รายการ (${rec.items.length})`}</h3>
-          <table className="items-table">
+          <div style={{ overflowX: 'auto' }}>
+          <table className="items-table" style={{ minWidth: 360 }}>
             <thead>
               <tr>
                 <th>{isLaborType ? 'งาน' : 'รายการ'}</th>
-                <th style={{ width: 100 }}>{isLaborType ? 'หมวดงาน' : 'หมวดหมู่'}</th>
+                <th className="hide-mobile" style={{ width: 100 }}>{isLaborType ? 'หมวดงาน' : 'หมวดหมู่'}</th>
                 <th style={{ width: 90 }} className="num">จำนวน</th>
                 <th style={{ width: 90 }} className="num">ราคา</th>
                 <th style={{ width: 110 }} className="num">รวม</th>
@@ -1909,8 +1917,11 @@ window.DetailDrawer = function DetailDrawer() {
                 const c = cats.find(x => x.id === it.categoryId);
                 return (
                   <tr key={it.id}>
-                    <td style={{ padding: '10px 8px' }}>{it.name}</td>
                     <td style={{ padding: '10px 8px' }}>
+                      {it.name}
+                      {c && <div className="show-mobile tbl-sub"><span className="cat-dot" style={{ background: c.color, width: 6, height: 6, borderRadius: '50%', display: 'inline-block', marginRight: 4 }}></span>{c.name}</div>}
+                    </td>
+                    <td className="hide-mobile" style={{ padding: '10px 8px' }}>
                       {c ? <span className="cat-pill"><span className="cat-dot" style={{ background: c.color }}></span>{c.name}</span> : <span className="text-muted">—</span>}
                     </td>
                     <td style={{ padding: '10px 8px' }} className="num mono">{it.qty} {it.unit}</td>
@@ -1921,6 +1932,7 @@ window.DetailDrawer = function DetailDrawer() {
               })}
             </tbody>
           </table>
+          </div>
         </div>}
 
         {/* Docs & Tax — ซ่อนสำหรับ quick-receipt */}

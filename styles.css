@@ -1251,6 +1251,28 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .topbar-hamburger:hover { background: var(--bg-2); border-color: var(--line); }
 
+/* ── Mobile utility helpers ───────────────────── */
+.hide-mobile { }           /* overridden at ≤680px */
+.show-mobile { display: none; }  /* shown only at ≤680px */
+
+.tbl-sub {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* ── Drawer header row ────────────────────────── */
+.drawer-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 24px;
+  flex-wrap: wrap;
+}
+.drawer-header-info { flex: 1; min-width: 0; }
+.drawer-header-row > button { flex-shrink: 0; }
+
 /* ── Sidebar overlay backdrop ─────────────────── */
 .sidebar-backdrop {
   display: none;
@@ -1413,6 +1435,34 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   .dash-actions .dash-labor   { order: 2; }
   .dash-actions .dash-machine { order: 3; }
   .dash-actions .dash-export  { order: 4; }
+
+  /* ── Mobile utility classes ── */
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: block; }
+
+  /* ── Drawer header: ย้ายปุ่มลง row ล่าง ── */
+  .drawer-header-row { padding: 12px 14px; gap: 8px; }
+  .drawer-header-info { width: 100%; order: 1; margin-bottom: 4px; }
+  .drawer-header-row > button { order: 2; flex: 1; justify-content: center; font-size: 12.5px; padding: 7px 10px; }
+
+  /* ── History table: compact ── */
+  .history-table { font-size: 13px; }
+  .history-table th, .history-table td { padding: 11px 10px; }
+
+  /* ── Detail items table ── */
+  .items-table { min-width: 300px !important; }
+
+  /* ── Bigger touch targets ── */
+  .btn { min-height: 40px; }
+  .btn-sm { min-height: 34px; }
+  input.input, select.select, textarea.textarea { font-size: 16px; } /* ป้องกัน iOS zoom */
+
+  /* ── Form card ── */
+  .card-body { padding: 12px 12px; }
+
+  /* ── Option pills: wrap เต็ม ── */
+  .option-row { flex-wrap: wrap; }
+  .option-pill { flex: 1; min-width: 80px; justify-content: center; }
 }
 
 /* ============================
