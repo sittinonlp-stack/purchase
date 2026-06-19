@@ -793,6 +793,8 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
                     ? <span className="badge dot" style={{ background:'rgba(146,64,14,0.12)', color:'#92400e', borderColor:'rgba(146,64,14,0.3)' }}>🧾 ใบกำกับภาษี</span>
                     : r.type === 'invoice'
                     ? <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>📋 ใบแจ้งหนี้</span>
+                    : r.isRetentionPayout
+                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>คืนประกัน</span>
                     : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
                 </td>
                 <td className="hide-mobile">
@@ -4301,6 +4303,50 @@ window.LaborHistoryView = function LaborHistoryView() {
   const retentionTotal = Object.values(retentionByTeam).reduce((s, v) => s + v.pending, 0);
   const [retentionOpen, setRetentionOpen] = useState(false);
 
+  // ── Payout modal state ──────────────────────────────
+  const [payoutFor,     setPayoutFor]     = useState(null); // { tid, teamName, amount }
+  const [payoutAmount,  setPayoutAmount]  = useState('');
+  const [payoutDate,    setPayoutDate]    = useState('');
+  const [payoutProject, setPayoutProject] = useState('');
+  const [payoutNote,    setPayoutNote]    = useState('');
+
+  const openPayoutModal = (tid, teamName, amount) => {
+    setPayoutFor({ tid, teamName });
+    setPayoutAmount(String(amount));
+    setPayoutDate(todayStr());
+    setPayoutProject('');
+    setPayoutNote('');
+  };
+
+  const handleRetentionPayout = () => {
+    const amt = Number(payoutAmount);
+    if (!amt || amt <= 0) return app.pushToast('โปรดระบุจำนวนเงิน', 'error');
+    const { tid, teamName } = payoutFor;
+    const payoutRec = {
+      type: 'labor',
+      isRetentionPayout: true,
+      docNo: 'RP-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
+      date: payoutDate || todayStr(),
+      projectId: payoutProject || '',
+      workerTeamId: tid === '__none__' ? '' : tid,
+      vendor: teamName,
+      period: 'คืนประกัน',
+      items: [{ id: window.newId(), name: 'จ่ายคืนเงินประกันผลงาน', qty: 1, unit: 'รายการ', price: amt }],
+      vatMode: 'exclusive', vatRate: 0,
+      whtEnabled: false, whtRate: 0,
+      advanceDeduction: 0, retentionDeduction: 0,
+      docs: [], note: payoutNote, images: [], workLogs: [],
+      approved: true,
+    };
+    app.addRecord(payoutRec);
+    allLabor
+      .filter(r => (r.workerTeamId || '__none__') === tid && Number(r.retentionDeduction || 0) > 0 && !r.retentionReturned)
+      .forEach(r => app.updateRecord(r.id, { retentionReturned: true }));
+    app.pushToast('บันทึกจ่ายคืนเงินประกันผลงานแล้ว ✓');
+    setPayoutFor(null);
+    setRetentionOpen(false);
+  };
+
   const usedTeamIds = useMemo(() => new Set(allLabor.map(r => r.workerTeamId).filter(Boolean)), [allLabor]);
   const usedTeams   = useMemo(() => (app.teams || []).filter(t => usedTeamIds.has(t.id)), [app.teams, usedTeamIds]);
 
@@ -4411,14 +4457,9 @@ window.LaborHistoryView = function LaborHistoryView() {
                         </div>
                       </div>
                       {!allReturned && (
-                        <button className="btn btn-sm" style={{ marginTop: 8, width: '100%' }}
-                          onClick={() => {
-                            allLabor
-                              .filter(r => (r.workerTeamId || '__none__') === tid && Number(r.retentionDeduction || 0) > 0 && !r.retentionReturned)
-                              .forEach(r => app.updateRecord(r.id, { retentionReturned: true }));
-                            app.pushToast('บันทึกจ่ายคืนเงินประกันผลงานแล้ว ✓');
-                          }}>
-                          <Icon name="check" size={13} /> บันทึกจ่ายคืน ฿{fmt(info.pending)}
+                        <button className="btn btn-sm btn-accent" style={{ marginTop: 8, width: '100%' }}
+                          onClick={() => openPayoutModal(tid, team ? team.name : 'ไม่ระบุทีมช่าง', info.pending)}>
+                          <Icon name="money" size={13} /> สร้างบันทึกจ่ายคืนเงินประกัน ฿{fmt(info.pending)}
                         </button>
                       )}
                     </div>
@@ -4430,6 +4471,53 @@ window.LaborHistoryView = function LaborHistoryView() {
                   {retentionTotal > 0 ? '฿'+fmt(retentionTotal) : '✓ จ่ายคืนครบแล้ว'}
                 </span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: บันทึกจ่ายคืนเงินประกันผลงาน */}
+      {payoutFor && (
+        <div className="modal-overlay" onClick={() => setPayoutFor(null)} style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">บันทึกจ่ายคืนเงินประกันผลงาน</h2>
+              <button className="btn-icon" onClick={() => setPayoutFor(null)}><Icon name="x" size={16}/></button>
+            </div>
+            <div className="modal-body" style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <div style={{ padding:'10px 14px', background:'var(--bg)', borderRadius:8, fontSize:13, color:'var(--ink-2)' }}>
+                ทีมช่าง: <strong style={{ color:'var(--ink-1)' }}>{payoutFor.teamName}</strong>
+                <div style={{ fontSize:12, marginTop:4, color:'var(--ink-3)' }}>
+                  ระบบจะสร้างบันทึกค่าแรงใหม่ประเภท "จ่ายคืนเงินประกัน" และนับเป็นรายจ่ายด้านบัญชีโดยอัตโนมัติ
+                </div>
+              </div>
+              <div>
+                <label className="field-label">จำนวนเงินที่จ่ายคืน (บาท)</label>
+                <input className="input mono" type="number" min="0" step="any"
+                  value={payoutAmount} onChange={e => setPayoutAmount(e.target.value)} placeholder="0.00"/>
+              </div>
+              <div>
+                <label className="field-label">วันที่จ่ายคืน</label>
+                <input className="input" type="date" value={payoutDate} onChange={e => setPayoutDate(e.target.value)}/>
+              </div>
+              <div>
+                <label className="field-label">โครงการ <span style={{ color:'var(--ink-3)', fontWeight:400 }}>(ถ้ามี)</span></label>
+                <select className="select" value={payoutProject} onChange={e => setPayoutProject(e.target.value)}>
+                  <option value="">— ไม่ระบุโครงการ —</option>
+                  {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="field-label">หมายเหตุ <span style={{ color:'var(--ink-3)', fontWeight:400 }}>(ไม่บังคับ)</span></label>
+                <input className="input" type="text" value={payoutNote} onChange={e => setPayoutNote(e.target.value)}
+                  placeholder="เช่น คืนประกันงวดสุดท้าย หลังตรวจรับงานเรียบร้อย"/>
+              </div>
+            </div>
+            <div style={{ padding:'12px 20px', borderTop:'1px solid var(--line)', display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setPayoutFor(null)}>ยกเลิก</button>
+              <button className="btn btn-accent" onClick={handleRetentionPayout}>
+                <Icon name="check" size={14}/> บันทึกจ่ายคืน ฿{fmt(Number(payoutAmount)||0)}
+              </button>
             </div>
           </div>
         </div>
