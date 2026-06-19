@@ -4286,13 +4286,19 @@ window.LaborHistoryView = function LaborHistoryView() {
       const ret = Number(r.retentionDeduction || 0);
       if (ret <= 0) return;
       const tid = r.workerTeamId || '__none__';
-      if (!m[tid]) m[tid] = { total: 0, count: 0 };
-      m[tid].total += ret;
-      m[tid].count++;
+      if (!m[tid]) m[tid] = { pending: 0, returned: 0, pendingCount: 0, returnedCount: 0 };
+      if (r.retentionReturned) {
+        m[tid].returned += ret;
+        m[tid].returnedCount++;
+      } else {
+        m[tid].pending += ret;
+        m[tid].pendingCount++;
+      }
     });
     return m;
   }, [allLabor]);
-  const retentionTotal = Object.values(retentionByTeam).reduce((s, v) => s + v.total, 0);
+  // retentionTotal = เฉพาะที่ยังไม่ได้จ่ายคืน
+  const retentionTotal = Object.values(retentionByTeam).reduce((s, v) => s + v.pending, 0);
   const [retentionOpen, setRetentionOpen] = useState(false);
 
   const usedTeamIds = useMemo(() => new Set(allLabor.map(r => r.workerTeamId).filter(Boolean)), [allLabor]);
@@ -4358,9 +4364,9 @@ window.LaborHistoryView = function LaborHistoryView() {
         {retentionTotal > 0 && (
           <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setRetentionOpen(true)}
             title="คลิกดูรายละเอียดเงินประกันผลงานแยกตามทีมช่าง">
-            <div className="stat-label">เงินประกันผลงานสะสม</div>
+            <div className="stat-label">เงินประกันผลงานค้างคืน</div>
             <div className="stat-value mono" style={{ color: 'var(--info)' }}>{"฿"+fmt(retentionTotal)}</div>
-            <div className="stat-delta"><Icon name="chevron" size={11} stroke={2.5} /> คลิกดูแยกตามทีมช่าง</div>
+            <div className="stat-delta"><Icon name="chevron" size={11} stroke={2.5} /> คลิกบันทึกจ่ายคืน</div>
             <div className="stat-icon green"><Icon name="percent" size={18} /></div>
           </div>
         )}
@@ -4375,26 +4381,54 @@ window.LaborHistoryView = function LaborHistoryView() {
               <button className="btn-icon" onClick={() => setRetentionOpen(false)}><Icon name="x" size={16} /></button>
             </div>
             <div className="modal-body">
-              <div className="text-small text-muted" style={{ marginBottom: 12 }}>
-                เงินที่หักไว้เป็นประกันผลงานจากค่าแรง — แยกตามทีมที่รับงาน
+              <div className="text-small text-muted" style={{ marginBottom: 16 }}>
+                เงินที่หักไว้เป็นประกันผลงานจากค่าแรง แยกตามทีมช่าง<br/>
+                เมื่อตรวจรับงานเรียบร้อยและจ่ายเงินประกันคืนทีมจริงๆ แล้ว → กดปุ่ม <strong>บันทึกจ่ายคืน</strong>
               </div>
               {Object.entries(retentionByTeam)
-                .sort((a, b) => b[1].total - a[1].total)
+                .sort((a, b) => (b[1].pending + b[1].returned) - (a[1].pending + a[1].returned))
                 .map(([tid, info]) => {
                   const team = (app.workerTeams || []).find(t => t.id === tid);
+                  const allReturned = info.pending === 0;
                   return (
-                    <div key={tid} className="row between" style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{team ? team.name : 'ไม่ระบุทีมช่าง'}</div>
-                        <div className="text-small text-muted">{info.count} รายการ</div>
+                    <div key={tid} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', opacity: allReturned ? 0.65 : 1 }}>
+                      <div className="row between" style={{ alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{team ? team.name : 'ไม่ระบุทีมช่าง'}</div>
+                          {allReturned
+                            ? <div className="text-small" style={{ color: 'var(--success, #16a34a)' }}>จ่ายคืนครบแล้ว {info.returnedCount} รายการ ✓</div>
+                            : <div className="text-small text-muted">
+                                ค้างจ่าย {info.pendingCount} รายการ
+                                {info.returnedCount > 0 && <span style={{ color: 'var(--success, #16a34a)' }}> · คืนแล้ว {info.returnedCount} รายการ</span>}
+                              </div>
+                          }
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          {allReturned
+                            ? <div className="mono" style={{ fontWeight: 700, color: 'var(--success, #16a34a)' }}>฿{fmt(info.returned)}</div>
+                            : <div className="mono" style={{ fontWeight: 700, color: 'var(--info)' }}>฿{fmt(info.pending)}</div>
+                          }
+                        </div>
                       </div>
-                      <div className="mono" style={{ fontWeight: 700, color: 'var(--info)' }}>฿{fmt(info.total)}</div>
+                      {!allReturned && (
+                        <button className="btn btn-sm" style={{ marginTop: 8, width: '100%' }}
+                          onClick={() => {
+                            allLabor
+                              .filter(r => (r.workerTeamId || '__none__') === tid && Number(r.retentionDeduction || 0) > 0 && !r.retentionReturned)
+                              .forEach(r => app.updateRecord(r.id, { retentionReturned: true }));
+                            app.pushToast('บันทึกจ่ายคืนเงินประกันผลงานแล้ว ✓');
+                          }}>
+                          <Icon name="check" size={13} /> บันทึกจ่ายคืน ฿{fmt(info.pending)}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
-              <div className="row between" style={{ paddingTop: 12, fontWeight: 700 }}>
-                <span>รวมทั้งหมด</span>
-                <span className="mono" style={{ color: 'var(--info)' }}>฿{fmt(retentionTotal)}</span>
+              <div className="row between" style={{ paddingTop: 14, fontWeight: 700 }}>
+                <span>คงค้างทั้งหมด</span>
+                <span className="mono" style={{ color: retentionTotal > 0 ? 'var(--info)' : 'var(--success, #16a34a)' }}>
+                  {retentionTotal > 0 ? '฿'+fmt(retentionTotal) : '✓ จ่ายคืนครบแล้ว'}
+                </span>
               </div>
             </div>
           </div>
