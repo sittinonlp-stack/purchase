@@ -57,11 +57,12 @@ window.DashboardView = function DashboardView() {
   const stats = useMemo(() => {
     // รายจ่ายจริงเท่านั้น — ไม่รวม income, quick-receipt, receipt, tax-invoice, invoice
     const exp = periodRecords.filter(isExpense);
-    const allTotals = exp.map((r) => computeTotals(r));
-    const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
     // matRecs = material + machine + other (เหมือนกับ HistoryView "ทั้งหมด")
     const matRecs   = exp.filter(r => r.type === 'material' || r.type === 'machine' || r.type === 'other');
-    const laborRecs = exp.filter(r => r.type === 'labor' || r.type === 'lump-labor');
+    // ค่าแรง/เหมาจ่าย — นับเฉพาะที่อนุมัติแล้ว
+    const laborRecs = exp.filter(r => (r.type === 'labor' || r.type === 'lump-labor') && r.approved);
+    const allTotals = [...matRecs, ...laborRecs].map(r => computeTotals(r));
+    const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
     const matCount  = matRecs.length;
     const laborCount = laborRecs.length;
     const matTotal   = matRecs.reduce((s, r) => s + computeTotals(r).total, 0);
@@ -89,6 +90,7 @@ window.DashboardView = function DashboardView() {
     const m = {};
     app.records.forEach((r) => {
       if (!isExpense(r)) return;
+      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
       const t = computeTotals(r).total;
       m[r.projectId] = (m[r.projectId] || 0) + t;
     });
@@ -106,6 +108,7 @@ window.DashboardView = function DashboardView() {
     }
     app.records.forEach((r) => {
       if (!isExpense(r)) return;
+      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
       const k = (r.date || '').slice(0, 7);
       const m = months.find(x => x.key === k);
       if (!m) return;
@@ -145,6 +148,7 @@ window.DashboardView = function DashboardView() {
     }
     app.records.forEach(r => {
       if (!isExpense(r)) return;
+      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
       const d = days.find(x => x.key === r.date); if (!d) return;
       const total = computeTotals(r).total;
       if (r.type === 'material') d.mat += total;
@@ -171,6 +175,7 @@ window.DashboardView = function DashboardView() {
     }
     app.records.forEach(r => {
       if (!r.date || !isExpense(r)) return;
+      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
       const w = weeks.find(x => r.date >= x.start && r.date <= x.end); if (!w) return;
       const total = computeTotals(r).total;
       if (r.type === 'material') w.mat += total;
