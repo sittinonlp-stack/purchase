@@ -4274,6 +4274,11 @@ window.LaborHistoryView = function LaborHistoryView() {
   const laborSum = filtered.filter(r => r.type === 'labor')     .reduce((s, r) => s + computeTotals(r).total, 0);
   const lumpSum  = filtered.filter(r => r.type === 'lump-labor').reduce((s, r) => s + computeTotals(r).total, 0);
 
+  // ค้างอนุมัติ — คำนวณจากรายการทั้งหมด (ไม่ขึ้นกับตัวกรอง)
+  const pendingRecs  = allLabor.filter(r => !r.approved);
+  const pendingSum   = pendingRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+  const pendingCount = pendingRecs.length;
+
   // เงินประกันผลงานสะสม (retention) — แยกตามทีมช่าง (จากค่าแรงทั้งหมด ไม่ขึ้นกับตัวกรอง)
   const retentionByTeam = useMemo(() => {
     const m = {};
@@ -4339,6 +4344,17 @@ window.LaborHistoryView = function LaborHistoryView() {
             <Icon name="clipboard" size={18} />
           </div>
         </div>
+        {pendingCount > 0 && (
+          <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setApproveFilter('pending')}
+            title="คลิกเพื่อกรองดูรายการที่ค้างอนุมัติ">
+            <div className="stat-label">ค้างอนุมัติ</div>
+            <div className="stat-value mono" style={{ color: 'oklch(0.55 0.18 50)' }}>{"฿"+fmt(pendingSum)}</div>
+            <div className="stat-delta" style={{ color: 'oklch(0.55 0.18 50)' }}>{pendingCount} รายการ — คลิกเพื่อกรอง</div>
+            <div className="stat-icon" style={{ background:'oklch(0.95 0.08 60)', color:'oklch(0.55 0.18 50)' }}>
+              <Icon name="clock" size={18} />
+            </div>
+          </div>
+        )}
         {retentionTotal > 0 && (
           <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setRetentionOpen(true)}
             title="คลิกดูรายละเอียดเงินประกันผลงานแยกตามทีมช่าง">
