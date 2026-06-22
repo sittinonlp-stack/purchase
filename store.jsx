@@ -255,6 +255,25 @@ const computeTotals = (rec) => {
   return { subTotal, vat, beforeWht, wht, advance, retention, discountAmt, total };
 };
 
+// เงินประกันผลงานคงค้าง (held retention) ของทีมช่าง + โครงการ
+// = ผลรวม retentionDeduction ของบิลปกติ − ผลรวมยอดจ่ายคืนที่ "อนุมัติแล้ว" (isRetentionPayout)
+// excludeId = ข้ามบิลที่กำลังแก้ไขอยู่ (ไม่ให้นับตัวเอง)
+const computeHeldRetention = (records, teamId, projectId, excludeId) => {
+  if (!teamId || !projectId) return 0;
+  let held = 0;
+  (records || []).forEach((r) => {
+    if (r.id === excludeId) return;
+    if (r.type !== 'labor' && r.type !== 'lump-labor') return;
+    if (r.workerTeamId !== teamId || r.projectId !== projectId) return;
+    if (r.isRetentionPayout) {
+      if (r.approved) held -= computeTotals(r).total;   // จ่ายคืนแล้ว (อนุมัติ) → ลดยอดคงค้าง
+    } else if (!r.retentionReturned) {
+      held += Number(r.retentionDeduction || 0);         // บิลปกติ → เพิ่มยอดคงค้าง
+    }
+  });
+  return Math.max(0, held);
+};
+
 // ---- Context ----
 const AppCtx = createContext(null);
 window.useApp = () => useContext(AppCtx);
@@ -918,4 +937,4 @@ window.AppProvider = function AppProvider({ children }) {
 const isIncome = (r) => !!(r && (r.type === 'income' || (r.meta && r.meta.kind === 'income')));
 
 // expose helpers
-Object.assign(window, { fmt, fmtInt, todayStr, fmtDate, newId, DOC_TYPES, computeTotals, isIncome });
+Object.assign(window, { fmt, fmtInt, todayStr, fmtDate, newId, DOC_TYPES, computeTotals, computeHeldRetention, isIncome });

@@ -615,12 +615,121 @@ function TeamHistoryPanel({ teamId, projectId, excludeId, compact }) {
 }
 window.TeamHistoryPanel = TeamHistoryPanel;
 
+// ---- Retention Payout Section (ใช้ร่วมกันทั้ง LaborForm และ LumpLaborForm) ----
+// toggle "จ่ายคืนเงินประกันผลงาน" ที่อยู่ข้างงวดงาน + พาเนลแสดงยอดคงค้าง + ช่องกรอกยอดจ่ายคืน
+function RetentionPayoutSection({ form, set, app, initial }) {
+  const on = !!form.isRetentionPayout;
+  const held = React.useMemo(
+    () => window.computeHeldRetention(app.records, form.workerTeamId, form.projectId, initial?.id),
+    [app.records, form.workerTeamId, form.projectId, initial]
+  );
+  const team = (app.workerTeams || []).find(t => t.id === form.workerTeamId);
+  const proj = (app.projects || []).find(p => p.id === form.projectId);
+  const payoutAmount = Number(form.items?.[0]?.price || 0);
+
+  const toggle = (next) => {
+    if (next) {
+      // เข้าโหมดจ่ายคืน — เติมรายการเดียวเป็นยอดคงค้าง, ปิดการหัก/ภาษี
+      set({
+        isRetentionPayout: true,
+        period: 'คืนเงินประกันผลงาน',
+        advanceDeduction: 0,
+        retentionDeduction: 0,
+        whtEnabled: false,
+        vatMode: 'exclusive',
+        vatRate: 0,
+        docs: [],
+        items: [{ id: window.newId(), name: 'จ่ายคืนเงินประกันผลงาน', categoryId: '', qty: 1, unit: 'รายการ', price: held > 0 ? held : 0 }],
+      });
+    } else {
+      set({ isRetentionPayout: false });
+    }
+  };
+
+  const setAmount = (v) => {
+    const it = form.items?.[0] || { id: window.newId(), name: 'จ่ายคืนเงินประกันผลงาน', categoryId: '', qty: 1, unit: 'รายการ' };
+    set({ items: [{ ...it, name: it.name || 'จ่ายคืนเงินประกันผลงาน', qty: 1, price: v }] });
+  };
+
+  return (
+    <div className="field full">
+      <button type="button"
+        onClick={() => toggle(!on)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+          padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+          border: `1.5px solid ${on ? 'var(--info)' : 'var(--line)'}`,
+          background: on ? 'rgba(37,99,235,0.06)' : 'var(--surface, #fff)',
+        }}>
+        <span style={{
+          width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+          border: `2px solid ${on ? 'var(--info)' : '#cbd5e1'}`,
+          background: on ? 'var(--info)' : '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontSize: 12, fontWeight: 700,
+        }}>{on ? '✓' : ''}</span>
+        <span>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: on ? 'var(--info)' : 'var(--ink-1)' }}>
+            จ่ายคืนเงินประกันผลงาน
+          </span>
+          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>
+            ติ๊กเมื่อบิลนี้เป็นการ "คืนเงินประกัน" ที่เคยหักไว้ (ไม่ใช่ค่าแรงงวดใหม่)
+          </span>
+        </span>
+      </button>
+
+      {on && (
+        <div style={{ marginTop: 10, padding: 14, borderRadius: 10, background: 'rgba(37,99,235,0.05)', border: '1px solid rgba(37,99,235,0.2)' }}>
+          {(!form.workerTeamId || !form.projectId) ? (
+            <div style={{ fontSize: 12.5, color: 'var(--warn)' }}>
+              โปรดเลือกโครงการและทีมช่างก่อน เพื่อแสดงยอดเงินประกันคงค้าง
+            </div>
+          ) : (
+            <>
+              <div className="row between" style={{ alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
+                  เงินประกันคงค้างของ <strong>{team?.name || 'ทีมนี้'}</strong> · {proj?.name || 'โครงการนี้'}
+                </span>
+                <span className="mono" style={{ fontSize: 16, fontWeight: 700, color: 'var(--info)' }}>฿{fmt(held)}</span>
+              </div>
+              <div className="field" style={{ marginTop: 12 }}>
+                <label className="field-label">ยอดที่จ่ายคืนงวดนี้</label>
+                <div className="input-affix">
+                  <div className="input-affix-prefix">฿</div>
+                  <input className="input mono" type="number" min="0" step="any"
+                    value={payoutAmount || ''} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+                </div>
+                {held > 0 && (
+                  <button type="button" className="badge" style={{ cursor: 'pointer', padding: '4px 10px', marginTop: 8 }}
+                    onClick={() => setAmount(held)}>
+                    ใช้ยอดคงค้างทั้งหมด ฿{fmt(held)}
+                  </button>
+                )}
+                {payoutAmount > held && (
+                  <div className="field-hint" style={{ color: 'var(--warn)' }}>
+                    ⚠ ยอดจ่ายคืนมากกว่ายอดคงค้าง (฿{fmt(held)})
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 4, lineHeight: 1.5 }}>
+                เมื่อบันทึกและ <strong>อนุมัติ</strong> แล้ว ระบบจะหักยอดนี้ออกจากเงินประกันคงค้างโดยอัตโนมัติ และนับเป็นรายจ่ายในแดชบอร์ด
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+window.RetentionPayoutSection = RetentionPayoutSection;
+
 // ---- The Labor Form ----
 window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
   const app = window.useApp();
 
   const blank = () => ({
     type: 'labor',
+    isRetentionPayout: false,
     docNo: 'LB-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
     date: todayStr(),
     projectId: '',
@@ -680,6 +789,9 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
   const handleSubmit = () => {
     if (!form.projectId)   return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.workerTeamId) return app.pushToast('โปรดเลือกทีมช่างก่อนบันทึก', 'error');
+    if (form.isRetentionPayout) {
+      if (!(Number(form.items?.[0]?.price) > 0)) return app.pushToast('โปรดระบุยอดเงินประกันที่จ่ายคืน', 'error');
+    } else
     if (!form.items.some(it => it.name.trim() && Number(it.qty) > 0)) return app.pushToast('โปรดเพิ่มรายการงานอย่างน้อย 1 รายการ', 'error');
     if (form.docs.length > 0) {
       const di = form.docInfo || {};
@@ -774,11 +886,12 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                 </div>
                 <div className="field">
                   <label className="field-label">งวดงาน</label>
-                  <input className="input" list="period-list" placeholder="เช่น งวดที่ 1, งวดสุดท้าย" value={form.period} onChange={(e) => set({ period: e.target.value })} />
+                  <input className="input" list="period-list" placeholder="เช่น งวดที่ 1, งวดสุดท้าย" value={form.period} onChange={(e) => set({ period: e.target.value })} disabled={form.isRetentionPayout} />
                   <datalist id="period-list">
                     {['งวดที่ 1', 'งวดที่ 2', 'งวดที่ 3', 'งวดที่ 4', 'งวดที่ 5', 'งวดสุดท้าย', 'งวดเดียว'].map(v => <option key={v} value={v} />)}
                   </datalist>
                 </div>
+                <RetentionPayoutSection form={form} set={set} app={app} initial={initial} />
               </div>
             </div>
           </div>
@@ -788,7 +901,8 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
             <TeamHistoryPanel teamId={form.workerTeamId} projectId={form.projectId} excludeId={initial?.id} compact />
           )}
 
-          {/* Card 2: items */}
+          {/* Card 2: items — ซ่อนในโหมดจ่ายคืนเงินประกัน (กรอกยอดในพาเนลด้านบนแทน) */}
+          {!form.isRetentionPayout && (
           <div className="card">
             <div className="card-header">
               <div>
@@ -801,8 +915,10 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
               <LaborItemsTable items={form.items} setItems={(items) => set({ items })} cats={app.laborCats} onAddCat={() => setCatModalOpen(true)} />
             </div>
           </div>
+          )}
 
-          {/* Card 3: deductions */}
+          {/* Card 3: deductions — ซ่อนในโหมดจ่ายคืนเงินประกัน */}
+          {!form.isRetentionPayout && (
           <div className="card">
             <div className="card-header">
               <div>
@@ -854,6 +970,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
               </div>
             </div>
           </div>
+          )}
 
           {/* Card 4: docs + tax (compact) */}
           <div className="card">
@@ -1119,6 +1236,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
 
   const blank = () => ({
     type: 'lump-labor',
+    isRetentionPayout: false,
     docNo: 'LS-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000 + 1000)),
     date: todayStr(),
     projectId: '',
@@ -1176,6 +1294,9 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
   const handleSubmit = () => {
     if (!form.projectId)    return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.workerTeamId) return app.pushToast('โปรดเลือกทีมช่างก่อนบันทึก', 'error');
+    if (form.isRetentionPayout) {
+      if (!(Number(form.items?.[0]?.price) > 0)) return app.pushToast('โปรดระบุยอดเงินประกันที่จ่ายคืน', 'error');
+    } else
     if (!form.items.some(it => it.name.trim() && Number(it.price) > 0)) return app.pushToast('โปรดเพิ่มรายการงานพร้อมราคาเหมาอย่างน้อย 1 รายการ', 'error');
     if (form.docs.length > 0) {
       const di = form.docInfo || {};
@@ -1272,6 +1393,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
                   <input className="input" placeholder="เช่น งานก่อ-ฉาบชั้น 2 ทั้งหมด, งานปูกระเบื้องห้องน้ำทุกห้อง"
                     value={form.note} onChange={(e) => set({ note: e.target.value })} />
                 </div>
+                <RetentionPayoutSection form={form} set={set} app={app} initial={initial} />
               </div>
             </div>
           </div>
@@ -1281,7 +1403,8 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
             <TeamHistoryPanel teamId={form.workerTeamId} projectId={form.projectId} excludeId={initial?.id} compact />
           )}
 
-          {/* Card 2: items */}
+          {/* Card 2: items — ซ่อนในโหมดจ่ายคืนเงินประกัน */}
+          {!form.isRetentionPayout && (
           <div className="card">
             <div className="card-header">
               <div>
@@ -1294,8 +1417,10 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
               <LumpLaborItemsTable items={form.items} setItems={(items) => set({ items })} cats={app.lumpLaborCats} onAddCat={() => setCatModalOpen(true)} />
             </div>
           </div>
+          )}
 
-          {/* Card 3: deductions */}
+          {/* Card 3: deductions — ซ่อนในโหมดจ่ายคืนเงินประกัน */}
+          {!form.isRetentionPayout && (
           <div className="card">
             <div className="card-header">
               <div>
@@ -1345,6 +1470,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
               </div>
             </div>
           </div>
+          )}
 
           {/* Card 4: docs + tax */}
           <div className="card">
