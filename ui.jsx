@@ -210,6 +210,7 @@ window.compressDataUrl = function compressDataUrl(dataUrl, maxDim = 1600, qualit
 // Generates a placeholder colored swatch on "pick file" to avoid touching disk.
 function ImageUploader({ images, onChange, max = 10 }) {
   const [dragging, setDragging] = useState(false);
+  const [lbIdx, setLbIdx] = useState(-1);   // index รูปที่เปิดดูแบบขยาย (lightbox)
   const inputRef = useRef(null);
 
   const pick = () => inputRef.current?.click();
@@ -239,7 +240,8 @@ function ImageUploader({ images, onChange, max = 10 }) {
           return (
             <div key={key} className="image-tile">
               {src
-                ? <img src={src} alt={(img && img.name) || ''} />
+                ? <img src={src} alt={(img && img.name) || ''} className="zoomable"
+                    style={{ cursor: 'zoom-in' }} onClick={() => setLbIdx(idx)} title="คลิกเพื่อดูรูปขนาดใหญ่" />
                 : <div style={{ width: '100%', height: '100%', background: (img && img.color) || '#d6d1c1' }}></div>}
               <button type="button" className="remove" onClick={() => remove(idx)} aria-label="ลบ">
                 <Icon name="x" size={11} stroke={2.5} />
@@ -266,6 +268,8 @@ function ImageUploader({ images, onChange, max = 10 }) {
       </div>
       <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
         onChange={(e) => { if (e.target.files) fromFiles(e.target.files); e.target.value = ''; }} />
+      {/* Lightbox — เปิดดูรูปขนาดใหญ่เมื่อคลิกที่รูป */}
+      <window.ImageLightbox images={images} index={lbIdx} onClose={() => setLbIdx(-1)} onChange={setLbIdx} />
     </div>
   );
 }
