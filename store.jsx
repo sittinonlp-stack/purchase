@@ -574,10 +574,7 @@ window.AppProvider = function AppProvider({ children }) {
             next[idx] = rec;
             return next;
           }
-          // ใหม่: ข้ามถ้าเป็น record ของโครงการที่เก็บถาวร (ไม่ดึงเข้า memory หลัก)
-          const proj = projectsRef.current.find((p) => p.id === rec.projectId);
-          if (rec.projectId && proj && proj.status === 'archived') return rs;
-          return [rec, ...rs]; // เอาขึ้นบนสุด
+          return [rec, ...rs]; // ใหม่ → เอาขึ้นบนสุด (รวมโครงการเก็บถาวรด้วย)
         });
       },
       onRecordDelete: removeById(setRecords),
@@ -747,43 +744,21 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.updateProject(id, patch), 'updateProject');
   }, [dbOnline, dbSync]);
 
-  // เก็บโครงการเข้าคลัง — เปลี่ยนสถานะ + เอา record ออกจาก memory (แดชบอร์ดเลิกนับ + เบาลง)
+  // เก็บโครงการเข้าคลัง — เปลี่ยนสถานะอย่างเดียว (ซ่อนจากตัวเลือกโครงการ)
+  // record ยังอยู่ใน memory → แดชบอร์ด/ประวัติยังนับรวมเหมือนเดิม
   const archiveProject = useCallback((id) => {
     updateProject(id, { status: 'archived' });
-    setRecords((rs) => rs.filter((r) => r.projectId !== id));
-    setArchivedLoaded(false); // ให้แท็บเก็บถาวรโหลดใหม่ครั้งหน้า
   }, [updateProject]);
 
-  // นำกลับมา — เปลี่ยนสถานะ active + โหลด record กลับเข้า memory
-  const unarchiveProject = useCallback(async (id) => {
+  // นำกลับมา — เปลี่ยนสถานะ active (record อยู่ใน memory อยู่แล้ว)
+  const unarchiveProject = useCallback((id) => {
     updateProject(id, { status: 'active' });
-    setArchivedRecords((rs) => rs.filter((r) => r.projectId !== id));
-    if (dbOnline) {
-      try {
-        const recs = await window.db.loadProjectRecords(id);
-        setRecords((rs) => {
-          const have = new Set(rs.map((r) => r.id));
-          return [...recs.filter((r) => !have.has(r.id)), ...rs];
-        });
-      } catch (err) {
-        console.warn('[DB] โหลด record โครงการที่นำกลับมาไม่สำเร็จ:', err);
-      }
-    }
-  }, [dbOnline, updateProject]);
+  }, [updateProject]);
 
-  // โหลด record ของโครงการที่เก็บถาวรทั้งหมด (เรียกเมื่อเปิดแท็บ "เก็บถาวร")
+  // คงไว้เพื่อความเข้ากันได้ — ตอนนี้โหลด record ทั้งหมดตั้งแต่ต้นแล้ว จึงเป็น no-op
   const loadArchivedRecords = useCallback(async () => {
-    if (!dbOnline) { setArchivedLoaded(true); return; }
-    const archived = projects.filter((p) => p.status === 'archived');
-    if (!archived.length) { setArchivedRecords([]); setArchivedLoaded(true); return; }
-    try {
-      const results = await Promise.all(archived.map((p) => window.db.loadProjectRecords(p.id)));
-      setArchivedRecords(results.flat());
-      setArchivedLoaded(true);
-    } catch (err) {
-      console.warn('[DB] โหลด record โครงการเก็บถาวรไม่สำเร็จ:', err);
-    }
-  }, [dbOnline, projects]);
+    setArchivedLoaded(true);
+  }, []);
 
   // ── Material categories ───────────────────────────────
   const addMatCat = useCallback((c) => {
