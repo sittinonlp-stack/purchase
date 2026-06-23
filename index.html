@@ -34,15 +34,14 @@
 <body>
 <div id="root"></div>
 
-<!-- React + Babel (CDN) — ใช้ production build (เล็กกว่า/เร็วกว่า dev) -->
+<!-- React (production CDN) — เล็กกว่า/เร็วกว่า dev build -->
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <!-- Supabase JS (CDN) — must load before config/db -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
-<!-- Supabase setup (plain JS — must run before JSX store.jsx) -->
+<!-- Supabase setup (plain JS — must run before app scripts) -->
 <script src="config.js"></script>
 <script src="supabase-client.js"></script>
 <script src="db.js"></script>
@@ -50,15 +49,16 @@
 <!-- SheetJS — Excel export (community edition) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-<!-- App (JSX via Babel) -->
-<script type="text/babel" data-presets="react" src="store.jsx"></script>
-<script type="text/babel" data-presets="react" src="auth-ui.jsx"></script>
-<script type="text/babel" data-presets="react" src="ui.jsx"></script>
-<script type="text/babel" data-presets="react" src="forms.jsx"></script>
-<script type="text/babel" data-presets="react" src="labor.jsx"></script>
-<script type="text/babel" data-presets="react" src="receipt.jsx"></script>
-<script type="text/babel" data-presets="react" src="views.jsx"></script>
-<script type="text/babel" data-presets="react" src="app.jsx"></script>
+<!-- App — precompiled JSX → JS โดย esbuild (npm run build) ไม่ใช้ Babel ตอนรันไทม์ -->
+<!-- ลำดับสำคัญ: store ต้องมาก่อน (ประกาศ React hooks ที่ไฟล์อื่นใช้ร่วม scope) -->
+<script src="dist/store.js"></script>
+<script src="dist/auth-ui.js"></script>
+<script src="dist/ui.js"></script>
+<script src="dist/forms.js"></script>
+<script src="dist/labor.js"></script>
+<script src="dist/receipt.js"></script>
+<script src="dist/views.js"></script>
+<script src="dist/app.js"></script>
 
 <!-- ── Service Worker Registration (PWA) ──────────────────── -->
 <script>

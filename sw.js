@@ -5,7 +5,7 @@
 //           Network-only สำหรับ Supabase API
 // ============================================================
 
-const CACHE_NAME = 'jadsuea-v4';
+const CACHE_NAME = 'jadsuea-v5';
 const NET_TIMEOUT = 4000; // ms — ถ้า network ช้าเกินนี้ ใช้ cache แทน (กันค้าง)
 
 // ไฟล์ CDN ที่เปลี่ยนแปลงไม่บ่อย — ใช้ cache-first เพื่อความเร็ว
@@ -26,13 +26,14 @@ self.addEventListener('install', (event) => {
         '/config.js',
         '/supabase-client.js',
         '/db.js',
-        '/store.jsx',
-        '/auth-ui.jsx',
-        '/ui.jsx',
-        '/forms.jsx',
-        '/labor.jsx',
-        '/views.jsx',
-        '/app.jsx',
+        '/dist/store.js',
+        '/dist/auth-ui.js',
+        '/dist/ui.js',
+        '/dist/forms.js',
+        '/dist/labor.js',
+        '/dist/receipt.js',
+        '/dist/views.js',
+        '/dist/app.js',
         '/icon.svg',
         '/icon-maskable.svg',
         '/manifest.json',
