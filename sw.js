@@ -5,7 +5,8 @@
 //           Network-only สำหรับ Supabase API
 // ============================================================
 
-const CACHE_NAME = 'jadsuea-v3';
+const CACHE_NAME = 'jadsuea-v4';
+const NET_TIMEOUT = 4000; // ms — ถ้า network ช้าเกินนี้ ใช้ cache แทน (กันค้าง)
 
 // ไฟล์ CDN ที่เปลี่ยนแปลงไม่บ่อย — ใช้ cache-first เพื่อความเร็ว
 const CDN_HOSTS = [
@@ -88,25 +89,40 @@ self.addEventListener('fetch', (event) => {
       })
     );
   } else {
-    // ── Network-first สำหรับไฟล์แอป (jsx/js/css/html) ───
-    // ดึงจาก network ก่อนเสมอ → เห็นการเปลี่ยนแปลงทันทีเมื่อ refresh
-    // ถ้า network ล้มเหลว (offline) → ใช้ cache แทน
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          if (res && res.status === 200 && res.type !== 'opaque') {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
-          }
-          return res;
-        })
-        .catch(() => {
-          return caches.match(event.request).then((cached) => {
-            if (cached) return cached;
-            if (event.request.mode === 'navigate') return caches.match('/');
-            return new Response('Offline', { status: 503 });
-          });
-        })
-    );
+    // ── Network-first + timeout สำหรับไฟล์แอป (jsx/js/css/html) ───
+    // ดึงจาก network ก่อน → เห็นการเปลี่ยนแปลงทันทีเมื่อ refresh
+    // แต่ถ้า network ช้าเกิน NET_TIMEOUT หรือ offline → ใช้ cache ทันที (กันค้าง)
+    event.respondWith(networkFirstWithTimeout(event.request));
   }
 });
+
+// ดึงจาก network ก่อน แต่ถ้าเกิน timeout/ล้มเหลว → ตกไปใช้ cache (กันหน้าค้าง)
+function networkFirstWithTimeout(request) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (res) => { if (!settled) { settled = true; resolve(res); } };
+
+    // ตัวจับเวลา: ถ้า network ยังไม่ตอบใน NET_TIMEOUT และมี cache → ใช้ cache
+    const timer = setTimeout(() => {
+      caches.match(request).then((cached) => { if (cached) done(cached); });
+    }, NET_TIMEOUT);
+
+    fetch(request)
+      .then((res) => {
+        clearTimeout(timer);
+        if (res && res.status === 200 && res.type !== 'opaque') {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+        }
+        done(res);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        caches.match(request).then((cached) => {
+          if (cached) return done(cached);
+          if (request.mode === 'navigate') return caches.match('/').then(done);
+          done(new Response('Offline', { status: 503 }));
+        });
+      });
+  });
+}
