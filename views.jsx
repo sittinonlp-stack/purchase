@@ -713,11 +713,11 @@ function PaidButton({ record }) {
   const [date, setDate]   = useState(record.paidDate || todayStr());
   const [slips, setSlips] = useState(record.paidSlips || []);
   const paid     = !!record.paid;
-  const eligible = record.approved && record.accountingPosted;
+  const eligible = record.approved;   // ขึ้นปุ่มเมื่ออนุมัติแล้ว (ไม่เกี่ยวกับสถานะบัญชี)
 
-  // ยังไม่อนุมัติ+ลงบัญชี และยังไม่จ่าย → ยังจ่ายไม่ได้
+  // ยังไม่อนุมัติ และยังไม่จ่าย → ยังจ่ายไม่ได้
   if (!eligible && !paid) {
-    return <span style={{ fontSize: 11, color: 'var(--ink-4)' }} title="ต้องอนุมัติและลงบัญชีก่อนจึงบันทึกการจ่ายได้">—</span>;
+    return <span style={{ fontSize: 11, color: 'var(--ink-4)' }} title="ต้องกดอนุมัติก่อนจึงบันทึกการจ่ายได้">—</span>;
   }
 
   const openModal = (e) => {
@@ -763,8 +763,8 @@ function PaidButton({ record }) {
         </button>
       )}
 
-      {open && (
-        <div className="modal-overlay" onClick={() => setOpen(false)} style={{ zIndex: 1100 }}>
+      {open && ReactDOM.createPortal(
+        <div className="modal-overlay" onClick={() => setOpen(false)}>
           <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">บันทึกการจ่ายเงิน</h2>
@@ -791,7 +791,8 @@ function PaidButton({ record }) {
               <button className="btn btn-accent" onClick={save}><Icon name="check" size={14} /> บันทึก</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
@@ -4407,6 +4408,20 @@ window.LaborHistoryView = function LaborHistoryView() {
   const retentionTotal = Object.values(retentionByTeam).reduce((s, v) => s + v.balance, 0);
   const [retentionOpen, setRetentionOpen] = useState(false);
 
+  // ── ทำเครื่องหมาย "จ่ายแล้ว" ให้เอกสารเดิมทั้งหมด (ครั้งเดียว) ──
+  const [bulkPaidOpen, setBulkPaidOpen] = useState(false);
+  const [retroDone, setRetroDone] = useState(() => {
+    try { return localStorage.getItem('laborRetroPaidDone') === '1'; } catch { return false; }
+  });
+  const bulkTargets = useMemo(() => allLabor.filter(r => !r.paid), [allLabor]);
+  const doBulkPaid = () => {
+    bulkTargets.forEach(r => app.updateRecord(r.id, { paid: true, paidDate: r.paidDate || r.date }));
+    try { localStorage.setItem('laborRetroPaidDone', '1'); } catch {}
+    setRetroDone(true);
+    setBulkPaidOpen(false);
+    app.pushToast(`ทำเครื่องหมายจ่ายแล้ว ${bulkTargets.length} รายการ ✓`);
+  };
+
   const usedTeamIds = useMemo(() => new Set(allLabor.map(r => r.workerTeamId).filter(Boolean)), [allLabor]);
   const usedTeams   = useMemo(() => (app.teams || []).filter(t => usedTeamIds.has(t.id)), [app.teams, usedTeamIds]);
 
@@ -4578,6 +4593,12 @@ window.LaborHistoryView = function LaborHistoryView() {
             <option value="pending">รออนุมัติ</option>
             <option value="approved">อนุมัติแล้ว</option>
           </select>
+          {app.isAdmin && !retroDone && bulkTargets.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setBulkPaidOpen(true)}
+              title="ทำเครื่องหมายว่าจ่ายแล้วให้เอกสารเดิมทั้งหมด (ทำครั้งเดียว)">
+              <Icon name="check" size={13}/> ตั้งเอกสารเดิมเป็นจ่ายแล้ว
+            </button>
+          )}
           <div className="spacer"/>
           <div className="text-small text-muted">
             พบ <strong style={{ color:'var(--ink-1)' }} className="mono">{filtered.length}</strong> รายการ
@@ -4594,6 +4615,34 @@ window.LaborHistoryView = function LaborHistoryView() {
           <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} showApprove={true} showPaid={true}/>
         )}
       </div>
+
+      {/* Modal: ตั้งเอกสารเดิมทั้งหมดเป็น "จ่ายแล้ว" (ทำครั้งเดียว) */}
+      {bulkPaidOpen && (
+        <div className="modal-overlay" onClick={() => setBulkPaidOpen(false)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">ตั้งเอกสารเดิมเป็น "จ่ายแล้ว"</h2>
+              <button className="btn-icon" onClick={() => setBulkPaidOpen(false)}><Icon name="x" size={16}/></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.7 }}>
+                ระบบจะทำเครื่องหมายว่า <strong>จ่ายแล้ว</strong> ให้ค่าแรง/เหมาจ่าย
+                <strong className="mono"> {bulkTargets.length}</strong> รายการที่ยังไม่ได้ทำเครื่องหมาย
+                โดยใช้ <strong>วันที่ในเอกสาร</strong> เป็นวันที่โอน
+                <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 8, fontSize: 12.5, color: 'var(--ink-3)' }}>
+                  ใช้สำหรับล้างสถานะเอกสารเก่าครั้งเดียว — หลังจากนี้ค่อยกด "จ่ายแล้ว" แนบสลิปทีละรายการตามปกติ
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setBulkPaidOpen(false)}>ยกเลิก</button>
+              <button className="btn btn-accent" onClick={doBulkPaid}>
+                <Icon name="check" size={14}/> ยืนยัน ({bulkTargets.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
