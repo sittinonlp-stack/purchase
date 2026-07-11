@@ -102,6 +102,17 @@
       // ── lightweight flags stored inside meta ──────
       accountingPosted: Boolean((row.meta || {}).accountingPosted),
       approved:         Boolean((row.meta || {}).approved),
+      // ── สถานะการจ่ายเงินจริง (สลิป + วันที่โอน) ──
+      paid:             Boolean((row.meta || {}).paid),
+      paidDate:         (row.meta || {}).paidDate || '',
+      paidSlips:        (row.meta || {}).paidSlips || [],
+      // ── ค่าแรง: จ่ายคืนเงินประกันผลงาน ──────────
+      isRetentionPayout: Boolean((row.meta || {}).isRetentionPayout),
+      retentionReturned: Boolean((row.meta || {}).retentionReturned),
+      // ── ส่วนลด (ก่อน VAT) ────────────────────────
+      discountEnabled:  Boolean((row.meta || {}).discountEnabled),
+      discountType:     (row.meta || {}).discountType || 'baht',
+      discountValue:    Number((row.meta || {}).discountValue || 0),
       // ── ผู้สร้างเอกสาร (เก็บใน meta) ──────────────
       createdBy:        (row.meta || {}).createdBy || null,
       // ── ข้อมูลผู้รับเงิน (labor / lump-labor) ────
@@ -137,7 +148,21 @@
                                : (rec.depositReturnImages || []),
       deposit_return_note:   rec.depositReturnNote || '',
       // ── meta JSONB (รวม lightweight flags เช่น accountingPosted, approved, createdBy) ──
-      meta: { ...(rec.meta || {}), accountingPosted: Boolean(rec.accountingPosted), approved: Boolean(rec.approved), ...(rec.docInfo ? { docInfo: rec.docInfo } : {}), ...(rec.createdBy ? { createdBy: rec.createdBy } : {}) },
+      meta: {
+        ...(rec.meta || {}),
+        accountingPosted: Boolean(rec.accountingPosted),
+        approved: Boolean(rec.approved),
+        paid: Boolean(rec.paid),
+        paidDate: rec.paidDate || '',
+        paidSlips: rec.paidSlips || [],
+        isRetentionPayout: Boolean(rec.isRetentionPayout),
+        retentionReturned: Boolean(rec.retentionReturned),
+        discountEnabled: Boolean(rec.discountEnabled),
+        discountType: rec.discountType || 'baht',
+        discountValue: Number(rec.discountValue || 0),
+        ...(rec.docInfo ? { docInfo: rec.docInfo } : {}),
+        ...(rec.createdBy ? { createdBy: rec.createdBy } : {}),
+      },
     };
   }
 
@@ -530,13 +555,24 @@
       if (has('depositReturnImages')) dbPatch.deposit_return_images = await uploadImages(patch.depositReturnImages || []);
       if (has('depositReturnNote'))   dbPatch.deposit_return_note = patch.depositReturnNote || '';
 
-      // meta JSONB — merge เข้ากับของเดิม (accountingPosted / approved / docInfo)
-      if (has('accountingPosted') || has('approved') || has('docInfo') || has('meta')) {
+      // meta JSONB — merge เข้ากับของเดิม (flags ต่าง ๆ ที่เก็บใน meta)
+      const META_KEYS = ['accountingPosted', 'approved', 'docInfo', 'meta',
+        'paid', 'paidDate', 'paidSlips', 'isRetentionPayout', 'retentionReturned',
+        'discountEnabled', 'discountType', 'discountValue'];
+      if (META_KEYS.some(has)) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();
         const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
         if (has('accountingPosted')) newMeta.accountingPosted = Boolean(patch.accountingPosted);
         if (has('approved'))         newMeta.approved = Boolean(patch.approved);
         if (has('docInfo'))          newMeta.docInfo = patch.docInfo;
+        if (has('paid'))             newMeta.paid = Boolean(patch.paid);
+        if (has('paidDate'))         newMeta.paidDate = patch.paidDate || '';
+        if (has('paidSlips'))        newMeta.paidSlips = await uploadImages(patch.paidSlips || []);
+        if (has('isRetentionPayout')) newMeta.isRetentionPayout = Boolean(patch.isRetentionPayout);
+        if (has('retentionReturned')) newMeta.retentionReturned = Boolean(patch.retentionReturned);
+        if (has('discountEnabled'))  newMeta.discountEnabled = Boolean(patch.discountEnabled);
+        if (has('discountType'))     newMeta.discountType = patch.discountType || 'baht';
+        if (has('discountValue'))    newMeta.discountValue = Number(patch.discountValue || 0);
         dbPatch.meta = newMeta;
       }
 

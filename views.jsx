@@ -705,7 +705,99 @@ function ApproveCheckbox({ record }) {
   );
 }
 
-function RecordsTable({ records, onOpen, showApprove = false }) {
+// ---- Paid button + modal — บันทึกการจ่ายเงินจริง (สลิป + วันที่โอน) ----
+// แสดงเฉพาะบิลที่ "อนุมัติแล้ว + ลงบัญชีแล้ว" — เก็บวันที่โอนจริงแยกจากวันที่สร้างเอกสาร
+function PaidButton({ record }) {
+  const app = window.useApp();
+  const [open, setOpen]   = useState(false);
+  const [date, setDate]   = useState(record.paidDate || todayStr());
+  const [slips, setSlips] = useState(record.paidSlips || []);
+  const paid     = !!record.paid;
+  const eligible = record.approved && record.accountingPosted;
+
+  // ยังไม่อนุมัติ+ลงบัญชี และยังไม่จ่าย → ยังจ่ายไม่ได้
+  if (!eligible && !paid) {
+    return <span style={{ fontSize: 11, color: 'var(--ink-4)' }} title="ต้องอนุมัติและลงบัญชีก่อนจึงบันทึกการจ่ายได้">—</span>;
+  }
+
+  const openModal = (e) => {
+    e.stopPropagation();
+    setDate(record.paidDate || todayStr());
+    setSlips(record.paidSlips || []);
+    setOpen(true);
+  };
+  const save = () => {
+    if (!date) return app.pushToast('โปรดระบุวันที่โอน', 'error');
+    app.updateRecord(record.id, { paid: true, paidDate: date, paidSlips: slips });
+    app.pushToast('บันทึกการจ่ายเงินแล้ว ✓');
+    setOpen(false);
+  };
+  const unpay = () => {
+    app.updateRecord(record.id, { paid: false });
+    app.pushToast('ยกเลิกสถานะจ่ายแล้ว');
+    setOpen(false);
+  };
+
+  return (
+    <>
+      {paid ? (
+        <button onClick={openModal} title={`จ่ายแล้ว ${fmtDate(record.paidDate)} — คลิกดู/แก้ไข`}
+          style={{
+            display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+            padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
+            border: '1.5px solid #059669', background: 'rgba(5,150,105,0.1)', color: '#059669',
+            fontSize: 12, fontWeight: 600, lineHeight: 1.2,
+          }}>
+          <span>✓ จ่ายแล้ว</span>
+          {record.paidDate && <span className="mono" style={{ fontSize: 10.5, fontWeight: 500 }}>{fmtDate(record.paidDate)}</span>}
+        </button>
+      ) : (
+        <button onClick={openModal} title="บันทึกการจ่ายเงิน (แนบสลิป + วันที่โอน)"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
+            border: '1.5px solid var(--accent)', background: 'var(--accent)', color: '#1f1d18',
+            fontSize: 12.5, fontWeight: 600, lineHeight: 1,
+          }}>
+          <Icon name="money" size={13} /> จ่ายแล้ว
+        </button>
+      )}
+
+      {open && (
+        <div className="modal-overlay" onClick={() => setOpen(false)} style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">บันทึกการจ่ายเงิน</h2>
+              <button className="btn-icon" onClick={() => setOpen(false)}><Icon name="x" size={16} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ padding: '10px 14px', background: 'var(--bg)', borderRadius: 8, fontSize: 12.5, color: 'var(--ink-2)' }}>
+                <span className="mono">{record.docNo}</span> · {record.vendor}
+                <div style={{ marginTop: 2 }}>ยอดสุทธิ <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(computeTotals(record).total)}</strong></div>
+              </div>
+              <div className="field">
+                <label className="field-label">วันที่โอน <span className="req">*</span></label>
+                <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} />
+                <div className="field-hint">วันที่โอนเงินจริง — บัญชีใช้วันนี้ในการออกเอกสาร (ไม่ใช่วันที่สร้างบิล)</div>
+              </div>
+              <div className="field">
+                <label className="field-label">สลิปการโอน</label>
+                <window.ImageUploader images={slips} onChange={setSlips} max={3} />
+              </div>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              {paid && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', marginRight: 'auto' }} onClick={unpay}>ยกเลิกจ่ายแล้ว</button>}
+              <button className="btn btn-ghost" onClick={() => setOpen(false)}>ยกเลิก</button>
+              <button className="btn btn-accent" onClick={save}><Icon name="check" size={14} /> บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }) {
   const app = window.useApp();
   if (!records.length) {
     return (
@@ -736,6 +828,7 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
             <th className="hide-mobile" style={{ width: 100 }}>ประเภท</th>
             <th className="hide-mobile" style={{ width: 160 }}>เอกสาร</th>
             <th style={{ width: 130 }} className="num">ยอดสุทธิ</th>
+            {showPaid && <th style={{ width: 110, textAlign: 'center' }} title="สถานะการจ่ายเงินจริง">การจ่าย</th>}
           </tr>
         </thead>
         <tbody>
@@ -807,6 +900,11 @@ function RecordsTable({ records, onOpen, showApprove = false }) {
                   </div>
                 </td>
                 <td className="num mono" style={{ fontWeight: 500 }}>{fmt(total)}</td>
+                {showPaid && (
+                  <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <PaidButton record={r} />
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -4493,7 +4591,7 @@ window.LaborHistoryView = function LaborHistoryView() {
             <div className="empty-sub">เริ่มบันทึกค่าแรงรายวันหรือค่าแรงเหมาจ่ายรายการแรกได้เลย</div>
           </div>
         ) : (
-          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} showApprove={true}/>
+          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} showApprove={true} showPaid={true}/>
         )}
       </div>
     </>
