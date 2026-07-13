@@ -1285,3 +1285,58 @@ function AddProjectModal({ open, onClose, onAdd }) {
   );
 }
 window.AddProjectModal = AddProjectModal;
+
+// ---- Edit project details ----
+function EditProjectModal({ project, onClose, onSave }) {
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [client, setClient] = useState('');
+  const [color, setColor] = useState('#d97706');
+  useEffect(() => {
+    if (project) {
+      setName(project.name || '');
+      setCode(project.code || '');
+      setClient(project.client || '');
+      setColor(project.color || '#d97706');
+    }
+  }, [project]);
+  const base = ['#d97706', '#dc2626', '#a855f7', '#0ea5e9', '#16a34a', '#eab308'];
+  const colors = base.includes(color) ? base : [color, ...base];
+  return (
+    <Modal open={!!project} onClose={onClose} title="แก้ไขรายละเอียดโครงการ"
+      footer={<>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={() => name.trim() && onSave({ name: name.trim(), code, client, color })}>
+          <Icon name="save" size={14} /> บันทึกการแก้ไข
+        </button>
+      </>}>
+      <div className="col gap-16">
+        <div className="form-grid">
+          <div className="field">
+            <label className="field-label">รหัสโครงการ</label>
+            <input className="input mono" value={code} onChange={(e) => setCode(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field-label">สีประจำโครงการ</label>
+            <div className="row gap-6">
+              {colors.map((c) => (
+                <button key={c} type="button" onClick={() => setColor(c)} style={{
+                  width: 28, height: 28, borderRadius: 6, background: c, border: color === c ? '2px solid var(--ink-1)' : '2px solid transparent', cursor: 'pointer'
+                }} />
+              ))}
+            </div>
+          </div>
+          <div className="field full">
+            <label className="field-label">ชื่อโครงการ</label>
+            <input className="input" autoFocus placeholder="เช่น อาคารพาณิชย์ 4 ชั้น สุขุมวิท" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="field full">
+            <label className="field-label">เจ้าของ / ลูกค้า</label>
+            <input className="input" placeholder="ชื่อ-นามสกุล หรือ บริษัท" value={client} onChange={(e) => setClient(e.target.value)} />
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+window.EditProjectModal = EditProjectModal;

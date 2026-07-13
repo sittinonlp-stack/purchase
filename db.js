@@ -354,7 +354,15 @@
       if (projErr) throw projErr;
     },
     async updateProject(id, patch) {
-      const { error } = await window.supabaseClient.from('projects').update(jsProject({ ...patch, id })).eq('id', id);
+      // partial-safe: อัปเดตเฉพาะคอลัมน์ที่ส่งมาจริง ๆ (ห้ามใช้ jsProject เพราะจะเติม default ทับของเดิม)
+      const dbPatch = {};
+      if ('code'   in patch) dbPatch.code   = patch.code;
+      if ('name'   in patch) dbPatch.name   = patch.name;
+      if ('client' in patch) dbPatch.client = patch.client || '';
+      if ('color'  in patch) dbPatch.color  = patch.color || '#d97706';
+      if ('status' in patch) dbPatch.status = patch.status || 'active';
+      if (Object.keys(dbPatch).length === 0) return;
+      const { error } = await window.supabaseClient.from('projects').update(dbPatch).eq('id', id);
       if (error) throw error;
     },
     // โหลด record ของโครงการเดียว (สำหรับโครงการที่เก็บถาวร — โหลดเมื่อต้องการ)

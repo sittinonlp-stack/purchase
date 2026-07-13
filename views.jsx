@@ -1018,6 +1018,7 @@ window.ProjectsView = function ProjectsView() {
   const app = window.useApp();
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // project obj | null
+  const [editProject, setEditProject] = useState(null); // project obj | null
   const [tab, setTab] = useState('active'); // active | archived
 
   // เปิดแท็บเก็บถาวรครั้งแรก → โหลด record ของโครงการเก็บถาวรมาแสดงยอด
@@ -1127,6 +1128,11 @@ window.ProjectsView = function ProjectsView() {
                     </>
                   )}
                   {app.isAdmin && (
+                    <button className="btn btn-ghost btn-sm" title="แก้ไขรายละเอียดโครงการ" onClick={() => setEditProject(p)}>
+                      <Icon name="edit" size={12} />
+                    </button>
+                  )}
+                  {app.isAdmin && (
                     <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(p)}>
                       <Icon name="trash" size={12} />
                     </button>
@@ -1139,6 +1145,9 @@ window.ProjectsView = function ProjectsView() {
       </div>
 
       <AddProjectModal open={open} onClose={() => setOpen(false)} onAdd={(p) => { app.addProject(p); app.pushToast('เพิ่มโครงการแล้ว'); setOpen(false); }} />
+
+      <window.EditProjectModal project={editProject} onClose={() => setEditProject(null)}
+        onSave={(patch) => { app.updateProject(editProject.id, patch); app.pushToast('บันทึกการแก้ไขโครงการแล้ว'); setEditProject(null); }} />
 
       {/* ── Confirm delete project modal ── */}
       {confirmDelete && (() => {
