@@ -829,7 +829,7 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
             <th className="hide-mobile" style={{ width: 100 }}>ประเภท</th>
             <th className="hide-mobile" style={{ width: 160 }}>เอกสาร</th>
             <th style={{ width: 130 }} className="num">ยอดสุทธิ</th>
-            {showPaid && <th style={{ width: 110, textAlign: 'center' }} title="สถานะการจ่ายเงินจริง">การจ่าย</th>}
+            {showPaid && <th className="hide-mobile" style={{ width: 110, textAlign: 'center' }} title="สถานะการจ่ายเงินจริง">การจ่าย</th>}
           </tr>
         </thead>
         <tbody>
@@ -867,6 +867,11 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
                     {proj && <><span className="proj-chip-dot" style={{ background: proj.color, width: 6, height: 6, display: 'inline-block', borderRadius: '50%', margin: '0 3px 0 6px' }}></span>{proj.name}</>}
                     {' · '}{fmtDate(r.date)}
                   </div>
+                  {showPaid && (r.approved || r.paid) && (
+                    <div className="show-mobile" style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                      <PaidButton record={r} />
+                    </div>
+                  )}
                 </td>
                 <td className="hide-mobile">
                   {r.type === 'material'
@@ -902,7 +907,7 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
                 </td>
                 <td className="num mono" style={{ fontWeight: 500 }}>{fmt(total)}</td>
                 {showPaid && (
-                  <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                  <td className="hide-mobile" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                     <PaidButton record={r} />
                   </td>
                 )}
