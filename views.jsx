@@ -969,16 +969,19 @@ window.HistoryView = function HistoryView() {
     !window.isIncome(r)
   ), [app.records]);
 
-  // ── ปิดรายการเดิม (ครั้งเดียว): อนุมัติ + จ่ายแล้ว เพื่อไม่ให้ยอดเก่าหายจากแดชบอร์ด ──
+  // ── ปิดรายการเดิม (ครั้งเดียว): อนุมัติ + จ่ายแล้ว ทั้งวัสดุ/เครื่องจักร/อื่นๆ ──
   const [bulkOpen, setBulkOpen] = useState(false);
   const [retroDone, setRetroDone] = useState(() => {
-    try { return localStorage.getItem('expenseRetroDone') === '1'; } catch { return false; }
+    try { return localStorage.getItem('expenseRetroDone2') === '1'; } catch { return false; }
   });
   const bulkTargets = useMemo(() =>
-    allExp.filter(r => (r.type === 'material' || r.type === 'machine') && !r.approved), [allExp]);
+    allExp.filter(r => !r.approved || !r.paid), [allExp]);
   const doBulkClose = () => {
-    bulkTargets.forEach(r => app.updateRecord(r.id, { approved: true, paid: true, paidDate: r.paidDate || r.date }));
-    try { localStorage.setItem('expenseRetroDone', '1'); } catch {}
+    bulkTargets.forEach(r => app.updateRecord(r.id, {
+      approved: true, approvedDate: r.approvedDate || r.date,
+      paid: true, paidDate: r.paidDate || r.date,
+    }));
+    try { localStorage.setItem('expenseRetroDone2', '1'); } catch {}
     setRetroDone(true);
     setBulkOpen(false);
     app.pushToast(`ปิดรายการเดิม ${bulkTargets.length} รายการแล้ว ✓`);
@@ -1123,8 +1126,8 @@ window.HistoryView = function HistoryView() {
             </div>
             <div className="modal-body">
               <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.7 }}>
-                จะทำเครื่องหมาย <strong>อนุมัติ + จ่ายแล้ว</strong> ให้วัสดุ/เครื่องจักร
-                <strong className="mono"> {bulkTargets.length}</strong> รายการที่ยังไม่อนุมัติ (ใช้วันที่ในเอกสารเป็นวันที่จ่าย)
+                จะตั้งเป็น <strong>อนุมัติ + จ่ายแล้ว</strong> ให้รายการจัดซื้อ/เช่า/อื่นๆ
+                <strong className="mono"> {bulkTargets.length}</strong> รายการที่ยังไม่ปิด (ใช้วันที่ในเอกสารเป็นวันที่อนุมัติ/จ่าย)
                 <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 8, fontSize: 12.5, color: 'var(--ink-3)' }}>
                   ใช้ปิดรายการเก่าครั้งเดียว เพื่อไม่ให้ยอดเดิมหายจากแดชบอร์ด — หลังจากนี้บิลใหม่จะเข้าขั้นตอน อนุมัติ → จ่าย ตามปกติ
                 </div>
@@ -4553,18 +4556,21 @@ window.LaborHistoryView = function LaborHistoryView() {
   const retentionTotal = Object.values(retentionByTeam).reduce((s, v) => s + v.balance, 0);
   const [retentionOpen, setRetentionOpen] = useState(false);
 
-  // ── ทำเครื่องหมาย "จ่ายแล้ว" ให้เอกสารเดิมทั้งหมด (ครั้งเดียว) ──
+  // ── ปิดรายการเดิม (ครั้งเดียว): อนุมัติ + จ่ายแล้ว ให้ค่าแรงเดิมทั้งหมด ──
   const [bulkPaidOpen, setBulkPaidOpen] = useState(false);
   const [retroDone, setRetroDone] = useState(() => {
-    try { return localStorage.getItem('laborRetroPaidDone') === '1'; } catch { return false; }
+    try { return localStorage.getItem('laborRetroDone2') === '1'; } catch { return false; }
   });
-  const bulkTargets = useMemo(() => allLabor.filter(r => !r.paid), [allLabor]);
+  const bulkTargets = useMemo(() => allLabor.filter(r => !r.approved || !r.paid), [allLabor]);
   const doBulkPaid = () => {
-    bulkTargets.forEach(r => app.updateRecord(r.id, { paid: true, paidDate: r.paidDate || r.date }));
-    try { localStorage.setItem('laborRetroPaidDone', '1'); } catch {}
+    bulkTargets.forEach(r => app.updateRecord(r.id, {
+      approved: true, approvedDate: r.approvedDate || r.date,
+      paid: true, paidDate: r.paidDate || r.date,
+    }));
+    try { localStorage.setItem('laborRetroDone2', '1'); } catch {}
     setRetroDone(true);
     setBulkPaidOpen(false);
-    app.pushToast(`ทำเครื่องหมายจ่ายแล้ว ${bulkTargets.length} รายการ ✓`);
+    app.pushToast(`ปิดรายการเดิม ${bulkTargets.length} รายการแล้ว ✓`);
   };
 
   const usedTeamIds = useMemo(() => new Set(allLabor.map(r => r.workerTeamId).filter(Boolean)), [allLabor]);
@@ -4740,8 +4746,8 @@ window.LaborHistoryView = function LaborHistoryView() {
           </select>
           {app.isAdmin && !retroDone && bulkTargets.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={() => setBulkPaidOpen(true)}
-              title="ทำเครื่องหมายว่าจ่ายแล้วให้เอกสารเดิมทั้งหมด (ทำครั้งเดียว)">
-              <Icon name="check" size={13}/> ตั้งเอกสารเดิมเป็นจ่ายแล้ว
+              title="อนุมัติ + จ่ายแล้ว ให้ค่าแรงเดิมทั้งหมด (ทำครั้งเดียว)">
+              <Icon name="check" size={13}/> ปิดรายการเดิม (อนุมัติ+จ่าย)
             </button>
           )}
           <div className="spacer"/>
@@ -4761,21 +4767,21 @@ window.LaborHistoryView = function LaborHistoryView() {
         )}
       </div>
 
-      {/* Modal: ตั้งเอกสารเดิมทั้งหมดเป็น "จ่ายแล้ว" (ทำครั้งเดียว) */}
+      {/* Modal: ปิดรายการค่าแรงเดิมทั้งหมด (อนุมัติ + จ่ายแล้ว) ทำครั้งเดียว */}
       {bulkPaidOpen && (
         <div className="modal-overlay" onClick={() => setBulkPaidOpen(false)}>
           <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">ตั้งเอกสารเดิมเป็น "จ่ายแล้ว"</h2>
+              <h2 className="modal-title">ปิดรายการค่าแรงเดิม</h2>
               <button className="btn-icon" onClick={() => setBulkPaidOpen(false)}><Icon name="x" size={16}/></button>
             </div>
             <div className="modal-body">
               <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.7 }}>
-                ระบบจะทำเครื่องหมายว่า <strong>จ่ายแล้ว</strong> ให้ค่าแรง/เหมาจ่าย
-                <strong className="mono"> {bulkTargets.length}</strong> รายการที่ยังไม่ได้ทำเครื่องหมาย
-                โดยใช้ <strong>วันที่ในเอกสาร</strong> เป็นวันที่โอน
+                ระบบจะตั้งเป็น <strong>อนุมัติ + จ่ายแล้ว</strong> ให้ค่าแรง/เหมาจ่าย
+                <strong className="mono"> {bulkTargets.length}</strong> รายการที่ยังไม่ปิด
+                โดยใช้ <strong>วันที่ในเอกสาร</strong> เป็นวันที่อนุมัติ/วันที่จ่าย
                 <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 8, fontSize: 12.5, color: 'var(--ink-3)' }}>
-                  ใช้สำหรับล้างสถานะเอกสารเก่าครั้งเดียว — หลังจากนี้ค่อยกด "จ่ายแล้ว" แนบสลิปทีละรายการตามปกติ
+                  ใช้ปิดรายการเก่าครั้งเดียว เพื่อให้ยอดครบในแดชบอร์ด — หลังจากนี้บิลใหม่จะเข้าขั้นตอน อนุมัติ → จ่าย ตามปกติ
                 </div>
               </div>
             </div>
