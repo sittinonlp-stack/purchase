@@ -986,8 +986,13 @@ window.HistoryView = function HistoryView() {
   }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter]);
 
   const sum = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
-  const pendingCount = useMemo(() => allExp.filter(r => (r.type === 'material' || r.type === 'machine') && !r.approved).length, [allExp]);
-  const unpaidCount  = useMemo(() => allExp.filter(r => r.approved && !r.paid).length, [allExp]);
+  // สรุปสถานะ (จากรายการทั้งหมด ไม่ขึ้นกับตัวกรอง)
+  const pendingRecs = useMemo(() => allExp.filter(r => (r.type === 'material' || r.type === 'machine') && !r.approved), [allExp]);
+  const unpaidRecs  = useMemo(() => allExp.filter(r => r.approved && !r.paid), [allExp]);
+  const pendingCount = pendingRecs.length;
+  const unpaidCount  = unpaidRecs.length;
+  const pendingSum   = useMemo(() => pendingRecs.reduce((s, r) => s + computeTotals(r).total, 0), [pendingRecs]);
+  const unpaidSum    = useMemo(() => unpaidRecs.reduce((s, r) => s + computeTotals(r).total, 0), [unpaidRecs]);
 
   return (
     <>
@@ -1003,6 +1008,34 @@ window.HistoryView = function HistoryView() {
           </button>
         </div>
       </div>
+
+      {/* การ์ดสรุปสถานะ — กันบิลตกหล่น (คลิกเพื่อกรอง) */}
+      {(pendingCount > 0 || unpaidCount > 0) && (
+        <div className="stat-grid" style={{ marginBottom: 18 }}>
+          {pendingCount > 0 && (
+            <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setApproveFilter('pending')}
+              title="วัสดุ/เครื่องจักรที่ยังไม่อนุมัติ — คลิกเพื่อกรอง">
+              <div className="stat-label">รออนุมัติ</div>
+              <div className="stat-value mono" style={{ color: 'oklch(0.55 0.18 50)' }}>{"฿" + fmt(pendingSum)}</div>
+              <div className="stat-delta" style={{ color: 'oklch(0.55 0.18 50)' }}>{pendingCount} รายการ — คลิกเพื่อกรอง</div>
+              <div className="stat-icon" style={{ background: 'oklch(0.95 0.08 60)', color: 'oklch(0.55 0.18 50)' }}>
+                <Icon name="clock" size={18} />
+              </div>
+            </div>
+          )}
+          {unpaidCount > 0 && (
+            <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setApproveFilter('unpaid')}
+              title="อนุมัติแล้วแต่ยังไม่จ่าย — คลิกเพื่อกรอง">
+              <div className="stat-label">อนุมัติแล้ว—รอส่งบัญชี</div>
+              <div className="stat-value mono" style={{ color: 'var(--info)' }}>{"฿" + fmt(unpaidSum)}</div>
+              <div className="stat-delta" style={{ color: 'var(--info)' }}>{unpaidCount} รายการ — คลิกเพื่อกรอง</div>
+              <div className="stat-icon" style={{ background: 'rgba(37,99,235,0.1)', color: 'var(--info)' }}>
+                <Icon name="receipt" size={18} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <div className="filter-bar">
@@ -1995,6 +2028,14 @@ window.DetailDrawer = function DetailDrawer() {
                 window.openPrintPopup(Component, titleLabel + ' ' + rec.docNo, rec, c, app);
               }} title="พิมพ์">
                 <Icon name="download" size={13} /> พิมพ์
+              </button>
+            )}
+            {rec.approved && ['material', 'machine', 'other', 'labor', 'lump-labor'].includes(rec.type) && (
+              <button className="btn btn-ghost btn-sm" onClick={() => {
+                const c = window.getCompanySettings();
+                window.openPrintPopup(window.PrintablePaymentApproval, 'ใบอนุมัติสั่งจ่าย ' + rec.docNo, rec, c, app);
+              }} title="พิมพ์ใบอนุมัติสั่งจ่าย สำหรับส่งฝ่ายบัญชี">
+                <Icon name="receipt" size={13} /> ใบอนุมัติ
               </button>
             )}
             <button className="btn btn-accent btn-sm" onClick={() => {

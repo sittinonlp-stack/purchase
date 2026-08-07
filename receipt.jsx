@@ -835,6 +835,140 @@ function PrintableReceipt({ rec, company, app }) {
 }
 window.PrintableReceipt = PrintableReceipt;
 
+// ──────────────────────────────────────────────
+// PrintablePaymentApproval — ใบอนุมัติสั่งจ่าย (ส่งฝ่ายบัญชี)
+// ──────────────────────────────────────────────
+function PrintablePaymentApproval({ rec, company, app }) {
+  const totals = computeTotals(rec);
+  const proj = app?.projects?.find(p => p.id === rec.projectId);
+  const di = rec.docInfo || {};
+  const typeLabel = rec.type === 'material' ? 'จัดซื้อวัสดุ'
+    : rec.type === 'machine' ? 'เช่าเครื่องจักร'
+    : rec.type === 'labor' || rec.type === 'lump-labor' ? 'ค่าแรง'
+    : 'ค่าใช้จ่าย';
+  const rows = [['รวมเป็นเงิน', totals.subTotal]];
+  if (totals.discountAmt > 0) rows.push(['ส่วนลด', -totals.discountAmt]);
+  if (totals.vat > 0)        rows.push(['ภาษีมูลค่าเพิ่ม (VAT)', totals.vat]);
+  if (totals.wht > 0)        rows.push(['หัก ณ ที่จ่าย', -totals.wht]);
+  if (totals.advance > 0)    rows.push(['หักเบิกล่วงหน้า', -totals.advance]);
+  if (totals.retention > 0)  rows.push(['หักเงินประกันผลงาน', -totals.retention]);
+
+  return (
+    <div className="printable-receipt">
+      {/* Header */}
+      <div className="rcpt-header">
+        <div className="rcpt-company">
+          {company.logoDataUrl && <img src={company.logoDataUrl} alt="logo" className="rcpt-logo" />}
+          <div>
+            <div className="rcpt-company-name">{company.name || 'ชื่อบริษัท'}</div>
+            {company.branch  && <div className="rcpt-company-line">{company.branch}</div>}
+            {company.address && <div className="rcpt-company-line">{company.address}</div>}
+            <div className="rcpt-company-line">
+              {company.phone && <span>โทร {company.phone}</span>}
+              {company.phone && company.email && <span> · </span>}
+              {company.email && <span>{company.email}</span>}
+            </div>
+            {company.taxId && <div className="rcpt-company-line">เลขประจำตัวผู้เสียภาษี: <span className="rcpt-mono">{company.taxId}</span></div>}
+          </div>
+        </div>
+        <div className="rcpt-title-box">
+          <div className="rcpt-title">ใบอนุมัติสั่งจ่าย</div>
+          <div className="rcpt-title-en">PAYMENT APPROVAL</div>
+          <div className="rcpt-original">สำหรับฝ่ายบัญชี</div>
+        </div>
+      </div>
+
+      {/* Doc info */}
+      <div className="rcpt-info-row">
+        <div className="rcpt-info-cell"><div className="rcpt-info-label">เลขที่บิล / No.</div><div className="rcpt-info-value rcpt-mono">{rec.docNo}</div></div>
+        <div className="rcpt-info-cell"><div className="rcpt-info-label">วันที่เอกสาร / Date</div><div className="rcpt-info-value">{fmtDate(rec.date)}</div></div>
+        <div className="rcpt-info-cell"><div className="rcpt-info-label">ประเภท / Type</div><div className="rcpt-info-value">{typeLabel}</div></div>
+        {proj && <div className="rcpt-info-cell"><div className="rcpt-info-label">โครงการ / Project</div><div className="rcpt-info-value">{proj.name}</div></div>}
+      </div>
+
+      {/* Payee */}
+      <div className="rcpt-customer">
+        <div className="rcpt-customer-title">ผู้ขาย / ผู้รับเงิน — Payee</div>
+        <div className="rcpt-customer-grid">
+          <div>
+            <div className="rcpt-customer-name">{rec.vendor || di.name || '—'}</div>
+            {di.address && <div className="rcpt-customer-line">{di.address}</div>}
+          </div>
+          <div className="rcpt-customer-side">
+            {di.taxId && <div className="rcpt-customer-line"><span className="rcpt-customer-key">เลขผู้เสียภาษี:</span> <span className="rcpt-mono">{di.taxId}</span></div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Items */}
+      <table className="rcpt-items">
+        <thead>
+          <tr>
+            <th style={{ width: 36 }}>ลำดับ</th>
+            <th>รายการ / Description</th>
+            <th style={{ width: 56 }} className="rcpt-num">จำนวน</th>
+            <th style={{ width: 56 }}>หน่วย</th>
+            <th style={{ width: 88 }} className="rcpt-num">ราคา/หน่วย</th>
+            <th style={{ width: 110 }} className="rcpt-num">จำนวนเงิน</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(rec.items || []).map((it, i) => (
+            <tr key={it.id || i}>
+              <td className="rcpt-num">{i + 1}</td>
+              <td>{it.name || '—'}</td>
+              <td className="rcpt-num rcpt-mono">{Number(it.qty || 0)}</td>
+              <td>{it.unit || ''}</td>
+              <td className="rcpt-num rcpt-mono">{fmt(Number(it.price || 0))}</td>
+              <td className="rcpt-num rcpt-mono">{fmt(Number(it.qty || 0) * Number(it.price || 0))}</td>
+            </tr>
+          ))}
+          {Array.from({ length: Math.max(0, 5 - (rec.items || []).length) }).map((_, i) => (
+            <tr key={'empty-' + i} className="rcpt-empty-row"><td colSpan={6}>&nbsp;</td></tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Totals */}
+      <div className="rcpt-totals">
+        <div className="rcpt-totals-left">
+          <div className="rcpt-amount-words">
+            <span className="rcpt-amount-words-label">จำนวนเงินที่อนุมัติจ่าย (ตัวอักษร):</span>
+            <div className="rcpt-amount-words-text">({thaiBahtText(totals.total)})</div>
+          </div>
+        </div>
+        <div className="rcpt-totals-right">
+          {rows.map(([label, val], i) => (
+            <div className="rcpt-total-row" key={i}><span>{label}</span><span className="rcpt-mono">{fmt(val)}</span></div>
+          ))}
+          <div className="rcpt-total-row rcpt-total-grand"><span>ยอดสุทธิที่ต้องจ่าย</span><span className="rcpt-mono">{fmt(totals.total)} บาท</span></div>
+        </div>
+      </div>
+
+      {rec.note && <div className="rcpt-note" style={{ marginBottom: 8 }}><span className="rcpt-note-label">หมายเหตุ:</span> {rec.note}</div>}
+
+      {/* Signatures */}
+      <div className="rcpt-signatures">
+        <div className="rcpt-sig">
+          {company.preparedBySignature && <img src={company.preparedBySignature} className="rcpt-sig-img" alt="" />}
+          <div className="rcpt-sig-line"></div>
+          <div className="rcpt-sig-label">ผู้จัดทำ / Prepared by</div>
+          {company.preparedByName && <div className="rcpt-sig-name">({company.preparedByName})</div>}
+          <div className="rcpt-sig-date">วันที่ {fmtDate(rec.date)}</div>
+        </div>
+        <div className="rcpt-sig">
+          {company.approvedBySignature && <img src={company.approvedBySignature} className="rcpt-sig-img" alt="" />}
+          <div className="rcpt-sig-line"></div>
+          <div className="rcpt-sig-label">ผู้อนุมัติสั่งจ่าย / Approved by</div>
+          {company.approvedByName && <div className="rcpt-sig-name">({company.approvedByName})</div>}
+          <div className="rcpt-sig-date">วันที่ ............................</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+window.PrintablePaymentApproval = PrintablePaymentApproval;
+
 // ============================================================
 // TaxInvoiceForm — ฟอร์ม "ใบเสร็จรับเงิน/ใบกำกับภาษี" (มี VAT)
 // ============================================================
