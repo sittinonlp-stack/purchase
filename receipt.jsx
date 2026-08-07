@@ -171,6 +171,11 @@ body{
 .rcpt-sig-label{font-size:11px;color:#333}
 .rcpt-sig-name{font-size:11px;color:#000;margin-top:1px}
 .rcpt-sig-date{font-size:10.5px;color:#777;margin-top:4px}
+.rcpt-stamp{position:absolute;top:48%;left:50%;transform:translate(-50%,-50%) rotate(-15deg);border:3px solid rgba(206,32,32,.5);border-radius:10px;padding:10px 30px 8px;text-align:center;color:rgba(206,32,32,.62);pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rcpt-stamp:before{content:"";position:absolute;inset:4px;border:1.5px solid rgba(206,32,32,.4);border-radius:6px}
+.rcpt-stamp-main{font-size:40px;font-weight:700;letter-spacing:.06em;line-height:1}
+.rcpt-stamp-en{font-size:13px;font-weight:600;letter-spacing:.22em;margin-top:6px}
+.rcpt-stamp-date{font-size:11px;letter-spacing:.05em;margin-top:6px;padding-top:5px;border-top:1px solid rgba(206,32,32,.35)}
 .invoice-project-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding:10px 14px;margin-bottom:14px;border:1px solid #999;border-radius:4px;background:#fafafa}
 .ipb-label{font-size:10px;color:#555;letter-spacing:0.05em;text-transform:uppercase}
 .ipb-value{font-size:12.5px;font-weight:500;margin-top:2px}
@@ -963,6 +968,13 @@ function PrintablePaymentApproval({ rec, company, app }) {
           {company.approvedByName && <div className="rcpt-sig-name">({company.approvedByName})</div>}
           <div className="rcpt-sig-date">วันที่ ............................</div>
         </div>
+      </div>
+
+      {/* ตราปั๊ม "อนุมัติแล้ว" — แดงโปร่งแสง มองเห็นรายละเอียดด้านหลังได้ */}
+      <div className="rcpt-stamp">
+        <div className="rcpt-stamp-main">อนุมัติแล้ว</div>
+        <div className="rcpt-stamp-en">APPROVED FOR PAYMENT</div>
+        <div className="rcpt-stamp-date">{fmtDate(rec.approvedDate || rec.date)}</div>
       </div>
     </div>
   );

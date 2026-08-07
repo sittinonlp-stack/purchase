@@ -669,7 +669,11 @@ function ApproveCheckbox({ record }) {
   const toggle = (e) => {
     e.stopPropagation();
     if (!app.isAdmin) return; // กันไม่ให้ non-admin แก้ไข
-    app.updateRecord(record.id, { approved: !approved });
+    const next = !approved;
+    // บันทึกวันที่อนุมัติตอนติ๊กครั้งแรก (ใช้บนตราปั๊มใบอนุมัติ)
+    app.updateRecord(record.id, next
+      ? { approved: true, approvedDate: record.approvedDate || todayStr() }
+      : { approved: false });
   };
 
   // non-admin: แสดงเฉพาะสถานะ ไม่ให้กด
@@ -802,6 +806,24 @@ function PaidButton({ record }) {
   );
 }
 
+// ---- ปุ่มพิมพ์ใบอนุมัติสั่งจ่าย (แสดงเมื่ออนุมัติแล้ว) — พิมพ์ได้จากแถวเลย ----
+function ApprovalPrintButton({ record }) {
+  const app = window.useApp();
+  if (!record.approved) return null;
+  const print = (e) => {
+    e.stopPropagation();
+    const c = window.getCompanySettings();
+    window.openPrintPopup(window.PrintablePaymentApproval, 'ใบอนุมัติสั่งจ่าย ' + record.docNo, record, c, app);
+  };
+  return (
+    <button onClick={print} title="พิมพ์ใบอนุมัติสั่งจ่าย สำหรับส่งฝ่ายบัญชี"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+        border: '1.5px solid var(--info)', background: 'rgba(37,99,235,0.08)', color: 'var(--info)', fontSize: 12, fontWeight: 600, lineHeight: 1 }}>
+      <Icon name="receipt" size={13} /> ใบอนุมัติ
+    </button>
+  );
+}
+
 function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }) {
   const app = window.useApp();
   if (!records.length) {
@@ -833,7 +855,7 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
             <th className="hide-mobile" style={{ width: 100 }}>ประเภท</th>
             <th className="hide-mobile" style={{ width: 160 }}>เอกสาร</th>
             <th style={{ width: 130 }} className="num">ยอดสุทธิ</th>
-            {showPaid && <th className="hide-mobile" style={{ width: 110, textAlign: 'center' }} title="สถานะการจ่ายเงินจริง">การจ่าย</th>}
+            {showPaid && <th className="hide-mobile" style={{ width: 132, textAlign: 'center' }} title="ใบอนุมัติ + สถานะการจ่าย">ใบอนุมัติ / จ่าย</th>}
           </tr>
         </thead>
         <tbody>
@@ -872,7 +894,8 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
                     {' · '}{fmtDate(r.date)}
                   </div>
                   {showPaid && (r.approved || r.paid) && (
-                    <div className="show-mobile" style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                    <div className="show-mobile" style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                      <ApprovalPrintButton record={r} />
                       <PaidButton record={r} />
                     </div>
                   )}
@@ -912,7 +935,10 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
                 <td className="num mono" style={{ fontWeight: 500 }}>{fmt(total)}</td>
                 {showPaid && (
                   <td className="hide-mobile" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                    <PaidButton record={r} />
+                    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                      <ApprovalPrintButton record={r} />
+                      <PaidButton record={r} />
+                    </div>
                   </td>
                 )}
               </tr>

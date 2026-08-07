@@ -102,6 +102,7 @@
       // ── lightweight flags stored inside meta ──────
       accountingPosted: Boolean((row.meta || {}).accountingPosted),
       approved:         Boolean((row.meta || {}).approved),
+      approvedDate:     (row.meta || {}).approvedDate || '',
       // ── สถานะการจ่ายเงินจริง (สลิป + วันที่โอน) ──
       paid:             Boolean((row.meta || {}).paid),
       paidDate:         (row.meta || {}).paidDate || '',
@@ -152,6 +153,7 @@
         ...(rec.meta || {}),
         accountingPosted: Boolean(rec.accountingPosted),
         approved: Boolean(rec.approved),
+        approvedDate: rec.approvedDate || '',
         paid: Boolean(rec.paid),
         paidDate: rec.paidDate || '',
         paidSlips: rec.paidSlips || [],
@@ -564,7 +566,7 @@
       if (has('depositReturnNote'))   dbPatch.deposit_return_note = patch.depositReturnNote || '';
 
       // meta JSONB — merge เข้ากับของเดิม (flags ต่าง ๆ ที่เก็บใน meta)
-      const META_KEYS = ['accountingPosted', 'approved', 'docInfo', 'meta',
+      const META_KEYS = ['accountingPosted', 'approved', 'approvedDate', 'docInfo', 'meta',
         'paid', 'paidDate', 'paidSlips', 'isRetentionPayout', 'retentionReturned',
         'discountEnabled', 'discountType', 'discountValue'];
       if (META_KEYS.some(has)) {
@@ -572,6 +574,7 @@
         const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
         if (has('accountingPosted')) newMeta.accountingPosted = Boolean(patch.accountingPosted);
         if (has('approved'))         newMeta.approved = Boolean(patch.approved);
+        if (has('approvedDate'))     newMeta.approvedDate = patch.approvedDate || '';
         if (has('docInfo'))          newMeta.docInfo = patch.docInfo;
         if (has('paid'))             newMeta.paid = Boolean(patch.paid);
         if (has('paidDate'))         newMeta.paidDate = patch.paidDate || '';
