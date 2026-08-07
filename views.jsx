@@ -25,6 +25,11 @@ function imgAlt(img, fallback) {
 const EXPENSE_TYPES = new Set(['material', 'machine', 'other', 'labor', 'lump-labor']);
 const isExpense = (r) => EXPENSE_TYPES.has(r.type) && !window.isIncome(r);
 
+// ประเภทที่ต้อง "อนุมัติ" ก่อนถึงจะนับเข้าแดชบอร์ด (จัดซื้อวัสดุ/เช่าเครื่องจักร/ค่าแรง)
+// 'other' (เบ็ดเตล็ด) ไม่ต้องอนุมัติ — นับทันที
+const NEEDS_APPROVAL = new Set(['material', 'machine', 'labor', 'lump-labor']);
+const countsInDashboard = (r) => !NEEDS_APPROVAL.has(r.type) || !!r.approved;
+
 // 'YYYY-MM' → ป้ายเดือนภาษาไทย เช่น "มิถุนายน 2569"
 function monthLabelTH(ym) {
   if (!ym) return '';
@@ -57,9 +62,8 @@ window.DashboardView = function DashboardView() {
   const stats = useMemo(() => {
     // รายจ่ายจริงเท่านั้น — ไม่รวม income, quick-receipt, receipt, tax-invoice, invoice
     const exp = periodRecords.filter(isExpense);
-    // matRecs = material + machine + other (เหมือนกับ HistoryView "ทั้งหมด")
-    const matRecs   = exp.filter(r => r.type === 'material' || r.type === 'machine' || r.type === 'other');
-    // ค่าแรง/เหมาจ่าย — นับเฉพาะที่อนุมัติแล้ว
+    // นับเฉพาะที่ผ่านเงื่อนไขอนุมัติ (วัสดุ/เครื่องจักร/ค่าแรง ต้องอนุมัติก่อน; อื่นๆ นับทันที)
+    const matRecs   = exp.filter(r => (r.type === 'material' || r.type === 'machine' || r.type === 'other') && countsInDashboard(r));
     const laborRecs = exp.filter(r => (r.type === 'labor' || r.type === 'lump-labor') && r.approved);
     const allTotals = [...matRecs, ...laborRecs].map(r => computeTotals(r));
     const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
@@ -90,7 +94,7 @@ window.DashboardView = function DashboardView() {
     const m = {};
     app.records.forEach((r) => {
       if (!isExpense(r)) return;
-      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
+      if (!countsInDashboard(r)) return;
       const t = computeTotals(r).total;
       m[r.projectId] = (m[r.projectId] || 0) + t;
     });
@@ -108,7 +112,7 @@ window.DashboardView = function DashboardView() {
     }
     app.records.forEach((r) => {
       if (!isExpense(r)) return;
-      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
+      if (!countsInDashboard(r)) return;
       const k = (r.date || '').slice(0, 7);
       const m = months.find(x => x.key === k);
       if (!m) return;
@@ -148,7 +152,7 @@ window.DashboardView = function DashboardView() {
     }
     app.records.forEach(r => {
       if (!isExpense(r)) return;
-      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
+      if (!countsInDashboard(r)) return;
       const d = days.find(x => x.key === r.date); if (!d) return;
       const total = computeTotals(r).total;
       if (r.type === 'material') d.mat += total;
@@ -175,7 +179,7 @@ window.DashboardView = function DashboardView() {
     }
     app.records.forEach(r => {
       if (!r.date || !isExpense(r)) return;
-      if ((r.type === 'labor' || r.type === 'lump-labor') && !r.approved) return;
+      if (!countsInDashboard(r)) return;
       const w = weeks.find(x => r.date >= x.start && r.date <= x.end); if (!w) return;
       const total = computeTotals(r).total;
       if (r.type === 'material') w.mat += total;
@@ -929,20 +933,40 @@ window.HistoryView = function HistoryView() {
   const [projFilter, setProjFilter] = useState('all');
   const [sortKey, setSortKey] = useState('date-desc');
   const [accFilter, setAccFilter] = useState('all'); // all | unposted | posted
+  const [approveFilter, setApproveFilter] = useState('all'); // all | pending | approved | unpaid
+
+  // ── รายการวัสดุ/เครื่องจักร/อื่นๆ ทั้งหมด (ก่อนกรอง) ──
+  const allExp = useMemo(() => app.records.filter(r =>
+    r.type !== 'quick-receipt' && r.type !== 'receipt' &&
+    r.type !== 'tax-invoice'   && r.type !== 'invoice' &&
+    r.type !== 'labor'         && r.type !== 'lump-labor' &&
+    !window.isIncome(r)
+  ), [app.records]);
+
+  // ── ปิดรายการเดิม (ครั้งเดียว): อนุมัติ + จ่ายแล้ว เพื่อไม่ให้ยอดเก่าหายจากแดชบอร์ด ──
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [retroDone, setRetroDone] = useState(() => {
+    try { return localStorage.getItem('expenseRetroDone') === '1'; } catch { return false; }
+  });
+  const bulkTargets = useMemo(() =>
+    allExp.filter(r => (r.type === 'material' || r.type === 'machine') && !r.approved), [allExp]);
+  const doBulkClose = () => {
+    bulkTargets.forEach(r => app.updateRecord(r.id, { approved: true, paid: true, paidDate: r.paidDate || r.date }));
+    try { localStorage.setItem('expenseRetroDone', '1'); } catch {}
+    setRetroDone(true);
+    setBulkOpen(false);
+    app.pushToast(`ปิดรายการเดิม ${bulkTargets.length} รายการแล้ว ✓`);
+  };
 
   const filtered = useMemo(() => {
-    // แสดงเฉพาะ material, machine, other — labor/lump-labor ย้ายไป LaborHistoryView
-    // และไม่รวมรายรับ (income) ซึ่งมีหน้าประวัติของตัวเอง
-    let arr = app.records.filter(r =>
-      r.type !== 'quick-receipt' && r.type !== 'receipt' &&
-      r.type !== 'tax-invoice'   && r.type !== 'invoice' &&
-      r.type !== 'labor'         && r.type !== 'lump-labor' &&
-      !window.isIncome(r)
-    );
+    let arr = allExp.slice();  // สำเนา — กัน .sort() ไปแก้ allExp ที่ memo ไว้
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
     if (accFilter === 'unposted') arr = arr.filter(r => !r.accountingPosted);
     if (accFilter === 'posted')   arr = arr.filter(r =>  r.accountingPosted);
+    if (approveFilter === 'pending')  arr = arr.filter(r => !r.approved);
+    if (approveFilter === 'approved') arr = arr.filter(r =>  r.approved);
+    if (approveFilter === 'unpaid')   arr = arr.filter(r =>  r.approved && !r.paid);
     if (q.trim()) {
       const s = q.toLowerCase();
       arr = arr.filter(r =>
@@ -959,9 +983,11 @@ window.HistoryView = function HistoryView() {
       return 0;
     });
     return arr;
-  }, [app.records, q, typeFilter, projFilter, sortKey, accFilter]);
+  }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter]);
 
   const sum = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
+  const pendingCount = useMemo(() => allExp.filter(r => (r.type === 'material' || r.type === 'machine') && !r.approved).length, [allExp]);
+  const unpaidCount  = useMemo(() => allExp.filter(r => r.approved && !r.paid).length, [allExp]);
 
   return (
     <>
@@ -1000,20 +1026,58 @@ window.HistoryView = function HistoryView() {
             <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
             <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
           </select>
+          <select className="select" value={approveFilter} onChange={(e) => setApproveFilter(e.target.value)}
+            style={{ borderColor: approveFilter !== 'all' ? '#2563eb' : undefined, color: approveFilter !== 'all' ? '#2563eb' : undefined }}>
+            <option value="all">การอนุมัติ: ทั้งหมด</option>
+            <option value="pending">รออนุมัติ{pendingCount > 0 ? ` (${pendingCount})` : ''}</option>
+            <option value="approved">อนุมัติแล้ว</option>
+            <option value="unpaid">อนุมัติแล้ว—รอส่งบัญชี{unpaidCount > 0 ? ` (${unpaidCount})` : ''}</option>
+          </select>
           <select className="select" value={accFilter} onChange={(e) => setAccFilter(e.target.value)}
             style={{ borderColor: accFilter !== 'all' ? '#059669' : undefined, color: accFilter !== 'all' ? '#059669' : undefined }}>
             <option value="all">สถานะบัญชี: ทั้งหมด</option>
             <option value="unposted">ยังไม่ลงบัญชี</option>
             <option value="posted">ลงบัญชีแล้ว</option>
           </select>
+          {app.isAdmin && !retroDone && bulkTargets.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setBulkOpen(true)}
+              title="ปิดรายการเดิมทั้งหมด (อนุมัติ+จ่ายแล้ว) ทำครั้งเดียว">
+              <Icon name="check" size={13} /> ปิดรายการเดิม
+            </button>
+          )}
           <div className="spacer"></div>
           <div className="text-small text-muted">
             พบ <strong style={{ color: 'var(--ink-1)' }} className="mono">{filtered.length}</strong> รายการ ·
             ยอดรวม <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(sum)}</strong>
           </div>
         </div>
-        <RecordsTable records={filtered} onOpen={(id) => app.setDetailId(id)} />
+        <RecordsTable records={filtered} onOpen={(id) => app.setDetailId(id)} showApprove={true} showPaid={true} />
       </div>
+
+      {/* Modal: ปิดรายการเดิมทั้งหมด (อนุมัติ + จ่ายแล้ว) ครั้งเดียว */}
+      {bulkOpen && (
+        <div className="modal-overlay" onClick={() => setBulkOpen(false)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">ปิดรายการจัดซื้อเดิม</h2>
+              <button className="btn-icon" onClick={() => setBulkOpen(false)}><Icon name="x" size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.7 }}>
+                จะทำเครื่องหมาย <strong>อนุมัติ + จ่ายแล้ว</strong> ให้วัสดุ/เครื่องจักร
+                <strong className="mono"> {bulkTargets.length}</strong> รายการที่ยังไม่อนุมัติ (ใช้วันที่ในเอกสารเป็นวันที่จ่าย)
+                <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 8, fontSize: 12.5, color: 'var(--ink-3)' }}>
+                  ใช้ปิดรายการเก่าครั้งเดียว เพื่อไม่ให้ยอดเดิมหายจากแดชบอร์ด — หลังจากนี้บิลใหม่จะเข้าขั้นตอน อนุมัติ → จ่าย ตามปกติ
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setBulkOpen(false)}>ยกเลิก</button>
+              <button className="btn btn-accent" onClick={doBulkClose}><Icon name="check" size={14} /> ยืนยัน ({bulkTargets.length})</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
