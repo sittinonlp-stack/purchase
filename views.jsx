@@ -1977,6 +1977,9 @@ window.DetailDrawer = function DetailDrawer() {
   const openLb  = (images, idx) => { setLbImgs(images); setLbIdx(idx); };
   const closeLb = () => setLbIdx(-1);
 
+  // เปิดรายละเอียด → ดึงข้อมูลเต็ม (รูปภาพ + บันทึกงาน) เพื่อให้แสดงครบ และปลอดภัยตอนกดแก้ไข
+  useEffect(() => { if (app.detailId) app.hydrateRecord(app.detailId); }, [app.detailId]);
+
   if (!rec) return null;
   const proj = app.projects.find(p => p.id === rec.projectId);
   const isLaborType = rec.type === 'labor' || rec.type === 'lump-labor';

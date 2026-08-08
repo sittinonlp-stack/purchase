@@ -398,6 +398,13 @@ window.AppProvider = function AppProvider({ children }) {
       setRecords(recs);
       setDbOnline(true);
       loadedUserIdRef.current = userId; // ✓ data loaded — mark for skip on next SIGNED_IN
+
+      // Phase 2: โหลดรูปภาพ + บันทึกงาน เบื้องหลัง แล้ว merge เข้ากับ record (ไม่บล็อกการแสดงผลหลัก)
+      if (typeof window.db.loadRecordMedia === 'function') {
+        window.db.loadRecordMedia()
+          .then((media) => setRecords((rs) => rs.map((r) => (media[r.id] ? { ...r, ...media[r.id] } : r))))
+          .catch((e) => console.warn('[DB] โหลดรูปภาพเบื้องหลังไม่สำเร็จ (non-fatal):', e));
+      }
     } catch (err) {
       console.error('[DB] โหลดข้อมูลไม่สำเร็จ:', err);
       // ── ถ้าเป็น auth error (token หมดอายุ/ถูกล้าง) → ออกจากระบบเพื่อให้ล็อกอินใหม่ ──
@@ -666,6 +673,18 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteRecord(id), 'deleteRecord');
   }, [dbOnline, dbSync]);
 
+  // ดึงข้อมูลเต็ม (รวมรูปภาพ + บันทึกงาน) ของ record เดียว แล้ว merge เข้า state
+  // ใช้ตอนเปิดดูรายละเอียด/ก่อนแก้ไข — กันข้อมูลรูป/บันทึกงานหายเพราะโหลดแบบเบา (phase 1)
+  const hydrateRecord = useCallback(async (id) => {
+    if (!dbOnline || !id) return;
+    try {
+      const full = await window.db.fetchRecord(id);
+      setRecords((rs) => rs.map((x) => (x.id === id ? { ...x, ...full } : x)));
+    } catch (e) {
+      console.warn('[DB] hydrateRecord ไม่สำเร็จ:', e?.message || e);
+    }
+  }, [dbOnline]);
+
   // ── Background cleanup: บีบอัดรูป base64 เก่าที่ทำให้ DB บวม/โหลดช้า ──
   // ทำงานครั้งเดียวหลังโหลดข้อมูล — ค่อย ๆ ย่อรูปทีละรายการเบื้องหลัง
   const optimizedRef = useRef(false);
@@ -883,14 +902,14 @@ window.AppProvider = function AppProvider({ children }) {
     lumpLaborCats, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
     otherCats, addOtherCat, updateOtherCat, deleteOtherCat,
     workerTeams, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
-    records, addRecord, updateRecord, deleteRecord,
+    records, addRecord, updateRecord, deleteRecord, hydrateRecord,
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, signOut, dbOnline,
        projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
-       addRecord, updateRecord, deleteRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
+       addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
        addLaborCat, updateLaborCat, deleteLaborCat, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
        addOtherCat, updateOtherCat, deleteOtherCat,

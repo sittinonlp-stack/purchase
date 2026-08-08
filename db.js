@@ -301,12 +301,21 @@
         const lightErr = e1 || e2 || e3 || e4 || e7 || e8 || e5;
         if (lightErr) throw lightErr;
 
-        // โหลด record ทั้งหมด (รวมโครงการที่เก็บถาวร) — เก็บถาวรเป็นแค่การซ่อนจากตัวเลือกโครงการ
-        // ข้อมูลรายรับ-รายจ่ายยังคงนับรวมในแดชบอร์ดและประวัติเหมือนเดิม
-        const { data: recs, error: e6 } = await client
-          .from('records')
-          .select('*, record_items(*), work_logs(*)')
-          .order('created_at', { ascending: false });
+        // Phase 1 (เบา): โหลด record แบบไม่รวมรูปภาพ/บันทึกงาน เพื่อให้แดชบอร์ด/ประวัติแสดงผลไว
+        //   - รวม record_items (จำเป็นสำหรับคำนวณยอด) แต่ไม่รวม images / deposit_return_images / work_logs (หนัก)
+        //   - รูปภาพ + บันทึกงาน โหลดเบื้องหลังภายหลังด้วย loadRecordMedia()
+        const LIGHT_COLS = 'id, type, doc_no, date, project_id, vendor, worker_team_id, period, ' +
+          'vat_mode, vat_rate, wht_enabled, wht_rate, advance_deduction, retention_deduction, ' +
+          'docs, note, deposit_amount, deposit_status, deposit_return_date, deposit_return_note, ' +
+          'meta, created_at, record_items(*)';
+        let recs, e6;
+        ({ data: recs, error: e6 } = await client
+          .from('records').select(LIGHT_COLS).order('created_at', { ascending: false }));
+        if (e6 && isMissingColumnError(e6)) {
+          // DB ที่ยังไม่มีบางคอลัมน์ → fallback ใช้ * (ยังเบากว่าเดิมเพราะไม่ join work_logs)
+          ({ data: recs, error: e6 } = await client
+            .from('records').select('*, record_items(*)').order('created_at', { ascending: false }));
+        }
         if (e6) throw e6;
 
         return {
@@ -335,6 +344,31 @@
         }
       }
       throw lastErr;
+    },
+
+    // ── Phase 2 (เบื้องหลัง): โหลดรูปภาพ + บันทึกงาน ของทุก record ──
+    // คืน map: id → { images, depositReturnImages, workLogs } เพื่อ merge เข้ากับ record ที่โหลดแบบเบาไปแล้ว
+    async loadRecordMedia() {
+      const client = window.supabaseClient;
+      if (!client) return {};
+      let { data, error } = await client
+        .from('records')
+        .select('id, images, deposit_return_images, work_logs(*)');
+      if (error && isMissingColumnError(error)) {
+        ({ data, error } = await client.from('records').select('id, images, work_logs(*)'));
+      }
+      if (error) throw error;
+      const map = {};
+      (data || []).forEach((row) => {
+        map[row.id] = {
+          images: row.images || [],
+          depositReturnImages: row.deposit_return_images || [],
+          workLogs: (row.work_logs || []).map((log) => ({
+            id: log.id, date: log.date, note: log.note || '', images: log.images || [],
+          })),
+        };
+      });
+      return map;
     },
 
     // ── Projects ─────────────────────────────────
