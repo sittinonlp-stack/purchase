@@ -280,7 +280,6 @@ function Shell() {
         </div>
       </div>
       {app.detailId && <window.DetailDrawer />}
-      <window.QuickReceiptFab />
       <window.ToastStack />
     </div>
   );

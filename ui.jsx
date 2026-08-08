@@ -372,10 +372,6 @@ function Sidebar() {
           <button className={"nav-item" + (view === 'new-invoice' ? " active" : "")} onClick={() => go('new-invoice')}>
             <Icon name="clipboard" /> ออกใบแจ้งหนี้
           </button>
-          <button className={"nav-item nav-item--quick" + (view === 'quick-receipt' ? " active" : "")} onClick={() => go('quick-receipt')}>
-            <Icon name="camera" /> ถ่ายรูปใบเสร็จ
-          </button>
-
           <div className="nav-section-label">เรียกดู</div>
           <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => go('history')}>
             <Icon name="history" /> ประวัติทั้งหมด
@@ -420,14 +416,6 @@ function Sidebar() {
             {records.filter(r => r.type === 'invoice').length > 0 && (
               <span className="badge" style={{ background:'rgba(37,99,235,0.15)', color:'#1d4ed8', border:'1px solid rgba(37,99,235,0.3)' }}>
                 {records.filter(r => r.type === 'invoice').length}
-              </span>
-            )}
-          </button>
-          <button className={"nav-item nav-item--quick" + (view === 'receipts' ? " active" : "")} onClick={() => go('receipts')}>
-            <Icon name="camera" /> รูปถ่ายใบเสร็จ
-            {records.filter(r => r.type === 'quick-receipt' && !r.accountingPosted).length > 0 && (
-              <span className="badge" style={{ background:'rgba(14,165,233,0.15)', color:'#0ea5e9', border:'1px solid rgba(14,165,233,0.3)' }}>
-                {records.filter(r => r.type === 'quick-receipt' && !r.accountingPosted).length}
               </span>
             )}
           </button>
