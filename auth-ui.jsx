@@ -52,23 +52,35 @@ function AuthScreen() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
           <div style={{
             width: 44, height: 44, borderRadius: 12,
-            background: 'linear-gradient(135deg,#d97706,#f59e0b)',
+            background: 'linear-gradient(135deg,#10b981,#047857)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, flexShrink: 0,
-          }}>🏗️</div>
+            flexShrink: 0, position: 'relative',
+          }}>
+            <svg width="26" height="26" viewBox="0 0 46 46" aria-hidden="true">
+              <polygon points="23,7 5,23 41,23" fill="#ffffff"/>
+              <rect x="10" y="21" width="26" height="18" rx="2" fill="#ffffff"/>
+              <rect x="19" y="29" width="8" height="10" rx="1.5" fill="#047857"/>
+            </svg>
+            <span style={{
+              position: 'absolute', right: -5, bottom: -5, width: 21, height: 21,
+              borderRadius: '50%', background: '#f59e0b', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, lineHeight: 1,
+            }}>฿</span>
+          </div>
           <div>
-            <div style={{ color: '#fff', fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>ระบบจัดซื้อ</div>
-            <div style={{ color: '#d97706', fontSize: 12, fontWeight: 500 }}>ForHouse Construction</div>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>ForHouse Cost</div>
+            <div style={{ color: '#34d399', fontSize: 12, fontWeight: 500 }}>คุมต้นทุนงานก่อสร้าง</div>
           </div>
         </div>
 
         <div>
           <h1 style={{ color: '#fff', fontSize: 28, fontWeight: 700, margin: '0 0 12px', lineHeight: 1.3 }}>
-            บันทึกการจัดซื้อ<br/>งานรับเหมาก่อสร้าง
+            คุมต้นทุน<br/>งานรับเหมาก่อสร้าง
           </h1>
           <p style={{ color: '#9ca3af', fontSize: 14, lineHeight: 1.7, margin: 0 }}>
-            ระบบบันทึก จัดซื้อวัสดุ · เช่าเครื่องจักร · ค่าแรง
-            พร้อมประวัติและรายงานสรุปทุกโครงการ
+            จัดซื้อ · เช่าเครื่องจักร · ค่าแรง · รายรับ · เอกสารบัญชี
+            ครบในที่เดียว พร้อมประวัติและรายงานสรุปทุกโครงการ
           </p>
         </div>
 
@@ -76,9 +88,9 @@ function AuthScreen() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
           {[
             ['🧾', 'จัดซื้อวัสดุ + เช่าเครื่องจักร'],
-            ['👷', 'บันทึกค่าแรงทีมช่าง'],
+            ['👷', 'ค่าแรง + เงินประกันผลงาน'],
+            ['💰', 'รายรับ · ตามบิล · เอกสารบัญชี'],
             ['📊', 'แดชบอร์ดสรุปทุกโครงการ'],
-            ['🔒', 'ควบคุมสิทธิ์ผู้ใช้งาน'],
           ].map(([icon, text]) => (
             <div key={text} style={{
               display: 'flex', alignItems: 'center', gap: 10,

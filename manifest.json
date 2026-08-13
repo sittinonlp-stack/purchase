@@ -1,13 +1,13 @@
 {
-  "name": "ระบบจัดซื้องานก่อสร้าง",
-  "short_name": "จัดซื้อ",
-  "description": "ระบบบันทึกการจัดซื้อวัสดุ ค่าแรง และค่าใช้จ่ายงานรับเหมาก่อสร้าง",
+  "name": "ForHouse Cost — คุมต้นทุนงานรับเหมาก่อสร้าง",
+  "short_name": "ForHouse Cost",
+  "description": "ระบบคุมต้นทุนงานรับเหมาก่อสร้าง — จัดซื้อ ค่าแรง รายรับ ตามบิล และเอกสารบัญชี ครบทุกโครงการ",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#f8f7f4",
-  "theme_color": "#d97706",
+  "background_color": "#ffffff",
+  "theme_color": "#059669",
   "lang": "th",
   "categories": ["business", "productivity"],
   "icons": [

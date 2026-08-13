@@ -3355,7 +3355,7 @@ ${includeDetails && filtered.length > 0 ? `
 
 <!-- FOOTER -->
 <div class="report-footer">
-  <span>ระบบจัดซื้องานรับเหมาก่อสร้าง &nbsp;❖&nbsp; รายงานนี้สร้างโดยระบบอัตโนมัติ &nbsp;❖&nbsp; ${now}</span>
+  <span>ForHouse Cost — คุมต้นทุนงานรับเหมาก่อสร้าง &nbsp;❖&nbsp; รายงานนี้สร้างโดยระบบอัตโนมัติ &nbsp;❖&nbsp; ${now}</span>
   <span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span>
 </div>
 

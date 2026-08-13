@@ -331,10 +331,16 @@ function Sidebar() {
 
       <aside className={'sidebar' + (sidebarOpen ? ' open' : '')}>
         <div className="sidebar-brand">
-          <div className="sidebar-logo">จ</div>
+          <div className="sidebar-logo">
+            <svg width="22" height="22" viewBox="0 0 46 46" aria-hidden="true">
+              <polygon points="23,7 5,23 41,23" fill="#ffffff"/>
+              <rect x="10" y="21" width="26" height="18" rx="2" fill="#ffffff"/>
+              <rect x="19" y="29" width="8" height="10" rx="1.5" fill="var(--accent)"/>
+            </svg>
+          </div>
           <div>
-            <div className="sidebar-brand-name">จัดซื้อ</div>
-            <div className="sidebar-brand-sub">งานรับเหมาก่อสร้าง</div>
+            <div className="sidebar-brand-name">ForHouse Cost</div>
+            <div className="sidebar-brand-sub">คุมต้นทุนงานก่อสร้าง</div>
           </div>
         </div>
 
