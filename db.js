@@ -8,10 +8,10 @@
   // ──────────────────────────────────────────────────
 
   function dbProject(row) {
-    return { id: row.id, code: row.code, name: row.name, client: row.client || '', color: row.color || '#d97706', status: row.status || 'active' };
+    return { id: row.id, code: row.code, name: row.name, client: row.client || '', color: row.color || '#d97706', status: row.status || 'active', trackBills: Boolean(row.track_bills) };
   }
   function jsProject(p) {
-    return { id: p.id, code: p.code, name: p.name, client: p.client || '', color: p.color || '#d97706', status: p.status || 'active' };
+    return { id: p.id, code: p.code, name: p.name, client: p.client || '', color: p.color || '#d97706', status: p.status || 'active', track_bills: Boolean(p.trackBills) };
   }
 
   function dbCat(row) {
@@ -109,6 +109,11 @@
       paid:             Boolean((row.meta || {}).paid),
       paidDate:         (row.meta || {}).paidDate || '',
       paidSlips:        (row.meta || {}).paidSlips || [],
+      // ── ตามบิล: ใบกำกับภาษี/ใบเสร็จตัวจริงจากร้าน ──
+      billStatus:       (row.meta || {}).billStatus || '',
+      billDate:         (row.meta || {}).billDate || '',
+      billNo:           (row.meta || {}).billNo || '',
+      billImages:       (row.meta || {}).billImages || [],
       // ── ค่าแรง: จ่ายคืนเงินประกันผลงาน ──────────
       isRetentionPayout: Boolean((row.meta || {}).isRetentionPayout),
       retentionReturned: Boolean((row.meta || {}).retentionReturned),
@@ -160,6 +165,10 @@
         paid: Boolean(rec.paid),
         paidDate: rec.paidDate || '',
         paidSlips: rec.paidSlips || [],
+        billStatus: rec.billStatus || '',
+        billDate: rec.billDate || '',
+        billNo: rec.billNo || '',
+        billImages: rec.billImages || [],
         isRetentionPayout: Boolean(rec.isRetentionPayout),
         retentionReturned: Boolean(rec.retentionReturned),
         discountEnabled: Boolean(rec.discountEnabled),
@@ -376,7 +385,13 @@
 
     // ── Projects ─────────────────────────────────
     async insertProject(p) {
-      const { error } = await window.supabaseClient.from('projects').insert(jsProject(p));
+      const row = jsProject(p);
+      let { error } = await window.supabaseClient.from('projects').insert(row);
+      if (error && isMissingColumnError(error)) {
+        // คอลัมน์ track_bills ยังไม่ถูกสร้าง (ยังไม่รัน migration) → insert โดยไม่มีคอลัมน์นี้
+        const { track_bills, ...fallback } = row;
+        ({ error } = await window.supabaseClient.from('projects').insert(fallback));
+      }
       if (error) throw error;
     },
     async deleteProject(id) {
@@ -400,8 +415,16 @@
       if ('client' in patch) dbPatch.client = patch.client || '';
       if ('color'  in patch) dbPatch.color  = patch.color || '#d97706';
       if ('status' in patch) dbPatch.status = patch.status || 'active';
+      if ('trackBills' in patch) dbPatch.track_bills = Boolean(patch.trackBills);
       if (Object.keys(dbPatch).length === 0) return;
-      const { error } = await window.supabaseClient.from('projects').update(dbPatch).eq('id', id);
+      let { error } = await window.supabaseClient.from('projects').update(dbPatch).eq('id', id);
+      if (error && isMissingColumnError(error)) {
+        // คอลัมน์ track_bills ยังไม่ถูกสร้าง → อัปเดตคอลัมน์อื่นไปก่อน (ตามบิลจะยังไม่เก็บจนกว่าจะรัน migration)
+        const { track_bills, ...fallback } = dbPatch;
+        if (Object.keys(fallback).length > 0) {
+          ({ error } = await window.supabaseClient.from('projects').update(fallback).eq('id', id));
+        } else { error = null; }
+      }
       if (error) throw error;
     },
     // โหลด record ของโครงการเดียว (สำหรับโครงการที่เก็บถาวร — โหลดเมื่อต้องการ)
@@ -605,7 +628,8 @@
       // meta JSONB — merge เข้ากับของเดิม (flags ต่าง ๆ ที่เก็บใน meta)
       const META_KEYS = ['accountingPosted', 'approved', 'approvedDate', 'docsIssued', 'docInfo', 'meta',
         'paid', 'paidDate', 'paidSlips', 'isRetentionPayout', 'retentionReturned',
-        'discountEnabled', 'discountType', 'discountValue'];
+        'discountEnabled', 'discountType', 'discountValue',
+        'billStatus', 'billDate', 'billNo', 'billImages'];
       if (META_KEYS.some(has)) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();
         const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
@@ -617,6 +641,10 @@
         if (has('paid'))             newMeta.paid = Boolean(patch.paid);
         if (has('paidDate'))         newMeta.paidDate = patch.paidDate || '';
         if (has('paidSlips'))        newMeta.paidSlips = await uploadImages(patch.paidSlips || []);
+        if (has('billStatus'))       newMeta.billStatus = patch.billStatus || '';
+        if (has('billDate'))         newMeta.billDate = patch.billDate || '';
+        if (has('billNo'))           newMeta.billNo = patch.billNo || '';
+        if (has('billImages'))       newMeta.billImages = await uploadImages(patch.billImages || []);
         if (has('isRetentionPayout')) newMeta.isRetentionPayout = Boolean(patch.isRetentionPayout);
         if (has('retentionReturned')) newMeta.retentionReturned = Boolean(patch.retentionReturned);
         if (has('discountEnabled'))  newMeta.discountEnabled = Boolean(patch.discountEnabled);

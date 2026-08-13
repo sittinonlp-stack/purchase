@@ -1240,9 +1240,10 @@ function AddProjectModal({ open, onClose, onAdd }) {
   const [code, setCode] = useState('');
   const [client, setClient] = useState('');
   const [color, setColor] = useState('#d97706');
+  const [trackBills, setTrackBills] = useState(false);
   useEffect(() => {
     if (open) {
-      setName(''); setClient(''); setColor('#d97706');
+      setName(''); setClient(''); setColor('#d97706'); setTrackBills(false);
       setCode('PJ-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 900 + 100)));
     }
   }, [open]);
@@ -1251,7 +1252,7 @@ function AddProjectModal({ open, onClose, onAdd }) {
     <Modal open={open} onClose={onClose} title="เพิ่มโครงการใหม่"
       footer={<>
         <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
-        <button className="btn btn-accent" onClick={() => name.trim() && onAdd({ name: name.trim(), code, client, color, status: 'active' })}>
+        <button className="btn btn-accent" onClick={() => name.trim() && onAdd({ name: name.trim(), code, client, color, status: 'active', trackBills })}>
           <Icon name="plus" size={14} /> เพิ่มโครงการ
         </button>
       </>}>
@@ -1279,6 +1280,15 @@ function AddProjectModal({ open, onClose, onAdd }) {
             <label className="field-label">เจ้าของ / ลูกค้า</label>
             <input className="input" placeholder="ชื่อ-นามสกุล หรือ บริษัท" value={client} onChange={(e) => setClient(e.target.value)} />
           </div>
+          <div className="field full">
+            <label className="field-label">ตามบิล (ใบกำกับภาษี/ใบเสร็จจากร้าน)</label>
+            <button type="button" onClick={() => setTrackBills(v => !v)}
+              className={"status-chip" + (trackBills ? " on approve" : "")}
+              style={{ alignSelf: 'flex-start' }}>
+              <span className="tick">{trackBills ? '✓' : ''}</span> {trackBills ? 'เปิดตามบิลโครงการนี้' : 'ปิด (ไม่ตามบิล)'}
+            </button>
+            <div className="field-hint">เปิดถ้าโครงการนี้ต้องเก็บใบกำกับภาษี/ใบเสร็จตัวจริงจากร้านไว้ยื่นภาษีซื้อ (เปิด/ปิดภายหลังได้)</div>
+          </div>
         </div>
       </div>
     </Modal>
@@ -1292,12 +1302,14 @@ function EditProjectModal({ project, onClose, onSave }) {
   const [code, setCode] = useState('');
   const [client, setClient] = useState('');
   const [color, setColor] = useState('#d97706');
+  const [trackBills, setTrackBills] = useState(false);
   useEffect(() => {
     if (project) {
       setName(project.name || '');
       setCode(project.code || '');
       setClient(project.client || '');
       setColor(project.color || '#d97706');
+      setTrackBills(!!project.trackBills);
     }
   }, [project]);
   const base = ['#d97706', '#dc2626', '#a855f7', '#0ea5e9', '#16a34a', '#eab308'];
@@ -1306,7 +1318,7 @@ function EditProjectModal({ project, onClose, onSave }) {
     <Modal open={!!project} onClose={onClose} title="แก้ไขรายละเอียดโครงการ"
       footer={<>
         <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
-        <button className="btn btn-accent" onClick={() => name.trim() && onSave({ name: name.trim(), code, client, color })}>
+        <button className="btn btn-accent" onClick={() => name.trim() && onSave({ name: name.trim(), code, client, color, trackBills })}>
           <Icon name="save" size={14} /> บันทึกการแก้ไข
         </button>
       </>}>
@@ -1333,6 +1345,15 @@ function EditProjectModal({ project, onClose, onSave }) {
           <div className="field full">
             <label className="field-label">เจ้าของ / ลูกค้า</label>
             <input className="input" placeholder="ชื่อ-นามสกุล หรือ บริษัท" value={client} onChange={(e) => setClient(e.target.value)} />
+          </div>
+          <div className="field full">
+            <label className="field-label">ตามบิล (ใบกำกับภาษี/ใบเสร็จจากร้าน)</label>
+            <button type="button" onClick={() => setTrackBills(v => !v)}
+              className={"status-chip" + (trackBills ? " on approve" : "")}
+              style={{ alignSelf: 'flex-start' }}>
+              <span className="tick">{trackBills ? '✓' : ''}</span> {trackBills ? 'เปิดตามบิลโครงการนี้' : 'ปิด (ไม่ตามบิล)'}
+            </button>
+            <div className="field-hint">เปิดเมื่อโครงการนี้ต้องเก็บใบกำกับภาษี/ใบเสร็จตัวจริงจากร้านไว้ยื่นภาษีซื้อ — รายการวัสดุ/เครื่องจักรของโครงการนี้จะขึ้นสถานะ "รอรับบิล" ให้ตามจนครบ</div>
           </div>
         </div>
       </div>

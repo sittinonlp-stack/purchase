@@ -33,6 +33,17 @@ const countsInDashboard = (r) => !NEEDS_APPROVAL.has(r.type) || !!r.approved;
 // เอกสารที่ต้องออกแต่ยังไม่ได้ออก (docs ที่ยังไม่อยู่ใน docsIssued)
 const pendingDocs = (r) => (r.docs || []).filter(d => !((r.docsIssued || []).includes(d)));
 
+// ── ตามบิล: ใบกำกับภาษี/ใบเสร็จตัวจริงที่ร้านต้องส่งมาให้ ──
+// เปิดใช้เฉพาะโครงการที่ตั้งค่า "ตามบิล" (proj.trackBills) และเฉพาะวัสดุ/เครื่องจักร
+// สถานะ: '' หรือ 'pending' = รอรับบิล | 'received' = รับแล้ว | 'none' = ไม่ต้องตามบิล (เงินสด/ไม่มี VAT)
+// ประวัติเก่า (บิลลงวันที่ก่อน BILL_TRACK_FROM = 10 ส.ค. 69) ถือว่าได้รับบิลแล้วโดยปริยาย
+// เริ่มตามบิลจริงกับรายการที่ซื้อตั้งแต่ 11 ส.ค. 69 เป็นต้นไป
+const BILL_TRACK_FROM = '2026-08-11';
+const needsBill = (r, proj) => (r.type === 'material' || r.type === 'machine') && !!(proj && proj.trackBills);
+const billDefault = (r) => (r.date && r.date < BILL_TRACK_FROM) ? 'received' : 'pending';
+const billState = (r, proj) => needsBill(r, proj) ? (r.billStatus || billDefault(r)) : 'na';
+const isBillPending = (r, proj) => billState(r, proj) === 'pending';
+
 // 'YYYY-MM' → ป้ายเดือนภาษาไทย เช่น "มิถุนายน 2569"
 function monthLabelTH(ym) {
   if (!ym) return '';
@@ -790,6 +801,81 @@ function ApprovalPrintButton({ record }) {
   );
 }
 
+// ---- ตามบิล: บันทึกการรับใบกำกับภาษี/ใบเสร็จจากร้าน (ในหน้ารายละเอียด) ----
+function BillReceiveSection({ rec }) {
+  const app = window.useApp();
+  const status = rec.billStatus || billDefault(rec);   // pending | received | none (เก่ากว่า 11 ส.ค. 69 = received)
+  const [date, setDate] = useState(rec.billDate || todayStr());
+  const [no, setNo]     = useState(rec.billNo || '');
+  const [imgs, setImgs] = useState(rec.billImages || []);
+
+  const saveReceived = () => {
+    if (!date) return app.pushToast('โปรดระบุวันที่รับบิล', 'error');
+    app.updateRecord(rec.id, { billStatus: 'received', billDate: date, billNo: no.trim(), billImages: imgs });
+    app.pushToast(status === 'received' ? 'บันทึกข้อมูลบิลแล้ว ✓' : 'บันทึกรับใบกำกับภาษีแล้ว ✓');
+  };
+  const markNone = () => {
+    app.updateRecord(rec.id, { billStatus: 'none' });
+    app.pushToast('ทำเครื่องหมาย: ไม่ต้องตามบิล');
+  };
+  const reopen = () => {
+    app.updateRecord(rec.id, { billStatus: 'pending' });
+    app.pushToast('กลับเป็นสถานะรอรับบิล');
+  };
+
+  const banner = status === 'received'
+    ? { bg: 'var(--accent-soft)', bd: 'rgba(5,150,105,0.35)', fg: 'var(--accent-ink)', text: '✓ รับใบกำกับภาษี/ใบเสร็จจากร้านแล้ว' + (rec.billDate ? ' · ' + fmtDate(rec.billDate) : '') }
+    : status === 'none'
+    ? { bg: 'var(--surface-2)', bd: 'var(--line)', fg: 'var(--ink-3)', text: 'ไม่ต้องตามบิล (เงินสด / ไม่มีใบกำกับภาษี)' }
+    : { bg: 'var(--warn-soft)', bd: 'rgba(217,119,6,0.35)', fg: '#96590a', text: '📥 รอรับใบกำกับภาษี/ใบเสร็จตัวจริงจากร้าน' };
+
+  return (
+    <div className="detail-section">
+      <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>ใบกำกับภาษี/ใบเสร็จจากร้าน</h3>
+      <div style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + banner.bd, background: banner.bg, color: banner.fg, fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>{banner.text}</div>
+
+      {status !== 'none' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="row gap-12" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="field" style={{ flex: '1 1 150px', margin: 0 }}>
+              <label className="field-label">วันที่รับบิล <span className="req">*</span></label>
+              <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <div className="field" style={{ flex: '1 1 180px', margin: 0 }}>
+              <label className="field-label">เลขที่ใบกำกับภาษี</label>
+              <input className="input" value={no} onChange={e => setNo(e.target.value)} placeholder="ถ้ามี" />
+            </div>
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label className="field-label">รูปถ่ายใบกำกับภาษี/ใบเสร็จ</label>
+            <window.ImageUploader images={imgs} onChange={setImgs} max={5} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        {status !== 'none' && (
+          <button className="btn btn-accent btn-sm" onClick={saveReceived}>
+            <Icon name="check" size={13} /> {status === 'received' ? 'บันทึกการแก้ไข' : 'รับบิลแล้ว'}
+          </button>
+        )}
+        {status === 'pending' && (
+          <button className="btn btn-ghost btn-sm" onClick={markNone}>ไม่ต้องตามบิล</button>
+        )}
+        {status === 'received' && (
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={reopen}>ยกเลิกรับบิล (กลับไปรอ)</button>
+        )}
+        {status === 'none' && (
+          <button className="btn btn-ghost btn-sm" onClick={reopen}>กลับเป็นรอรับบิล</button>
+        )}
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.5 }}>
+        ใช้ตามบิลกับร้านให้ครบก่อนยื่นภาษีซื้อ — กด "รับบิลแล้ว" เมื่อได้ใบกำกับภาษีตัวจริง แล้วรายการจะหลุดจากตัวกรอง "ตามบิล"
+      </div>
+    </div>
+  );
+}
+
 // แถวเดียวของตาราง — memoize เพื่อไม่ให้ทุกแถว re-render เวลากดปุ่มในแถวใดแถวหนึ่ง (ตารางมีหลายร้อยแถว)
 const RecordRow = React.memo(function RecordRow({ r, projects, showApprove, showPaid, onOpen }) {
   const proj = projects.find(p => p.id === r.projectId);
@@ -846,6 +932,16 @@ const RecordRow = React.memo(function RecordRow({ r, projects, showApprove, show
               );
             })}
             {r.whtEnabled && <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'var(--info-soft)', color: '#1a4fb0', border: '1px solid rgba(37,99,235,0.3)', whiteSpace: 'nowrap' }}>หัก {r.whtRate}%</span>}
+          </div>
+        )}
+        {/* ตามบิล — ใบกำกับภาษี/ใบเสร็จจากร้าน (เฉพาะโครงการที่เปิดตามบิล) */}
+        {(billState(r, proj) === 'pending' || billState(r, proj) === 'received') && (
+          <div style={{ marginTop: 5 }}>
+            {billState(r, proj) === 'received' ? (
+              <span title={'รับใบกำกับภาษี/ใบเสร็จจากร้านแล้ว' + (r.billDate ? ' · ' + fmtDate(r.billDate) : '')} style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent-ink)', border: '1px solid rgba(5,150,105,0.35)', whiteSpace: 'nowrap' }}>✓ รับบิลแล้ว</span>
+            ) : (
+              <span title="ยังไม่ได้รับใบกำกับภาษี/ใบเสร็จตัวจริงจากร้าน — รอตามบิลก่อนยื่นภาษี" style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'var(--warn-soft)', color: '#96590a', border: '1px solid rgba(217,119,6,0.35)', whiteSpace: 'nowrap' }}>📥 รอรับบิล</span>
+            )}
           </div>
         )}
       </td>
@@ -939,6 +1035,14 @@ window.HistoryView = function HistoryView() {
   const [accFilter, setAccFilter] = useState('all'); // all | unposted | posted
   const [approveFilter, setApproveFilter] = useState('all'); // all | pending | approved | unpaid
   const [docFilter, setDocFilter] = useState(false); // true = เฉพาะที่มีเอกสารต้องออก
+  const [billFilter, setBillFilter] = useState(false); // true = เฉพาะที่ยังรอรับใบกำกับภาษีจากร้าน
+
+  // ── lookup โครงการ (ใช้เช็ค trackBills สำหรับฟีเจอร์ตามบิล) ──
+  const projById = useMemo(() => {
+    const m = {};
+    app.projects.forEach(p => { m[p.id] = p; });
+    return m;
+  }, [app.projects]);
 
   // ── รายการวัสดุ/เครื่องจักร/อื่นๆ ทั้งหมด (ก่อนกรอง) ──
   const allExp = useMemo(() => app.records.filter(r =>
@@ -976,6 +1080,7 @@ window.HistoryView = function HistoryView() {
     if (approveFilter === 'approved') arr = arr.filter(r =>  r.approved);
     if (approveFilter === 'unpaid')   arr = arr.filter(r =>  r.approved && !r.paid);
     if (docFilter) arr = arr.filter(r => pendingDocs(r).length > 0);
+    if (billFilter) arr = arr.filter(r => isBillPending(r, projById[r.projectId]));
     if (q.trim()) {
       const s = q.toLowerCase();
       arr = arr.filter(r =>
@@ -992,10 +1097,14 @@ window.HistoryView = function HistoryView() {
       return 0;
     });
     return arr;
-  }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter, docFilter]);
+  }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter, docFilter, billFilter, projById]);
 
   const sum = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
   const pendingDocsCount = useMemo(() => allExp.filter(r => pendingDocs(r).length > 0).length, [allExp]);
+  // ตามบิล — รายการที่ยังไม่ได้รับใบกำกับภาษี/ใบเสร็จจากร้าน
+  const billPendingRecs = useMemo(() => allExp.filter(r => isBillPending(r, projById[r.projectId])), [allExp, projById]);
+  const billPendingCount = billPendingRecs.length;
+  const billPendingSum = useMemo(() => billPendingRecs.reduce((s, r) => s + computeTotals(r).total, 0), [billPendingRecs]);
   // สรุปสถานะ (จากรายการทั้งหมด ไม่ขึ้นกับตัวกรอง)
   const pendingRecs = useMemo(() => allExp.filter(r => (r.type === 'material' || r.type === 'machine') && !r.approved), [allExp]);
   const unpaidRecs  = useMemo(() => allExp.filter(r => r.approved && !r.paid), [allExp]);
@@ -1025,7 +1134,7 @@ window.HistoryView = function HistoryView() {
       </div>
 
       {/* การ์ดสรุปสถานะ — กันบิลตกหล่น (คลิกเพื่อกรอง) */}
-      {(pendingCount > 0 || unpaidCount > 0) && (
+      {(pendingCount > 0 || unpaidCount > 0 || billPendingCount > 0) && (
         <div className="stat-grid" style={{ marginBottom: 18 }}>
           {pendingCount > 0 && (
             <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setApproveFilter('pending')}
@@ -1045,6 +1154,17 @@ window.HistoryView = function HistoryView() {
               <div className="stat-value mono" style={{ color: 'var(--info)' }}>{"฿" + fmt(unpaidSum)}</div>
               <div className="stat-delta" style={{ color: 'var(--info)' }}>{unpaidCount} รายการ — คลิกเพื่อกรอง</div>
               <div className="stat-icon" style={{ background: 'rgba(37,99,235,0.1)', color: 'var(--info)' }}>
+                <Icon name="receipt" size={18} />
+              </div>
+            </div>
+          )}
+          {billPendingCount > 0 && (
+            <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setBillFilter(true)}
+              title="วัสดุ/เครื่องจักรที่ยังไม่ได้รับใบกำกับภาษี/ใบเสร็จจากร้าน — คลิกเพื่อกรอง">
+              <div className="stat-label">รอรับใบกำกับภาษีจากร้าน</div>
+              <div className="stat-value mono" style={{ color: 'oklch(0.55 0.18 50)' }}>{"฿" + fmt(billPendingSum)}</div>
+              <div className="stat-delta" style={{ color: 'oklch(0.55 0.18 50)' }}>{billPendingCount} รายการ — ตามบิลก่อนยื่นภาษี</div>
+              <div className="stat-icon" style={{ background: 'oklch(0.95 0.08 60)', color: 'oklch(0.55 0.18 50)' }}>
                 <Icon name="receipt" size={18} />
               </div>
             </div>
@@ -1092,6 +1212,12 @@ window.HistoryView = function HistoryView() {
             title="กรองเฉพาะบิลที่ยังมีเอกสารต้องออก (ใบสำคัญจ่าย/50 ทวิ)"
             style={!docFilter && pendingDocsCount > 0 ? { color: '#96590a', borderColor: 'rgba(217,119,6,0.4)' } : undefined}>
             <Icon name="receipt" size={13} /> รอออกเอกสาร{pendingDocsCount > 0 ? ` (${pendingDocsCount})` : ''}
+          </button>
+          <button className={"btn btn-sm" + (billFilter ? " btn-accent" : " btn-ghost")}
+            onClick={() => setBillFilter(v => !v)}
+            title="กรองเฉพาะรายการที่ยังไม่ได้รับใบกำกับภาษี/ใบเสร็จตัวจริงจากร้าน (ตามบิลก่อนยื่นภาษี)"
+            style={!billFilter && billPendingCount > 0 ? { color: '#96590a', borderColor: 'rgba(217,119,6,0.4)' } : undefined}>
+            📥 ตามบิล{billPendingCount > 0 ? ` (${billPendingCount})` : ''}
           </button>
           {app.isAdmin && !retroDone && bulkTargets.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={() => setBulkOpen(true)}
@@ -1207,11 +1333,14 @@ window.ProjectsView = function ProjectsView() {
               <div className="card-body">
                 <div className="row between mb-8">
                   <span className="mono text-small text-muted">{p.code}</span>
-                  {p.status === 'active'
-                    ? <span className="badge green dot">ดำเนินการ</span>
-                    : p.status === 'archived'
-                    ? <span className="badge gray dot">เก็บถาวร</span>
-                    : <span className="badge gray dot">ปิดแล้ว</span>}
+                  <div className="row gap-6">
+                    {p.trackBills && <span className="badge dot" style={{ background: 'var(--warn-soft)', color: '#96590a', borderColor: 'rgba(217,119,6,0.35)' }} title="เปิดตามบิล — เก็บใบกำกับภาษี/ใบเสร็จจากร้าน">📥 ตามบิล</span>}
+                    {p.status === 'active'
+                      ? <span className="badge green dot">ดำเนินการ</span>
+                      : p.status === 'archived'
+                      ? <span className="badge gray dot">เก็บถาวร</span>
+                      : <span className="badge gray dot">ปิดแล้ว</span>}
+                  </div>
                 </div>
                 <h3 style={{ fontSize: 16, marginBottom: 4 }}>{p.name}</h3>
                 <div className="text-small text-muted mb-16">{p.client}</div>
@@ -2116,6 +2245,9 @@ window.DetailDrawer = function DetailDrawer() {
             </div>
           )}
         </div>
+
+        {/* ตามบิล — รับใบกำกับภาษี/ใบเสร็จจากร้าน (เฉพาะโครงการที่เปิดตามบิล) */}
+        {needsBill(rec, proj) && <BillReceiveSection key={rec.id} rec={rec} />}
 
         {/* เอกสารที่ต้องออก — ทำเครื่องหมาย "ออกแล้ว" กันออกซ้ำ */}
         {(rec.docs && rec.docs.length > 0) && (
