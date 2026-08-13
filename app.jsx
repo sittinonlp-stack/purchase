@@ -99,6 +99,8 @@ function Shell() {
       <div className="main">
         <window.Topbar title={title} sub={sub} />
         <div className="content">
+          {['new-receipt', 'new-tax-invoice', 'new-invoice'].includes(view) && <window.DocTabStrip mode="issue" />}
+          {['receipts-list', 'tax-invoices-list', 'invoices-list'].includes(view) && <window.DocTabStrip mode="history" />}
           {view === 'dashboard' && <window.DashboardView />}
           {view === 'new-material' && (
             <window.PurchaseForm
@@ -116,7 +118,7 @@ function Shell() {
                 clearEditing();
                 app.setView('history');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('history'); }}
             />
           )}
           {view === 'new-machine' && (
@@ -135,7 +137,7 @@ function Shell() {
                 clearEditing();
                 app.setView('history');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('history'); }}
             />
           )}
           {view === 'quick-receipt' && <window.QuickReceiptView key={'qr-' + (app.editingId || 'new')} />}
@@ -198,7 +200,7 @@ function Shell() {
                 clearEditing();
                 app.setView('history');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('history'); }}
             />
           )}
           {view === 'new-income' && (
@@ -216,7 +218,7 @@ function Shell() {
                 clearEditing();
                 app.setView('income-history');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('income-history'); }}
             />
           )}
           {view === 'income-history' && <window.IncomeHistoryView />}
@@ -235,7 +237,7 @@ function Shell() {
                 clearEditing();
                 app.setView('receipts-list');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('receipts-list'); }}
             />
           )}
           {view === 'receipts-list' && <window.ReceiptsListView />}
@@ -254,7 +256,7 @@ function Shell() {
                 clearEditing();
                 app.setView('tax-invoices-list');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('tax-invoices-list'); }}
             />
           )}
           {view === 'tax-invoices-list' && <window.TaxInvoicesListView />}
@@ -273,7 +275,7 @@ function Shell() {
                 clearEditing();
                 app.setView('invoices-list');
               }}
-              onCancel={() => { clearEditing(); app.setView('dashboard'); }}
+              onCancel={() => { clearEditing(); app.setView('invoices-list'); }}
             />
           )}
           {view === 'invoices-list' && <window.InvoicesListView />}

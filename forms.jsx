@@ -113,8 +113,8 @@ function CategorySelect({ value, onChange, cats, onAdd, placeholder = 'เลื
       <button ref={btnRef} type="button" className="cell-input"
         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}
         onClick={handleToggle}>
-        {cur ? <><span className="cat-dot" style={{ background: cur.color }}></span><span style={{ flex: 1, fontSize: 12.5 }}>{cur.name}</span></>
-             : <span style={{ flex: 1, color: 'var(--ink-4)', fontSize: 12.5 }}>{placeholder}</span>}
+        {cur ? <><span className="cat-dot" style={{ background: cur.color, flexShrink: 0 }}></span><span style={{ flex: 1, fontSize: 12.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cur.name}</span></>
+             : <span style={{ flex: 1, color: 'var(--ink-4)', fontSize: 12.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{placeholder}</span>}
         <Icon name="chevron" size={11} stroke={2} />
       </button>
       {open && (
@@ -237,43 +237,43 @@ function ItemsTable({ items, setItems, cats, onAddCat, type }) {
 
   return (
     <div className="col gap-8" style={{ overflowX: 'auto' }}>
-      <table className="items-table" style={{ minWidth: 780 }}>
+      <table className="items-table" style={{ tableLayout: 'fixed', width: '100%' }}>
         <thead>
           <tr>
-            <th style={{ width: '38%' }}>{type === 'machine' ? 'เครื่องจักร / อุปกรณ์' : 'รายการวัสดุ'}</th>
+            <th style={{ width: '34%' }}>{type === 'machine' ? 'เครื่องจักร / อุปกรณ์' : 'รายการวัสดุ'}</th>
             <th style={{ width: '18%' }}>หมวดหมู่</th>
-            <th style={{ width: '8%' }} className="num">จำนวน</th>
-            <th style={{ width: '9%' }}>หน่วย</th>
-            <th style={{ width: '12%' }} className="num">ราคา/หน่วย</th>
-            <th style={{ width: '13%' }} className="num">รวม</th>
-            <th style={{ width: 36 }}></th>
+            <th style={{ width: '10%' }} className="num">จำนวน</th>
+            <th style={{ width: '11%' }}>หน่วย</th>
+            <th style={{ width: '13%' }} className="num">ราคา/หน่วย</th>
+            <th style={{ width: '14%' }} className="num">รวม</th>
+            <th style={{ width: 34 }}></th>
           </tr>
         </thead>
         <tbody>
           {items.map((it, idx) => (
             <tr key={it.id}>
-              <td>
+              <td data-label={type === 'machine' ? 'เครื่องจักร / อุปกรณ์' : 'รายการวัสดุ'}>
                 <input className="cell-input" placeholder={type === 'machine' ? 'เช่น รถเครน 25 ตัน + คนขับ' : 'เช่น เหล็กข้ออ้อย DB16'}
                   value={it.name} onChange={(e) => updateItem(it.id, { name: e.target.value })} />
               </td>
-              <td>
+              <td data-label="หมวดหมู่">
                 <CategorySelect value={it.categoryId} onChange={(v) => updateItem(it.id, { categoryId: v })} cats={cats} onAdd={onAddCat} placeholder="—" />
               </td>
-              <td>
+              <td data-label="จำนวน">
                 <input className="cell-input num" type="number" min="0" step="any" value={it.qty}
                   onChange={(e) => updateItem(it.id, { qty: e.target.value })} />
               </td>
-              <td>
+              <td data-label="หน่วย">
                 <input className="cell-input" value={it.unit} onChange={(e) => updateItem(it.id, { unit: e.target.value })} />
               </td>
-              <td>
+              <td data-label="ราคา/หน่วย">
                 <input className="cell-input num" type="number" min="0" step="any" value={it.price}
                   onChange={(e) => updateItem(it.id, { price: e.target.value })} />
               </td>
-              <td className="num mono" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
+              <td className="num mono" data-label="รวม" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
                 {fmt(Number(it.qty || 0) * Number(it.price || 0))}
               </td>
-              <td>
+              <td className="item-del">
                 <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบรายการ">
                   <Icon name="trash" size={13} />
                 </button>
@@ -1104,15 +1104,15 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
                 <tbody>
                   {form.items.map((it) => (
                     <tr key={it.id}>
-                      <td>
+                      <td data-label="รายละเอียด">
                         <input className="cell-input" placeholder="เช่น เงินงวดที่ 1 งานโครงสร้าง"
                           value={it.name} onChange={(e) => setItem(it.id, { name: e.target.value })} />
                       </td>
-                      <td>
+                      <td data-label="จำนวนเงิน (บาท)">
                         <input className="cell-input mono" type="number" step="0.01" style={{ textAlign: 'right' }}
                           value={it.price} onChange={(e) => setItem(it.id, { price: e.target.value, qty: 1 })} placeholder="0.00" />
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td className="item-del" style={{ textAlign: 'center' }}>
                         <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบ">
                           <Icon name="trash" size={13} />
                         </button>

@@ -428,43 +428,43 @@ function LaborItemsTable({ items, setItems, cats, onAddCat }) {
   const units = ['ตร.ม.', 'ตร.ว.', 'ม.', 'จุด', 'งวด', 'วัน', 'เหมา'];
   return (
     <div className="col gap-8" style={{ overflowX: 'auto' }}>
-      <table className="items-table" style={{ minWidth: 780 }}>
+      <table className="items-table" style={{ tableLayout: 'fixed', width: '100%' }}>
         <thead>
           <tr>
-            <th style={{ width: '36%' }}>รายการงาน</th>
-            <th style={{ width: '17%' }}>หมวดงาน</th>
-            <th style={{ width: '8%' }} className="num">ปริมาณ</th>
-            <th style={{ width: '12%' }}>หน่วย</th>
+            <th style={{ width: '34%' }}>รายการงาน</th>
+            <th style={{ width: '18%' }}>หมวดงาน</th>
+            <th style={{ width: '10%' }} className="num">ปริมาณ</th>
+            <th style={{ width: '11%' }}>หน่วย</th>
             <th style={{ width: '13%' }} className="num">ค่าแรง/หน่วย</th>
             <th style={{ width: '14%' }} className="num">รวม</th>
-            <th style={{ width: 36 }}></th>
+            <th style={{ width: 34 }}></th>
           </tr>
         </thead>
         <tbody>
           {items.map((it) => (
             <tr key={it.id}>
-              <td>
+              <td data-label="รายการงาน">
                 <input className="cell-input" placeholder="เช่น ก่ออิฐมวลเบา ผนังชั้น 2"
                   value={it.name} onChange={(e) => updateItem(it.id, { name: e.target.value })} />
               </td>
-              <td>
+              <td data-label="หมวดงาน">
                 <window.CategorySelect value={it.categoryId} onChange={(v) => updateItem(it.id, { categoryId: v })} cats={cats} onAdd={onAddCat} placeholder="—" />
               </td>
-              <td>
+              <td data-label="ปริมาณ">
                 <input className="cell-input num" type="number" min="0" step="any" value={it.qty}
                   onChange={(e) => updateItem(it.id, { qty: e.target.value })} />
               </td>
-              <td>
+              <td data-label="หน่วย">
                 <input className="cell-input" list="labor-units" value={it.unit} onChange={(e) => updateItem(it.id, { unit: e.target.value })} />
               </td>
-              <td>
+              <td data-label="ค่าแรง/หน่วย">
                 <input className="cell-input num" type="number" min="0" step="any" value={it.price}
                   onChange={(e) => updateItem(it.id, { price: e.target.value })} />
               </td>
-              <td className="num mono" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
+              <td className="num mono" data-label="รวม" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
                 {fmt(Number(it.qty || 0) * Number(it.price || 0))}
               </td>
-              <td>
+              <td className="item-del">
                 <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบ">
                   <Icon name="trash" size={13} />
                 </button>
@@ -855,7 +855,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }} className="form-layout">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18, alignItems: 'start' }} className="form-layout">
         <div className="col gap-16">
           {/* Card 1: header */}
           <div className="card">
@@ -1081,67 +1081,48 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
           </div>
         </div>
 
-        {/* Right summary */}
-        <div style={{ position: 'sticky', top: 84 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">สรุปยอดจ่าย</div>
+        {/* Summary bar — เต็มความกว้าง ด้านล่าง (เหมือนฟอร์มวัสดุ) */}
+        <div className="card form-summary-bottom">
+          <div className="card-body form-summary-bar">
+            <div className="summary-chips">
               <span className="badge amber dot">{form.period || 'งวดเดียว'}</span>
-            </div>
-            <div className="card-body">
-              <div className="summary-rows">
-                <div className="summary-row">
-                  <span className="label">ค่าแรงรวม</span>
-                  <span className="value">{fmt(totals.subTotal)}</span>
-                </div>
-                {Number(form.vatRate) > 0 && (
-                  <div className="summary-row">
-                    <span className="label">Vat {form.vatRate}%</span>
-                    <span className="value">{fmt(totals.vat)}</span>
-                  </div>
-                )}
-                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
-                  <span className="label">รวมก่อนหัก</span>
-                  <span className="value">{fmt(totals.beforeWht)}</span>
-                </div>
-                {form.whtEnabled && (
-                  <div className="summary-row">
-                    <span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span>
-                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
-                  </div>
-                )}
-                {Number(form.advanceDeduction) > 0 && (
-                  <div className="summary-row">
-                    <span className="label" style={{ color: 'var(--warn)' }}>หักเบิกล่วงหน้า</span>
-                    <span className="value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span>
-                  </div>
-                )}
-                {Number(form.retentionDeduction) > 0 && (
-                  <div className="summary-row">
-                    <span className="label" style={{ color: 'var(--info)' }}>หักเงินประกัน</span>
-                    <span className="value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span>
-                  </div>
-                )}
-                <div className="summary-row total">
-                  <span className="label">ยอดจ่ายสุทธิ</span>
-                  <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
-                </div>
+              <div className="summary-chip">
+                <span className="chip-label">ค่าแรงรวม</span>
+                <span className="chip-value">{fmt(totals.subTotal)}</span>
               </div>
-
-              <div className="mt-20" style={{ padding: 14, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="sparkle" size={13} /> เคล็ดลับ
+              {Number(form.vatRate) > 0 && (
+                <div className="summary-chip">
+                  <span className="chip-label">Vat {form.vatRate}%</span>
+                  <span className="chip-value">{fmt(totals.vat)}</span>
                 </div>
-                เงินประกันผลงานจะถูก "ตั้งพัก" ไว้ก่อน — เมื่องวดสุดท้ายตรวจรับงานเรียบร้อย สามารถสร้างบิลค่าแรงใหม่เพื่อ "คืนเงินประกัน" ได้
+              )}
+              {form.whtEnabled && (
+                <div className="summary-chip">
+                  <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                  <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
+                </div>
+              )}
+              {Number(form.advanceDeduction) > 0 && (
+                <div className="summary-chip">
+                  <span className="chip-label">หักเบิกล่วงหน้า</span>
+                  <span className="chip-value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span>
+                </div>
+              )}
+              {Number(form.retentionDeduction) > 0 && (
+                <div className="summary-chip">
+                  <span className="chip-label">หักเงินประกัน</span>
+                  <span className="chip-value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span>
+                </div>
+              )}
+              <div className="summary-chip total">
+                <span className="chip-label">ยอดจ่ายสุทธิ</span>
+                <span className="chip-value">{fmt(totals.total)} <span className="chip-unit">บาท</span></span>
               </div>
             </div>
-          </div>
-
-          <div className="row gap-8 mt-16">
-            <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}>
-              <Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}
-            </button>
-            <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+            <div className="row gap-8 summary-bar-actions">
+              <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
+              <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1176,44 +1157,44 @@ function LumpLaborItemsTable({ items, setItems, cats, onAddCat }) {
   const units = ['เหมา', 'ตร.ม.', 'ตร.ว.', 'ม.', 'จุด', 'งวด', 'วัน', 'ชุด'];
   return (
     <div className="col gap-8" style={{ overflowX: 'auto' }}>
-      <table className="items-table" style={{ minWidth: 780 }}>
+      <table className="items-table" style={{ tableLayout: 'fixed', width: '100%' }}>
         <thead>
           <tr>
-            <th style={{ width: '36%' }}>รายการงานเหมา</th>
-            <th style={{ width: '17%' }}>หมวดงาน</th>
-            <th style={{ width: '8%' }} className="num">ปริมาณ</th>
-            <th style={{ width: '12%' }}>หน่วย</th>
+            <th style={{ width: '34%' }}>รายการงานเหมา</th>
+            <th style={{ width: '18%' }}>หมวดงาน</th>
+            <th style={{ width: '10%' }} className="num">ปริมาณ</th>
+            <th style={{ width: '11%' }}>หน่วย</th>
             <th style={{ width: '13%' }} className="num">ราคา/หน่วย (฿)</th>
             <th style={{ width: '14%' }} className="num">รวม</th>
-            <th style={{ width: 36 }}></th>
+            <th style={{ width: 34 }}></th>
           </tr>
         </thead>
         <tbody>
           {items.map((it) => (
             <tr key={it.id}>
-              <td>
+              <td data-label="รายการงานเหมา">
                 <input className="cell-input" placeholder="เช่น งานก่อ-ฉาบทั้งชั้น, งานปูกระเบื้องห้องน้ำ"
                   value={it.name} onChange={(e) => updateItem(it.id, { name: e.target.value })} />
               </td>
-              <td>
+              <td data-label="หมวดงาน">
                 <window.CategorySelect value={it.categoryId} onChange={(v) => updateItem(it.id, { categoryId: v })} cats={cats} onAdd={onAddCat} placeholder="—" />
               </td>
-              <td>
+              <td data-label="ปริมาณ">
                 <input className="cell-input num" type="number" min="0" step="any" value={it.qty}
                   onChange={(e) => updateItem(it.id, { qty: e.target.value })} />
               </td>
-              <td>
+              <td data-label="หน่วย">
                 <input className="cell-input" list="lump-labor-units" value={it.unit}
                   onChange={(e) => updateItem(it.id, { unit: e.target.value })} />
               </td>
-              <td>
+              <td data-label="ราคา/หน่วย">
                 <input className="cell-input num" type="number" min="0" step="any" value={it.price}
                   onChange={(e) => updateItem(it.id, { price: e.target.value })} />
               </td>
-              <td className="num mono" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
+              <td className="num mono" data-label="รวม" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
                 {fmt(Number(it.qty || 0) * Number(it.price || 0))}
               </td>
-              <td>
+              <td className="item-del">
                 <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบ">
                   <Icon name="trash" size={13} />
                 </button>
@@ -1358,7 +1339,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }} className="form-layout">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18, alignItems: 'start' }} className="form-layout">
         <div className="col gap-16">
 
           {/* Card 1: header */}
@@ -1573,67 +1554,48 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
           </div>
         </div>
 
-        {/* Right: summary */}
-        <div style={{ position: 'sticky', top: 84 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">สรุปยอดจ่าย</div>
+        {/* Summary bar — เต็มความกว้าง ด้านล่าง (เหมือนฟอร์มวัสดุ) */}
+        <div className="card form-summary-bottom">
+          <div className="card-body form-summary-bar">
+            <div className="summary-chips">
               <span className="badge green dot">เหมาจ่าย</span>
-            </div>
-            <div className="card-body">
-              <div className="summary-rows">
-                <div className="summary-row">
-                  <span className="label">ยอดเหมารวม</span>
-                  <span className="value">{fmt(totals.subTotal)}</span>
-                </div>
-                {Number(form.vatRate) > 0 && (
-                  <div className="summary-row">
-                    <span className="label">Vat {form.vatRate}%</span>
-                    <span className="value">{fmt(totals.vat)}</span>
-                  </div>
-                )}
-                <div className="summary-row" style={{ borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
-                  <span className="label">รวมก่อนหัก</span>
-                  <span className="value">{fmt(totals.beforeWht)}</span>
-                </div>
-                {form.whtEnabled && (
-                  <div className="summary-row">
-                    <span className="label">หัก ณ ที่จ่าย {form.whtRate}%</span>
-                    <span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
-                  </div>
-                )}
-                {Number(form.advanceDeduction) > 0 && (
-                  <div className="summary-row">
-                    <span className="label" style={{ color: 'var(--warn)' }}>หักเบิกล่วงหน้า</span>
-                    <span className="value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span>
-                  </div>
-                )}
-                {Number(form.retentionDeduction) > 0 && (
-                  <div className="summary-row">
-                    <span className="label" style={{ color: 'var(--info)' }}>หักเงินประกัน</span>
-                    <span className="value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span>
-                  </div>
-                )}
-                <div className="summary-row total">
-                  <span className="label">ยอดจ่ายสุทธิ</span>
-                  <span className="value">{fmt(totals.total)} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>บาท</span></span>
-                </div>
+              <div className="summary-chip">
+                <span className="chip-label">ยอดเหมารวม</span>
+                <span className="chip-value">{fmt(totals.subTotal)}</span>
               </div>
-
-              <div className="mt-20" style={{ padding: 14, background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="clipboard" size={13} /> เหมาจ่าย คืออะไร?
+              {Number(form.vatRate) > 0 && (
+                <div className="summary-chip">
+                  <span className="chip-label">Vat {form.vatRate}%</span>
+                  <span className="chip-value">{fmt(totals.vat)}</span>
                 </div>
-                ตกลงราคาเป็นยอดรวมต่องาน ไม่ต้องนับปริมาณ/หน่วย — เหมาะสำหรับงานที่คุยราคาเหมาทั้งก้อน เช่น เหมาก่อ-ฉาบทั้งชั้น เหมาปูกระเบื้องทั้งห้อง
+              )}
+              {form.whtEnabled && (
+                <div className="summary-chip">
+                  <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                  <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
+                </div>
+              )}
+              {Number(form.advanceDeduction) > 0 && (
+                <div className="summary-chip">
+                  <span className="chip-label">หักเบิกล่วงหน้า</span>
+                  <span className="chip-value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span>
+                </div>
+              )}
+              {Number(form.retentionDeduction) > 0 && (
+                <div className="summary-chip">
+                  <span className="chip-label">หักเงินประกัน</span>
+                  <span className="chip-value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span>
+                </div>
+              )}
+              <div className="summary-chip total">
+                <span className="chip-label">ยอดจ่ายสุทธิ</span>
+                <span className="chip-value">{fmt(totals.total)} <span className="chip-unit">บาท</span></span>
               </div>
             </div>
-          </div>
-
-          <div className="row gap-8 mt-16">
-            <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit}>
-              <Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}
-            </button>
-            <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+            <div className="row gap-8 summary-bar-actions">
+              <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
+              <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
+            </div>
           </div>
         </div>
       </div>

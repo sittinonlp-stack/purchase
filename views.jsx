@@ -30,6 +30,9 @@ const isExpense = (r) => EXPENSE_TYPES.has(r.type) && !window.isIncome(r);
 const NEEDS_APPROVAL = new Set(['material', 'machine', 'labor', 'lump-labor']);
 const countsInDashboard = (r) => !NEEDS_APPROVAL.has(r.type) || !!r.approved;
 
+// เอกสารที่ต้องออกแต่ยังไม่ได้ออก (docs ที่ยังไม่อยู่ใน docsIssued)
+const pendingDocs = (r) => (r.docs || []).filter(d => !((r.docsIssued || []).includes(d)));
+
 // 'YYYY-MM' → ป้ายเดือนภาษาไทย เช่น "มิถุนายน 2569"
 function monthLabelTH(ym) {
   if (!ym) return '';
@@ -644,19 +647,10 @@ function AccCheckbox({ record }) {
   return (
     <button
       onClick={toggle}
+      className={'status-chip' + (posted ? ' on acct' : '')}
       title={posted ? 'ลงบัญชีแล้ว — คลิกเพื่อยกเลิก' : 'คลิกเพื่อทำเครื่องหมายว่าลงบัญชีแล้ว'}
-      style={{
-        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-        border: posted ? '2px solid #059669' : '2px solid #d1d5db',
-        background: posted ? '#059669' : '#fff',
-        color: '#fff',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer', transition: 'all 150ms',
-        fontSize: 15, fontWeight: 700, lineHeight: 1,
-        padding: 0,
-      }}
     >
-      {posted ? '✓' : ''}
+      <span className="tick">{posted ? '✓' : ''}</span> บัญชี
     </button>
   );
 }
@@ -679,16 +673,8 @@ function ApproveCheckbox({ record }) {
   // non-admin: แสดงเฉพาะสถานะ ไม่ให้กด
   if (!app.isAdmin) {
     return (
-      <div title={approved ? 'อนุมัติแล้ว' : 'รออนุมัติ'} style={{
-        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-        border: approved ? '2px solid #2563eb' : '2px solid #e5e7eb',
-        background: approved ? '#2563eb' : '#f9fafb',
-        color: '#fff',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 15, fontWeight: 700, lineHeight: 1,
-        cursor: 'default',
-      }}>
-        {approved ? '✓' : ''}
+      <div className={'status-chip' + (approved ? ' on approve' : '')} title={approved ? 'อนุมัติแล้ว' : 'รออนุมัติ'} style={{ cursor: 'default' }}>
+        <span className="tick">{approved ? '✓' : ''}</span> {approved ? 'อนุมัติแล้ว' : 'รออนุมัติ'}
       </div>
     );
   }
@@ -696,19 +682,10 @@ function ApproveCheckbox({ record }) {
   return (
     <button
       onClick={toggle}
+      className={'status-chip' + (approved ? ' on approve' : '')}
       title={approved ? 'อนุมัติแล้ว — คลิกเพื่อยกเลิก' : 'คลิกเพื่ออนุมัติ (Admin)'}
-      style={{
-        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-        border: approved ? '2px solid #2563eb' : '2px solid #d1d5db',
-        background: approved ? '#2563eb' : '#fff',
-        color: '#fff',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer', transition: 'all 150ms',
-        fontSize: 15, fontWeight: 700, lineHeight: 1,
-        padding: 0,
-      }}
     >
-      {approved ? '✓' : ''}
+      <span className="tick">{approved ? '✓' : ''}</span> {approved ? 'อนุมัติแล้ว' : 'อนุมัติ'}
     </button>
   );
 }
@@ -749,25 +726,14 @@ function PaidButton({ record }) {
   return (
     <>
       {paid ? (
-        <button onClick={openModal} title={`จ่ายแล้ว ${fmtDate(record.paidDate)} — คลิกดู/แก้ไข`}
-          style={{
-            display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 1,
-            padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
-            border: '1.5px solid #059669', background: 'rgba(5,150,105,0.1)', color: '#059669',
-            fontSize: 12, fontWeight: 600, lineHeight: 1.2,
-          }}>
-          <span>✓ จ่ายแล้ว</span>
-          {record.paidDate && <span className="mono" style={{ fontSize: 10.5, fontWeight: 500 }}>{fmtDate(record.paidDate)}</span>}
+        <button onClick={openModal} className="status-chip on paid" title={`จ่ายแล้ว ${fmtDate(record.paidDate)} — คลิกดู/แก้ไข`}
+          style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span className="tick">✓</span> จ่ายแล้ว</span>
+          {record.paidDate && <span className="mono" style={{ fontSize: 10, fontWeight: 500, opacity: 0.85, paddingLeft: 21 }}>{fmtDate(record.paidDate)}</span>}
         </button>
       ) : (
-        <button onClick={openModal} title="บันทึกการจ่ายเงิน (แนบสลิป + วันที่โอน)"
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
-            border: '1.5px solid var(--accent)', background: 'var(--accent)', color: '#1f1d18',
-            fontSize: 12.5, fontWeight: 600, lineHeight: 1,
-          }}>
-          <Icon name="money" size={13} /> จ่ายแล้ว
+        <button onClick={openModal} className="status-chip paid" title="บันทึกการจ่ายเงิน (แนบสลิป + วันที่โอน)">
+          <span className="tick"></span> จ่าย
         </button>
       )}
 
@@ -824,8 +790,102 @@ function ApprovalPrintButton({ record }) {
   );
 }
 
+// แถวเดียวของตาราง — memoize เพื่อไม่ให้ทุกแถว re-render เวลากดปุ่มในแถวใดแถวหนึ่ง (ตารางมีหลายร้อยแถว)
+const RecordRow = React.memo(function RecordRow({ r, projects, showApprove, showPaid, onOpen }) {
+  const proj = projects.find(p => p.id === r.projectId);
+  const total = computeTotals(r).total;
+  // อนุมัติแล้วแต่ยังไม่จ่าย → กระพริบเตือน; จ่ายแล้ว = เขียวจาง; ลงบัญชี = เขียวอ่อน
+  const pulse = r.approved && !r.paid;
+  const rowBg = pulse ? undefined
+    : (r.approved && r.paid) ? 'rgba(5,150,105,0.05)'
+    : r.accountingPosted ? 'rgba(5,150,105,0.04)' : undefined;
+  return (
+    <tr onClick={() => onOpen(r.id)} className={pulse ? 'pulse-approved' : undefined} style={{ background: rowBg }}>
+      {/* ── Accounting checkbox ── */}
+      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+        <AccCheckbox record={r} />
+      </td>
+      {/* ── สถานะ: อนุมัติ + ใบอนุมัติสั่งจ่าย (showApprove=true) ── */}
+      {showApprove && (
+        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+            <ApproveCheckbox record={r} />
+            <ApprovalPrintButton record={r} />
+          </div>
+        </td>
+      )}
+      <td className="mono hide-mobile" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
+      <td className="hide-mobile" style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
+      <td className="hide-mobile">
+        <div className="row gap-8">
+          <span className="proj-chip-dot" style={{ background: proj?.color || '#999' }}></span>
+          <span style={{ fontSize: 13 }}>{proj?.name || '—'}</span>
+        </div>
+      </td>
+      <td style={{ color: 'var(--ink-2)' }}>
+        <div>{r.vendor}</div>
+        <div className="tbl-sub show-mobile">
+          <span className="mono">{r.docNo}</span>
+          {proj && <><span className="proj-chip-dot" style={{ background: proj.color, width: 6, height: 6, display: 'inline-block', borderRadius: '50%', margin: '0 3px 0 6px' }}></span>{proj.name}</>}
+          {' · '}{fmtDate(r.date)}
+        </div>
+        {((r.docs && r.docs.length > 0) || r.whtEnabled) && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>
+            {(r.docs || []).map((d) => {
+              const doc = DOC_TYPES.find(x => x.id === d);
+              const issued = (r.docsIssued || []).includes(d);
+              const label = (doc?.label || d).replace('ใบ', '').trim();
+              return (
+                <span key={d} title={issued ? 'ออกเอกสารแล้ว' : 'รอออกเอกสาร'} style={{
+                  fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap',
+                  border: '1px solid',
+                  ...(issued
+                    ? { background: 'var(--accent-soft)', color: 'var(--accent-ink)', borderColor: 'rgba(5,150,105,0.35)' }
+                    : { background: 'var(--warn-soft)', color: '#96590a', borderColor: 'rgba(217,119,6,0.35)' }),
+                }}>{issued ? '✓ ' : '🧾 '}{label}</span>
+              );
+            })}
+            {r.whtEnabled && <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'var(--info-soft)', color: '#1a4fb0', border: '1px solid rgba(37,99,235,0.3)', whiteSpace: 'nowrap' }}>หัก {r.whtRate}%</span>}
+          </div>
+        )}
+      </td>
+      <td className="hide-mobile">
+        {r.type === 'material'
+          ? <span className="badge amber dot">วัสดุ</span>
+          : r.type === 'machine'
+          ? <span className="badge blue dot">เครื่องจักร</span>
+          : r.type === 'lump-labor'
+          ? <span className="badge green dot">เหมาจ่าย</span>
+          : window.isIncome(r)
+          ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
+          : r.type === 'other'
+          ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>อื่นๆ</span>
+          : r.type === 'quick-receipt'
+          ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
+          : r.type === 'receipt'
+          ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จ</span>
+          : r.type === 'tax-invoice'
+          ? <span className="badge dot" style={{ background:'rgba(146,64,14,0.12)', color:'#92400e', borderColor:'rgba(146,64,14,0.3)' }}>🧾 ใบกำกับภาษี</span>
+          : r.type === 'invoice'
+          ? <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>📋 ใบแจ้งหนี้</span>
+          : r.isRetentionPayout
+          ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>คืนประกัน</span>
+          : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
+      </td>
+      <td className="num mono" style={{ fontWeight: 500 }}>{fmt(total)}</td>
+      {showPaid && (
+        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+          <PaidButton record={r} />
+        </td>
+      )}
+    </tr>
+  );
+});
+
 function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }) {
   const app = window.useApp();
+  const onOpenRef = useRef(onOpen); onOpenRef.current = onOpen;
+  const stableOpen = useCallback((id) => onOpenRef.current(id), []);
   if (!records.length) {
     return (
       <div className="empty">
@@ -840,104 +900,28 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
       <table className="history-table">
         <thead>
           <tr>
-            <th style={{ width: 44, textAlign: 'center' }} title="ลงบันทึกค่าใช้จ่ายในบัญชีแล้ว">
-              <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>บัญชี</span>
+            <th style={{ width: 108, textAlign: 'center' }} title="ลงบัญชีโครงการแล้ว">
+              <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>ลงบัญชีโครงการ</span>
             </th>
             {showApprove && (
-              <th style={{ width: 52, textAlign: 'center' }} title="อนุมัติโดย Admin">
-                <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>อนุมัติ</span>
+              <th style={{ width: 126, textAlign: 'center' }} title="สถานะการอนุมัติ + ใบอนุมัติสั่งจ่าย">
+                <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>สถานะ</span>
               </th>
             )}
-            <th className="hide-mobile" style={{ width: 130 }}>เลขที่</th>
-            <th className="hide-mobile" style={{ width: 90 }}>วันที่</th>
+            <th className="hide-mobile" style={{ width: 106 }}>เลขที่</th>
+            <th className="hide-mobile" style={{ width: 86 }}>วันที่</th>
             <th className="hide-mobile">โครงการ</th>
             <th>ผู้ขาย / รายการ</th>
-            <th className="hide-mobile" style={{ width: 100 }}>ประเภท</th>
-            <th className="hide-mobile" style={{ width: 160 }}>เอกสาร</th>
-            <th style={{ width: 130 }} className="num">ยอดสุทธิ</th>
-            {showPaid && <th style={{ width: 132, textAlign: 'center' }} title="ใบอนุมัติ + สถานะการจ่าย">ใบอนุมัติ / จ่าย</th>}
+            <th className="hide-mobile" style={{ width: 92 }}>ประเภท</th>
+            <th style={{ width: 116 }} className="num">ยอดสุทธิ</th>
+            {showPaid && <th style={{ width: 104, textAlign: 'center' }} title="หลักฐานการชำระเงิน">หลักฐานชำระ</th>}
           </tr>
         </thead>
         <tbody>
-          {records.map((r) => {
-            const proj = app.projects.find(p => p.id === r.projectId);
-            const total = computeTotals(r).total;
-            // row highlight: อนุมัติแล้ว = น้ำเงินอ่อน, ลงบัญชี = เขียวอ่อน, ทั้งคู่ = น้ำเงินอ่อน
-            const rowBg = r.approved
-              ? 'rgba(37,99,235,0.05)'
-              : r.accountingPosted ? 'rgba(5,150,105,0.04)' : undefined;
-            return (
-              <tr key={r.id} onClick={() => onOpen(r.id)} style={{ background: rowBg }}>
-                {/* ── Accounting checkbox ── */}
-                <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                  <AccCheckbox record={r} />
-                </td>
-                {/* ── Approve checkbox (แสดงเฉพาะเมื่อ showApprove=true) ── */}
-                {showApprove && (
-                  <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                    <ApproveCheckbox record={r} />
-                  </td>
-                )}
-                <td className="mono hide-mobile" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
-                <td className="hide-mobile" style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
-                <td className="hide-mobile">
-                  <div className="row gap-8">
-                    <span className="proj-chip-dot" style={{ background: proj?.color || '#999' }}></span>
-                    <span style={{ fontSize: 13 }}>{proj?.name || '—'}</span>
-                  </div>
-                </td>
-                <td style={{ color: 'var(--ink-2)' }}>
-                  <div>{r.vendor}</div>
-                  <div className="tbl-sub show-mobile">
-                    <span className="mono">{r.docNo}</span>
-                    {proj && <><span className="proj-chip-dot" style={{ background: proj.color, width: 6, height: 6, display: 'inline-block', borderRadius: '50%', margin: '0 3px 0 6px' }}></span>{proj.name}</>}
-                    {' · '}{fmtDate(r.date)}
-                  </div>
-                </td>
-                <td className="hide-mobile">
-                  {r.type === 'material'
-                    ? <span className="badge amber dot">วัสดุ</span>
-                    : r.type === 'machine'
-                    ? <span className="badge blue dot">เครื่องจักร</span>
-                    : r.type === 'lump-labor'
-                    ? <span className="badge green dot">เหมาจ่าย</span>
-                    : window.isIncome(r)
-                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>💰 รายรับ</span>
-                    : r.type === 'other'
-                    ? <span className="badge dot" style={{ background:'rgba(99,102,241,0.12)', color:'#6366f1', borderColor:'rgba(99,102,241,0.3)' }}>อื่นๆ</span>
-                    : r.type === 'quick-receipt'
-                    ? <span className="badge dot" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9', borderColor:'rgba(14,165,233,0.3)' }}>📸 บิลด่วน</span>
-                    : r.type === 'receipt'
-                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>📄 ใบเสร็จ</span>
-                    : r.type === 'tax-invoice'
-                    ? <span className="badge dot" style={{ background:'rgba(146,64,14,0.12)', color:'#92400e', borderColor:'rgba(146,64,14,0.3)' }}>🧾 ใบกำกับภาษี</span>
-                    : r.type === 'invoice'
-                    ? <span className="badge dot" style={{ background:'rgba(37,99,235,0.12)', color:'#1d4ed8', borderColor:'rgba(37,99,235,0.3)' }}>📋 ใบแจ้งหนี้</span>
-                    : r.isRetentionPayout
-                    ? <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>คืนประกัน</span>
-                    : <span className="badge dot" style={{ background: 'oklch(0.94 0.04 290)', color: 'oklch(0.50 0.14 290)', borderColor: 'oklch(0.86 0.06 290)' }}>ค่าแรง</span>}
-                </td>
-                <td className="hide-mobile">
-                  <div className="doc-mini">
-                    {r.docs.map((d) => {
-                      const doc = DOC_TYPES.find(x => x.id === d);
-                      return <span key={d} className="badge">{doc?.label.replace('ใบ', '').trim()}</span>;
-                    })}
-                    {r.whtEnabled && <span className="badge amber">หัก {r.whtRate}%</span>}
-                  </div>
-                </td>
-                <td className="num mono" style={{ fontWeight: 500 }}>{fmt(total)}</td>
-                {showPaid && (
-                  <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                      <ApprovalPrintButton record={r} />
-                      <PaidButton record={r} />
-                    </div>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
+          {records.map((r) => (
+            <RecordRow key={r.id} r={r} projects={app.projects}
+              showApprove={showApprove} showPaid={showPaid} onOpen={stableOpen} />
+          ))}
         </tbody>
       </table>
     </div>
@@ -954,6 +938,7 @@ window.HistoryView = function HistoryView() {
   const [sortKey, setSortKey] = useState('date-desc');
   const [accFilter, setAccFilter] = useState('all'); // all | unposted | posted
   const [approveFilter, setApproveFilter] = useState('all'); // all | pending | approved | unpaid
+  const [docFilter, setDocFilter] = useState(false); // true = เฉพาะที่มีเอกสารต้องออก
 
   // ── รายการวัสดุ/เครื่องจักร/อื่นๆ ทั้งหมด (ก่อนกรอง) ──
   const allExp = useMemo(() => app.records.filter(r =>
@@ -990,6 +975,7 @@ window.HistoryView = function HistoryView() {
     if (approveFilter === 'pending')  arr = arr.filter(r => !r.approved);
     if (approveFilter === 'approved') arr = arr.filter(r =>  r.approved);
     if (approveFilter === 'unpaid')   arr = arr.filter(r =>  r.approved && !r.paid);
+    if (docFilter) arr = arr.filter(r => pendingDocs(r).length > 0);
     if (q.trim()) {
       const s = q.toLowerCase();
       arr = arr.filter(r =>
@@ -1006,9 +992,10 @@ window.HistoryView = function HistoryView() {
       return 0;
     });
     return arr;
-  }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter]);
+  }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter, docFilter]);
 
   const sum = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
+  const pendingDocsCount = useMemo(() => allExp.filter(r => pendingDocs(r).length > 0).length, [allExp]);
   // สรุปสถานะ (จากรายการทั้งหมด ไม่ขึ้นกับตัวกรอง)
   const pendingRecs = useMemo(() => allExp.filter(r => (r.type === 'material' || r.type === 'machine') && !r.approved), [allExp]);
   const unpaidRecs  = useMemo(() => allExp.filter(r => r.approved && !r.paid), [allExp]);
@@ -1024,10 +1011,15 @@ window.HistoryView = function HistoryView() {
           <h1 className="page-title">ประวัติทั้งหมด</h1>
           <div className="page-sub">เรียกดู ค้นหา และเปิดดูรายละเอียดบิลย้อนหลังได้ตลอดเวลา</div>
         </div>
-        <div className="row gap-8">
-          <button className="btn btn-ghost"><Icon name="download" size={14} /> ส่งออก Excel</button>
-          <button className="btn btn-accent" onClick={() => app.setView('new-material')}>
-            <Icon name="plus" size={14} stroke={2.5} /> บันทึกใหม่
+        <div className="row gap-8 dash-actions">
+          <button className="btn btn-accent" onClick={() => { app.setEditingId(null); app.setView('new-material'); }}>
+            <Icon name="cart" size={14} /> จัดซื้อวัสดุ
+          </button>
+          <button className="btn btn-accent" onClick={() => { app.setEditingId(null); app.setView('new-machine'); }}>
+            <Icon name="truck" size={14} /> เช่าเครื่องจักร
+          </button>
+          <button className="btn btn-ghost" onClick={() => { app.setEditingId(null); app.setView('new-other'); }}>
+            <Icon name="sparkle" size={14} /> ค่าใช้จ่ายอื่นๆ
           </button>
         </div>
       </div>
@@ -1049,7 +1041,7 @@ window.HistoryView = function HistoryView() {
           {unpaidCount > 0 && (
             <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setApproveFilter('unpaid')}
               title="อนุมัติแล้วแต่ยังไม่จ่าย — คลิกเพื่อกรอง">
-              <div className="stat-label">อนุมัติแล้ว—รอส่งบัญชี</div>
+              <div className="stat-label">อนุมัติแล้ว-รอชำระจ่าย</div>
               <div className="stat-value mono" style={{ color: 'var(--info)' }}>{"฿" + fmt(unpaidSum)}</div>
               <div className="stat-delta" style={{ color: 'var(--info)' }}>{unpaidCount} รายการ — คลิกเพื่อกรอง</div>
               <div className="stat-icon" style={{ background: 'rgba(37,99,235,0.1)', color: 'var(--info)' }}>
@@ -1087,7 +1079,7 @@ window.HistoryView = function HistoryView() {
             <option value="all">การอนุมัติ: ทั้งหมด</option>
             <option value="pending">รออนุมัติ{pendingCount > 0 ? ` (${pendingCount})` : ''}</option>
             <option value="approved">อนุมัติแล้ว</option>
-            <option value="unpaid">อนุมัติแล้ว—รอส่งบัญชี{unpaidCount > 0 ? ` (${unpaidCount})` : ''}</option>
+            <option value="unpaid">อนุมัติแล้ว-รอชำระจ่าย{unpaidCount > 0 ? ` (${unpaidCount})` : ''}</option>
           </select>
           <select className="select" value={accFilter} onChange={(e) => setAccFilter(e.target.value)}
             style={{ borderColor: accFilter !== 'all' ? '#059669' : undefined, color: accFilter !== 'all' ? '#059669' : undefined }}>
@@ -1095,6 +1087,12 @@ window.HistoryView = function HistoryView() {
             <option value="unposted">ยังไม่ลงบัญชี</option>
             <option value="posted">ลงบัญชีแล้ว</option>
           </select>
+          <button className={"btn btn-sm" + (docFilter ? " btn-accent" : " btn-ghost")}
+            onClick={() => setDocFilter(v => !v)}
+            title="กรองเฉพาะบิลที่ยังมีเอกสารต้องออก (ใบสำคัญจ่าย/50 ทวิ)"
+            style={!docFilter && pendingDocsCount > 0 ? { color: '#96590a', borderColor: 'rgba(217,119,6,0.4)' } : undefined}>
+            <Icon name="receipt" size={13} /> รอออกเอกสาร{pendingDocsCount > 0 ? ` (${pendingDocsCount})` : ''}
+          </button>
           {app.isAdmin && !retroDone && bulkTargets.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={() => setBulkOpen(true)}
               title="ปิดรายการเดิมทั้งหมด (อนุมัติ+จ่ายแล้ว) ทำครั้งเดียว">
@@ -2118,6 +2116,39 @@ window.DetailDrawer = function DetailDrawer() {
             </div>
           )}
         </div>
+
+        {/* เอกสารที่ต้องออก — ทำเครื่องหมาย "ออกแล้ว" กันออกซ้ำ */}
+        {(rec.docs && rec.docs.length > 0) && (
+          <div className="detail-section">
+            <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>เอกสารที่ต้องออก</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {rec.docs.map((d) => {
+                const doc = DOC_TYPES.find(x => x.id === d);
+                const issued = (rec.docsIssued || []).includes(d);
+                const toggle = () => {
+                  const cur = rec.docsIssued || [];
+                  const next = issued ? cur.filter(x => x !== d) : [...cur, d];
+                  app.updateRecord(rec.id, { docsIssued: next });
+                  app.pushToast(issued ? 'ยกเลิกสถานะออกแล้ว' : 'ทำเครื่องหมายออกเอกสารแล้ว ✓');
+                };
+                return (
+                  <div key={d} className="row between" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--line)', background: issued ? 'var(--accent-soft)' : 'var(--surface-2)' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{doc?.label || d}</div>
+                      {doc?.sub && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{doc.sub}</div>}
+                    </div>
+                    <button className={"status-chip" + (issued ? " on approve" : "")} onClick={toggle}>
+                      <span className="tick">{issued ? '✓' : ''}</span> {issued ? 'ออกแล้ว' : 'ทำเครื่องหมายออกแล้ว'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.5 }}>
+              กด "ทำเครื่องหมายออกแล้ว" เมื่อออกเอกสารเรียบร้อย — บิลจะหลุดจากตัวกรอง "รอออกเอกสาร" กันการออกซ้ำ
+            </div>
+          </div>
+        )}
 
         {/* Team history in same project — labor types only */}
         {isLaborType && team && (
@@ -4498,6 +4529,7 @@ window.LaborHistoryView = function LaborHistoryView() {
     if (accFilter === 'posted')         arr = arr.filter(r =>  r.accountingPosted);
     if (approveFilter === 'pending')    arr = arr.filter(r => !r.approved);
     if (approveFilter === 'approved')   arr = arr.filter(r =>  r.approved);
+    if (approveFilter === 'unpaid')     arr = arr.filter(r =>  r.approved && !r.paid);
     if (q.trim()) {
       const s = q.toLowerCase();
       arr = arr.filter(r =>
@@ -4524,6 +4556,10 @@ window.LaborHistoryView = function LaborHistoryView() {
   const pendingRecs  = allLabor.filter(r => !r.approved);
   const pendingSum   = pendingRecs.reduce((s, r) => s + computeTotals(r).total, 0);
   const pendingCount = pendingRecs.length;
+  // อนุมัติแล้ว-รอจ่าย — หายเมื่อกดจ่าย
+  const unpaidRecs   = allLabor.filter(r => r.approved && !r.paid);
+  const unpaidSum    = unpaidRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+  const unpaidCount  = unpaidRecs.length;
 
   // เงินประกันผลงานคงค้าง (retention) — แยกตามทีมช่าง (net = หักที่จ่ายคืนแล้ว)
   // held  = retentionDeduction ของบิลปกติ (ยังไม่ settled)
@@ -4627,6 +4663,17 @@ window.LaborHistoryView = function LaborHistoryView() {
             <div className="stat-delta" style={{ color: 'oklch(0.55 0.18 50)' }}>{pendingCount} รายการ — คลิกเพื่อกรอง</div>
             <div className="stat-icon" style={{ background:'oklch(0.95 0.08 60)', color:'oklch(0.55 0.18 50)' }}>
               <Icon name="clock" size={18} />
+            </div>
+          </div>
+        )}
+        {unpaidCount > 0 && (
+          <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setApproveFilter('unpaid')}
+            title="อนุมัติแล้วแต่ยังไม่จ่าย — คลิกเพื่อกรอง (หายเมื่อกดจ่าย)">
+            <div className="stat-label">อนุมัติแล้ว-รอจ่าย</div>
+            <div className="stat-value mono" style={{ color: 'var(--info)' }}>{"฿"+fmt(unpaidSum)}</div>
+            <div className="stat-delta" style={{ color: 'var(--info)' }}>{unpaidCount} รายการ — คลิกเพื่อกรอง</div>
+            <div className="stat-icon" style={{ background:'rgba(37,99,235,0.1)', color:'var(--info)' }}>
+              <Icon name="receipt" size={18} />
             </div>
           </div>
         )}
@@ -4740,6 +4787,7 @@ window.LaborHistoryView = function LaborHistoryView() {
             <option value="all">การอนุมัติ: ทั้งหมด</option>
             <option value="pending">รออนุมัติ</option>
             <option value="approved">อนุมัติแล้ว</option>
+            <option value="unpaid">อนุมัติแล้ว-รอจ่าย</option>
           </select>
           {app.isAdmin && !retroDone && bulkTargets.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={() => setBulkPaidOpen(true)}
@@ -4840,7 +4888,7 @@ window.IncomeHistoryView = function IncomeHistoryView() {
           <div className="page-sub">เงินรับเข้าโครงการทั้งหมด — รายการย้อนหลัง</div>
         </div>
         <div className="row gap-8 dash-actions">
-          <button className="btn btn-accent" onClick={() => app.setView('new-income')}>
+          <button className="btn btn-accent" onClick={() => { app.setEditingId(null); app.setView('new-income'); }}>
             <Icon name="money" size={14} /> บันทึกรายรับ
           </button>
         </div>

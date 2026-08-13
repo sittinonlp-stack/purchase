@@ -344,80 +344,31 @@ function Sidebar() {
             <Icon name="home" /> แดชบอร์ด
           </button>
 
-          <div className="nav-section-label">บันทึกรายการ</div>
-          <button className={"nav-item" + (view === 'new-material' ? " active" : "")} onClick={() => go('new-material')}>
-            <Icon name="cart" /> จัดซื้อวัสดุ
-          </button>
-          <button className={"nav-item" + (view === 'new-machine' ? " active" : "")} onClick={() => go('new-machine')}>
-            <Icon name="truck" /> เช่าเครื่องจักร
-          </button>
-          <button className={"nav-item" + (view === 'new-labor' ? " active" : "")} onClick={() => go('new-labor')}>
-            <Icon name="hammer" /> บันทึกค่าแรง
-          </button>
-          <button className={"nav-item" + (view === 'new-lump-labor' ? " active" : "")} onClick={() => go('new-lump-labor')}>
-            <Icon name="clipboard" /> ค่าแรงเหมาจ่าย
-          </button>
-          <button className={"nav-item" + (view === 'new-other' ? " active" : "")} onClick={() => go('new-other')}>
-            <Icon name="sparkle" /> ค่าใช้จ่ายอื่นๆ
-          </button>
-          <button className={"nav-item" + (view === 'new-income' ? " active" : "")} onClick={() => go('new-income')}>
-            <Icon name="money" /> บันทึกรายรับ
-          </button>
-          <button className={"nav-item" + (view === 'new-receipt' ? " active" : "")} onClick={() => go('new-receipt')}>
-            <Icon name="receipt" /> ออกใบเสร็จรับเงิน
-          </button>
-          <button className={"nav-item" + (view === 'new-tax-invoice' ? " active" : "")} onClick={() => go('new-tax-invoice')}>
-            <Icon name="receipt" /> ออกใบเสร็จ/ใบกำกับภาษี
-          </button>
-          <button className={"nav-item" + (view === 'new-invoice' ? " active" : "")} onClick={() => go('new-invoice')}>
-            <Icon name="clipboard" /> ออกใบแจ้งหนี้
-          </button>
-          <div className="nav-section-label">เรียกดู</div>
-          <button className={"nav-item" + (view === 'history' ? " active" : "")} onClick={() => go('history')}>
-            <Icon name="history" /> ประวัติทั้งหมด
+          <div className="nav-section-label">รายการ</div>
+          <button className={"nav-item" + (['history','new-material','new-machine','new-other'].includes(view) ? " active" : "")} onClick={() => go('history')}>
+            <Icon name="cart" /> จัดซื้อ / เช่า
             {records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted && !window.isIncome(r)).length > 0 && (
               <span className="badge">{records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted && !window.isIncome(r)).length}</span>
             )}
           </button>
-          <button className={"nav-item" + (view === 'labor-history' ? " active" : "")} onClick={() => go('labor-history')}>
-            <Icon name="hammer" /> ประวัติการเบิกค่าแรง
+          <button className={"nav-item" + (['labor-history','new-labor','new-lump-labor'].includes(view) ? " active" : "")} onClick={() => go('labor-history')}>
+            <Icon name="hammer" /> ค่าแรง
             {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length > 0 && (
               <span className="badge" style={{ background:'oklch(0.93 0.06 290)', color:'oklch(0.45 0.14 290)', border:'1px solid oklch(0.84 0.08 290)' }}>
                 {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length}
               </span>
             )}
           </button>
-          <button className={"nav-item" + (view === 'income-history' ? " active" : "")} onClick={() => go('income-history')}>
-            <Icon name="money" /> ประวัติบันทึกรายรับ
+          <button className={"nav-item" + (['income-history','new-income'].includes(view) ? " active" : "")} onClick={() => go('income-history')}>
+            <Icon name="money" /> รายรับ
             {records.filter(r => window.isIncome(r) && !r.accountingPosted).length > 0 && (
               <span className="badge" style={{ background:'rgba(5,150,105,0.15)', color:'#059669', border:'1px solid rgba(5,150,105,0.3)' }}>
                 {records.filter(r => window.isIncome(r) && !r.accountingPosted).length}
               </span>
             )}
           </button>
-          <button className={"nav-item" + (view === 'receipts-list' ? " active" : "")} onClick={() => go('receipts-list')}>
-            <Icon name="receipt" /> ประวัติใบเสร็จ
-            {records.filter(r => r.type === 'receipt').length > 0 && (
-              <span className="badge" style={{ background:'rgba(5,150,105,0.15)', color:'#059669', border:'1px solid rgba(5,150,105,0.3)' }}>
-                {records.filter(r => r.type === 'receipt').length}
-              </span>
-            )}
-          </button>
-          <button className={"nav-item" + (view === 'tax-invoices-list' ? " active" : "")} onClick={() => go('tax-invoices-list')}>
-            <Icon name="receipt" /> ประวัติใบกำกับภาษี
-            {records.filter(r => r.type === 'tax-invoice').length > 0 && (
-              <span className="badge" style={{ background:'rgba(146,64,14,0.15)', color:'#92400e', border:'1px solid rgba(146,64,14,0.3)' }}>
-                {records.filter(r => r.type === 'tax-invoice').length}
-              </span>
-            )}
-          </button>
-          <button className={"nav-item" + (view === 'invoices-list' ? " active" : "")} onClick={() => go('invoices-list')}>
-            <Icon name="clipboard" /> ประวัติใบแจ้งหนี้
-            {records.filter(r => r.type === 'invoice').length > 0 && (
-              <span className="badge" style={{ background:'rgba(37,99,235,0.15)', color:'#1d4ed8', border:'1px solid rgba(37,99,235,0.3)' }}>
-                {records.filter(r => r.type === 'invoice').length}
-              </span>
-            )}
+          <button className={"nav-item" + (['receipts-list','tax-invoices-list','invoices-list','new-receipt','new-tax-invoice','new-invoice'].includes(view) ? " active" : "")} onClick={() => go('receipts-list')}>
+            <Icon name="receipt" /> เอกสาร (ใบเสร็จ/กำกับภาษี/แจ้งหนี้)
           </button>
           <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => go('deposits')}
             style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>
@@ -431,7 +382,6 @@ function Sidebar() {
           <div className="nav-section-label">ตั้งค่า</div>
           <button className={"nav-item" + (view === 'projects' ? " active" : "")} onClick={() => go('projects')}>
             <Icon name="folder" /> โครงการ
-            <span className="badge">{projects.length}</span>
           </button>
           <button className={"nav-item" + (view === 'categories' ? " active" : "")} onClick={() => go('categories')}>
             <Icon name="tag" /> หมวดหมู่
@@ -1106,3 +1056,30 @@ function QuickReceiptFab() {
   );
 }
 window.QuickReceiptFab = QuickReceiptFab;
+
+// ---- Doc tab strip — สลับระหว่างเอกสาร (ออก / ประวัติ) ในหน้าเดียว ----
+function DocTabStrip({ mode }) {
+  const app = window.useApp();
+  const tabs = mode === 'issue'
+    ? [
+        { v: 'new-receipt',     label: 'ใบเสร็จรับเงิน', icon: 'receipt' },
+        { v: 'new-tax-invoice', label: 'ใบกำกับภาษี',    icon: 'receipt' },
+        { v: 'new-invoice',     label: 'ใบแจ้งหนี้',      icon: 'clipboard' },
+      ]
+    : [
+        { v: 'receipts-list',     label: 'ใบเสร็จรับเงิน', icon: 'receipt' },
+        { v: 'tax-invoices-list', label: 'ใบกำกับภาษี',    icon: 'receipt' },
+        { v: 'invoices-list',     label: 'ใบแจ้งหนี้',      icon: 'clipboard' },
+      ];
+  return (
+    <div className="tabs" style={{ marginBottom: 16 }}>
+      {tabs.map(t => (
+        <button key={t.v} className={"tab" + (app.view === t.v ? ' active' : '')}
+          onClick={() => { app.setEditingId(null); app.setView(t.v); }}>
+          <Icon name={t.icon} size={13} /> {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+window.DocTabStrip = DocTabStrip;

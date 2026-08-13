@@ -215,7 +215,17 @@ const DOC_TYPES = [
 ];
 
 // ---- Compute totals ----
+// cache ผลลัพธ์ต่อ object (record/form) — record ถือเป็น immutable (แก้ทีสร้าง object ใหม่)
+// จึงปลอดภัย และช่วยลดการคำนวณซ้ำหลายร้อยครั้งต่อ render (ตารางหลายร้อยแถว + การ์ดสรุป)
+const _totalsCache = new WeakMap();
 const computeTotals = (rec) => {
+  const cacheable = rec && typeof rec === 'object';
+  if (cacheable) { const hit = _totalsCache.get(rec); if (hit) return hit; }
+  const result = _computeTotals(rec);
+  if (cacheable) _totalsCache.set(rec, result);
+  return result;
+};
+const _computeTotals = (rec) => {
   const subTotalRaw = (rec.items || []).reduce((s, it) => s + (Number(it.qty || 0) * Number(it.price || 0)), 0);
 
   // ส่วนลด — คำนวณก่อน VAT (มาตรฐานใบกำกับภาษีไทย)
