@@ -125,6 +125,8 @@
       createdBy:        (row.meta || {}).createdBy || null,
       // ── ข้อมูลผู้รับเงิน (labor / lump-labor) ────
       docInfo: (row.meta || {}).docInfo || { name: '', taxId: '', address: '' },
+      // ── หมายเหตุ/คำอธิบายรายการงาน (แยกจาก note รูปภาพ) ──
+      workNote: (row.meta || {}).workNote || '',
     };
   }
 
@@ -176,6 +178,7 @@
         discountValue: Number(rec.discountValue || 0),
         ...(rec.docInfo ? { docInfo: rec.docInfo } : {}),
         ...(rec.createdBy ? { createdBy: rec.createdBy } : {}),
+        workNote: rec.workNote || '',
       },
     };
   }
@@ -629,7 +632,7 @@
       const META_KEYS = ['accountingPosted', 'approved', 'approvedDate', 'docsIssued', 'docInfo', 'meta',
         'paid', 'paidDate', 'paidSlips', 'isRetentionPayout', 'retentionReturned',
         'discountEnabled', 'discountType', 'discountValue',
-        'billStatus', 'billDate', 'billNo', 'billImages'];
+        'billStatus', 'billDate', 'billNo', 'billImages', 'workNote'];
       if (META_KEYS.some(has)) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();
         const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
@@ -645,6 +648,7 @@
         if (has('billDate'))         newMeta.billDate = patch.billDate || '';
         if (has('billNo'))           newMeta.billNo = patch.billNo || '';
         if (has('billImages'))       newMeta.billImages = await uploadImages(patch.billImages || []);
+        if (has('workNote'))         newMeta.workNote = patch.workNote || '';
         if (has('isRetentionPayout')) newMeta.isRetentionPayout = Boolean(patch.isRetentionPayout);
         if (has('retentionReturned')) newMeta.retentionReturned = Boolean(patch.retentionReturned);
         if (has('discountEnabled'))  newMeta.discountEnabled = Boolean(patch.discountEnabled);

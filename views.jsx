@@ -2238,10 +2238,16 @@ window.DetailDrawer = function DetailDrawer() {
               ) : rec.vendor}
             </div>
           </div>
+          {rec.workNote && (
+            <div className="detail-row">
+              <div className="label">หมายเหตุรายการงาน</div>
+              <div className="value" style={{ whiteSpace: 'pre-wrap' }}>{rec.workNote}</div>
+            </div>
+          )}
           {rec.note && (
             <div className="detail-row">
               <div className="label">หมายเหตุ</div>
-              <div className="value">{rec.note}</div>
+              <div className="value" style={{ whiteSpace: 'pre-wrap' }}>{rec.note}</div>
             </div>
           )}
         </div>

@@ -745,6 +745,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
     retentionDeduction: 0,
     docs: [],
     note: '',
+    workNote: '',
     images: [],
     workLogs: [],
     docInfo: { name: '', taxId: '', address: '' },
@@ -911,8 +912,14 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
               </div>
               <span className="badge gray mono">{form.items.length} รายการ</span>
             </div>
-            <div className="card-body">
+            <div className="card-body col gap-16">
               <LaborItemsTable items={form.items} setItems={(items) => set({ items })} cats={app.laborCats} onAddCat={() => setCatModalOpen(true)} />
+              <div className="field">
+                <label className="field-label">หมายเหตุ / คำอธิบายรายการงาน</label>
+                <textarea className="textarea" placeholder="อธิบายรายละเอียดของรายการงาน เช่น เหตุผลการปรับราคา ขอบเขตงาน หรือเงื่อนไขพิเศษ"
+                  value={form.workNote || ''} onChange={(e) => set({ workNote: e.target.value })} />
+                <div className="field-hint">ใช้บันทึกคำอธิบายเพิ่มเติมของรายการงาน (คนละส่วนกับหมายเหตุรูปภาพด้านล่าง) — ช่วยให้ตอนกลับมาแก้ไขเข้าใจรายละเอียดง่ายขึ้น</div>
+              </div>
             </div>
           </div>
           )}
@@ -1233,6 +1240,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
     retentionDeduction: 0,
     docs: [],
     note: '',
+    workNote: '',
     images: [],
     workLogs: [],
     docInfo: { name: '', taxId: '', address: '' },
@@ -1394,8 +1402,14 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
               </div>
               <span className="badge gray mono">{form.items.length} รายการ</span>
             </div>
-            <div className="card-body">
+            <div className="card-body col gap-16">
               <LumpLaborItemsTable items={form.items} setItems={(items) => set({ items })} cats={app.lumpLaborCats} onAddCat={() => setCatModalOpen(true)} />
+              <div className="field">
+                <label className="field-label">หมายเหตุ / คำอธิบายรายการงาน</label>
+                <textarea className="textarea" placeholder="อธิบายรายละเอียดของงานเหมา เช่น ขอบเขตงาน เงื่อนไขการจ่าย หรือหมายเหตุพิเศษ"
+                  value={form.workNote || ''} onChange={(e) => set({ workNote: e.target.value })} />
+                <div className="field-hint">ใช้บันทึกคำอธิบายเพิ่มเติมของรายการงานเหมา (คนละส่วนกับหมายเหตุรูปภาพด้านล่าง) — ช่วยให้ตอนกลับมาแก้ไขเข้าใจรายละเอียดง่ายขึ้น</div>
+              </div>
             </div>
           </div>
           )}
