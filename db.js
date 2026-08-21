@@ -35,6 +35,8 @@
       address:  row.address   || '',
       // ── รูปภาพเอกสาร (migration-worker-team-doc-images.sql) ──
       docImages: row.doc_images || [],
+      // ── รายชื่อลูกทีม (migration-worker-team-members.sql) ──
+      members: row.members || [],
     };
   }
   function jsTeam(t, imageUrls, docImageUrls) {
@@ -48,6 +50,7 @@
       id_card:   t.idCard   || '',
       address:   t.address  || '',
       doc_images: docImageUrls !== undefined ? docImageUrls : (t.docImages || []),
+      members: t.members || [],
     };
   }
 
@@ -127,6 +130,12 @@
       docInfo: (row.meta || {}).docInfo || { name: '', taxId: '', address: '' },
       // ── หมายเหตุ/คำอธิบายรายการงาน (แยกจาก note รูปภาพ) ──
       workNote: (row.meta || {}).workNote || '',
+      // ── หักประกันสังคม (หักจากช่างโดยตรง ไม่กระทบยอดรายจ่าย) ──
+      socialSecurity: Number((row.meta || {}).socialSecurity || 0),
+      socialSecurityNote: (row.meta || {}).socialSecurityNote || '',
+      socialSecurityEnabled: Boolean((row.meta || {}).socialSecurityEnabled),
+      socialSecurityItems: (row.meta || {}).socialSecurityItems || [],
+      socialSecurityPeriod: (row.meta || {}).socialSecurityPeriod || '',
     };
   }
 
@@ -179,6 +188,11 @@
         ...(rec.docInfo ? { docInfo: rec.docInfo } : {}),
         ...(rec.createdBy ? { createdBy: rec.createdBy } : {}),
         workNote: rec.workNote || '',
+        socialSecurity: Number(rec.socialSecurity || 0),
+        socialSecurityNote: rec.socialSecurityNote || '',
+        socialSecurityEnabled: Boolean(rec.socialSecurityEnabled),
+        socialSecurityItems: rec.socialSecurityItems || [],
+        socialSecurityPeriod: rec.socialSecurityPeriod || '',
       },
     };
   }
@@ -519,8 +533,8 @@
       const full = jsTeam(t, imageUrls, docImageUrls);
       let { error } = await window.supabaseClient.from('worker_teams').insert(full);
       if (error && isMissingColumnError(error)) {
-        // migration ใหม่ยังไม่ได้รัน (images / doc_images / doc fields) → retry ไม่รวมคอลัมน์ใหม่
-        const { images, doc_images, needs_doc, full_name, id_card, address, ...base } = full;
+        // migration ใหม่ยังไม่ได้รัน (images / doc_images / doc fields / members) → retry ไม่รวมคอลัมน์ใหม่
+        const { images, doc_images, needs_doc, full_name, id_card, address, members, ...base } = full;
         ({ error } = await window.supabaseClient.from('worker_teams').insert(base));
       }
       if (error) throw error;
@@ -531,8 +545,8 @@
       const full = jsTeam({ ...patch, id }, imageUrls, docImageUrls);
       let { error } = await window.supabaseClient.from('worker_teams').update(full).eq('id', id);
       if (error && isMissingColumnError(error)) {
-        // migration ใหม่ยังไม่ได้รัน (images / doc_images / doc fields) → retry ไม่รวมคอลัมน์ใหม่
-        const { images, doc_images, needs_doc, full_name, id_card, address, ...base } = full;
+        // migration ใหม่ยังไม่ได้รัน (images / doc_images / doc fields / members) → retry ไม่รวมคอลัมน์ใหม่
+        const { images, doc_images, needs_doc, full_name, id_card, address, members, ...base } = full;
         ({ error } = await window.supabaseClient.from('worker_teams').update(base).eq('id', id));
       }
       if (error) throw error;
@@ -632,7 +646,8 @@
       const META_KEYS = ['accountingPosted', 'approved', 'approvedDate', 'docsIssued', 'docInfo', 'meta',
         'paid', 'paidDate', 'paidSlips', 'isRetentionPayout', 'retentionReturned',
         'discountEnabled', 'discountType', 'discountValue',
-        'billStatus', 'billDate', 'billNo', 'billImages', 'workNote'];
+        'billStatus', 'billDate', 'billNo', 'billImages', 'workNote', 'socialSecurity', 'socialSecurityNote',
+        'socialSecurityEnabled', 'socialSecurityItems', 'socialSecurityPeriod'];
       if (META_KEYS.some(has)) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();
         const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
@@ -649,6 +664,11 @@
         if (has('billNo'))           newMeta.billNo = patch.billNo || '';
         if (has('billImages'))       newMeta.billImages = await uploadImages(patch.billImages || []);
         if (has('workNote'))         newMeta.workNote = patch.workNote || '';
+        if (has('socialSecurity'))   newMeta.socialSecurity = Number(patch.socialSecurity || 0);
+        if (has('socialSecurityNote')) newMeta.socialSecurityNote = patch.socialSecurityNote || '';
+        if (has('socialSecurityEnabled')) newMeta.socialSecurityEnabled = Boolean(patch.socialSecurityEnabled);
+        if (has('socialSecurityItems'))   newMeta.socialSecurityItems = patch.socialSecurityItems || [];
+        if (has('socialSecurityPeriod'))  newMeta.socialSecurityPeriod = patch.socialSecurityPeriod || '';
         if (has('isRetentionPayout')) newMeta.isRetentionPayout = Boolean(patch.isRetentionPayout);
         if (has('retentionReturned')) newMeta.retentionReturned = Boolean(patch.retentionReturned);
         if (has('discountEnabled'))  newMeta.discountEnabled = Boolean(patch.discountEnabled);

@@ -1996,6 +1996,19 @@ window.TeamsView = function TeamsView() {
                     : <span className="badge dot" style={{ background:'rgba(107,114,128,0.1)', color:'#6b7280', borderColor:'rgba(107,114,128,0.25)' }}>ไม่ออกเอกสาร</span>}
                 </div>
 
+                {/* รายชื่อลูกทีม — ออกแล้วขีดฆ่า (เก็บเป็นประวัติ) */}
+                {(t.members && t.members.length > 0) && (
+                  <div style={{ marginBottom: 14, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.7 }}>
+                    <Icon name="users" size={12} /> <span style={{ color: 'var(--ink-3)' }}>ลูกทีม ({t.members.filter(m => m.active).length}/{t.members.length}): </span>
+                    {t.members.map((m, i) => (
+                      <span key={m.id || i} title={m.active ? (m.phone || '') : ('ออกแล้ว' + (m.leftDate ? ' ' + fmtDate(m.leftDate) : ''))}
+                        style={{ color: m.active ? 'var(--ink-1)' : 'var(--ink-4)', textDecoration: m.active ? 'none' : 'line-through' }}>
+                        {m.name}{i < t.members.length - 1 ? ', ' : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* ข้อมูลเอกสาร — แสดงเมื่อ needsDoc */}
                 {t.needsDoc && (t.fullName || t.idCard || t.address || (t.docImages && t.docImages.length > 0)) && (
                   <div style={{
@@ -2396,7 +2409,12 @@ window.DetailDrawer = function DetailDrawer() {
             {rec.whtEnabled && <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {rec.whtRate}%</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>}
             {Number(rec.advanceDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--warn)' }}>หักเบิกล่วงหน้า</span><span className="value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span></div>}
             {Number(rec.retentionDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--info)' }}>หักเงินประกัน</span><span className="value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span></div>}
-            <div className="summary-row total"><span className="label">ยอดสุทธิ</span><span className="value">{fmt(totals.total)} บาท</span></div>
+            <div className="summary-row total"><span className="label">{Number(rec.socialSecurity) > 0 ? 'ยอดสุทธิ (บันทึกรายจ่าย)' : 'ยอดสุทธิ'}</span><span className="value">{fmt(totals.total)} บาท</span></div>
+            {totals.socialSecurity > 0 && <div className="summary-row"><span className="label" style={{ color: '#7c3aed' }}>หักประกันสังคม{rec.socialSecurityPeriod ? ` · ${monthLabelTH(rec.socialSecurityPeriod)}` : ''}</span><span className="value" style={{ color: '#7c3aed' }}>− {fmt(totals.socialSecurity)}</span></div>}
+            {totals.socialSecurity > 0 && <div className="summary-row total"><span className="label">โอนช่างจริง</span><span className="value" style={{ color: 'var(--accent-strong)' }}>{fmt(totals.netPay)} บาท</span></div>}
+            {(rec.socialSecurityItems && rec.socialSecurityItems.filter(m => Number(m.amount) > 0).length > 0)
+              ? <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 6, textAlign: 'right' }}>{rec.socialSecurityItems.filter(m => Number(m.amount) > 0).map(m => `${m.name || '—'} ฿${fmt(m.amount)}`).join('  ·  ')}</div>
+              : (rec.socialSecurityNote ? <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 6, textAlign: 'right', whiteSpace: 'pre-wrap' }}>ปกส.: {rec.socialSecurityNote}</div> : null)}
           </div>
         </div>}
 
@@ -4727,6 +4745,22 @@ window.LaborHistoryView = function LaborHistoryView() {
   const retentionTotal = Object.values(retentionByTeam).reduce((s, v) => s + v.balance, 0);
   const [retentionOpen, setRetentionOpen] = useState(false);
 
+  // ── ประกันสังคม แยกตามเดือน — ดูว่าหักของเดือนไหนไปแล้วบ้าง ──
+  const ssoByMonth = useMemo(() => {
+    const m = {};
+    allLabor.forEach(r => {
+      if (!r.socialSecurityEnabled) return;
+      const amt = (r.socialSecurityItems || []).reduce((s, x) => s + Number(x.amount || 0), 0);
+      if (amt <= 0) return;
+      const key = r.socialSecurityPeriod || '__none__';
+      if (!m[key]) m[key] = { total: 0, count: 0, records: [] };
+      m[key].total += amt; m[key].count++; m[key].records.push(r);
+    });
+    return m;
+  }, [allLabor]);
+  const ssoTotal = Object.values(ssoByMonth).reduce((s, v) => s + v.total, 0);
+  const [ssoOpen, setSsoOpen] = useState(false);
+
   // ── ปิดรายการเดิม (ครั้งเดียว): อนุมัติ + จ่ายแล้ว ให้ค่าแรงเดิมทั้งหมด ──
   const [bulkPaidOpen, setBulkPaidOpen] = useState(false);
   const [retroDone, setRetroDone] = useState(() => {
@@ -4824,6 +4858,15 @@ window.LaborHistoryView = function LaborHistoryView() {
             <div className="stat-icon green"><Icon name="percent" size={18} /></div>
           </div>
         )}
+        {ssoTotal > 0 && (
+          <div className="stat" style={{ cursor: 'pointer' }} onClick={() => setSsoOpen(true)}
+            title="คลิกดูประวัติการหักประกันสังคมรายเดือน">
+            <div className="stat-label">หักประกันสังคมสะสม</div>
+            <div className="stat-value mono" style={{ color: '#6d28d9' }}>{"฿"+fmt(ssoTotal)}</div>
+            <div className="stat-delta"><Icon name="chevron" size={11} stroke={2.5} /> ดูรายเดือน — หักเดือนไหนไปแล้วบ้าง</div>
+            <div className="stat-icon" style={{ background: 'rgba(124,58,237,0.1)', color: '#6d28d9' }}><Icon name="calendar" size={18} /></div>
+          </div>
+        )}
       </div>
 
       {/* Modal: เงินประกันผลงานแยกตามทีมช่าง */}
@@ -4875,6 +4918,48 @@ window.LaborHistoryView = function LaborHistoryView() {
                 <span className="mono" style={{ color: retentionTotal > 0 ? 'var(--info)' : 'var(--success, #16a34a)' }}>
                   {retentionTotal > 0 ? '฿'+fmt(retentionTotal) : '✓ จ่ายคืนครบแล้ว'}
                 </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: ประวัติหักประกันสังคม รายเดือน */}
+      {ssoOpen && (
+        <div className="modal-overlay" onClick={() => setSsoOpen(false)}>
+          <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">ประวัติหักประกันสังคม รายเดือน</h2>
+              <button className="btn-icon" onClick={() => setSsoOpen(false)}><Icon name="x" size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="text-small text-muted" style={{ marginBottom: 16 }}>
+                สรุปว่าหักประกันสังคม "ของเดือนไหน" ไปแล้วบ้าง (จับจากช่อง <strong>หักประกันสังคมของเดือน</strong> ที่ระบุตอนบันทึกค่าแรง) — ใช้เช็คว่าเดือนนั้นหักครบหรือยัง
+              </div>
+              {Object.keys(ssoByMonth).length === 0 ? (
+                <div className="text-small text-muted" style={{ padding: '16px 0', textAlign: 'center' }}>ยังไม่มีการหักประกันสังคม</div>
+              ) : Object.entries(ssoByMonth)
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .map(([period, info]) => {
+                  const teams = [...new Set(info.records.map(r => {
+                    const t = (app.workerTeams || []).find(x => x.id === r.workerTeamId);
+                    return t ? t.name : (r.vendor || '—');
+                  }))];
+                  return (
+                    <div key={period} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+                      <div className="row between" style={{ alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{period === '__none__' ? 'ไม่ระบุเดือน' : monthLabelTH(period)}</div>
+                          <div className="text-small text-muted">{info.count} รายการ · {teams.join(', ')}</div>
+                        </div>
+                        <div className="mono" style={{ fontWeight: 700, color: '#6d28d9' }}>฿{fmt(info.total)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              <div className="row between" style={{ paddingTop: 14, fontWeight: 700 }}>
+                <span>รวมทั้งหมด</span>
+                <span className="mono" style={{ color: '#6d28d9' }}>฿{fmt(ssoTotal)}</span>
               </div>
             </div>
           </div>

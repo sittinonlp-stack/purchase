@@ -236,6 +236,121 @@ function DocFields({ needsDoc, setNeedsDoc, fullName, setFullName, idCard, setId
 }
 
 // ---- Add worker team modal ----
+// หักประกันสังคม — ช่องติ๊ก + แจกแจงรายคน (หัวหน้า + ลูกทีม) กรอกยอดต่อคน
+function SocialSecuritySection({ form, set, team }) {
+  const enabled = !!form.socialSecurityEnabled;
+  const items = form.socialSecurityItems || [];
+  const total = items.reduce((s, m) => s + Number(m.amount || 0), 0);
+
+  const sumOf = (arr) => arr.reduce((s, m) => s + Number(m.amount || 0), 0);
+  const commit = (nextItems) => set({ socialSecurityItems: nextItems, socialSecurity: sumOf(nextItems) });
+
+  // เดือนที่หักโดยปริยาย = เดือนก่อนหน้าวันที่บิล (หักสิ้นเดือนก่อน มาเบิกเดือนถัดไป)
+  const defaultPeriod = () => {
+    const base = form.date ? new Date(form.date) : new Date();
+    base.setDate(1); base.setMonth(base.getMonth() - 1);
+    return base.toISOString().slice(0, 7);
+  };
+  const buildFromTeam = () => {
+    const rows = [];
+    if (team?.leader) rows.push({ id: newId(), name: team.leader, role: 'leader', amount: '' });
+    (team?.members || []).filter(m => m.active && (m.name || '').trim())
+      .forEach(m => rows.push({ id: newId(), name: m.name.trim(), role: 'member', amount: '' }));
+    if (rows.length === 0) rows.push({ id: newId(), name: '', role: '', amount: '' });
+    return rows;
+  };
+
+  const toggle = () => {
+    if (!enabled) {
+      const init = items.length ? items : buildFromTeam();
+      set({ socialSecurityEnabled: true, socialSecurityItems: init, socialSecurity: sumOf(init),
+        socialSecurityPeriod: form.socialSecurityPeriod || defaultPeriod() });
+    } else {
+      set({ socialSecurityEnabled: false, socialSecurity: 0 });
+    }
+  };
+  const updItem = (id, patch) => commit(items.map(m => m.id === id ? { ...m, ...patch } : m));
+  const addItem = () => commit([...items, { id: newId(), name: '', role: '', amount: '' }]);
+  const delItem = (id) => commit(items.filter(m => m.id !== id));
+  const reload  = () => commit(buildFromTeam());
+
+  return (
+    <div className="field full">
+      <button type="button" className="status-chip" onClick={toggle}
+        style={enabled ? { borderColor: '#7c3aed', background: 'rgba(124,58,237,0.10)', color: '#6d28d9' } : undefined}>
+        <span className="tick">{enabled ? '✓' : ''}</span> หักประกันสังคม
+      </button>
+
+      {enabled && (
+        <div style={{ marginTop: 12, border: '1px solid var(--line)', borderRadius: 10, padding: 12, background: 'var(--surface-2)' }}>
+          <div className="row between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+            <div className="field" style={{ margin: 0, maxWidth: 200 }}>
+              <label className="field-label" style={{ fontSize: 12 }}><Icon name="calendar" size={12} /> หักประกันสังคมของเดือน</label>
+              <input className="input" type="month" value={form.socialSecurityPeriod || ''} onChange={(e) => set({ socialSecurityPeriod: e.target.value })} />
+            </div>
+            {team && <button type="button" className="btn btn-ghost btn-sm" onClick={reload} title="ดึงรายชื่อหัวหน้า+ลูกทีมที่ทำงานอยู่ มาใหม่"><Icon name="history" size={12} /> ดึงรายชื่อจากทีม</button>}
+          </div>
+          <div className="col gap-8">
+            {items.map((m) => (
+              <div key={m.id} className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <input className="input" style={{ flex: '2 1 130px', minWidth: 0 }} placeholder="ชื่อ" value={m.name} onChange={(e) => updItem(m.id, { name: e.target.value })} />
+                {m.role === 'leader' && <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>หัวหน้า</span>}
+                <div className="input-affix" style={{ flex: '1 1 110px', minWidth: 0 }}>
+                  <div className="input-affix-prefix">฿</div>
+                  <input className="input mono" type="number" min="0" step="any" placeholder="0.00" value={m.amount} onChange={(e) => updItem(m.id, { amount: e.target.value })} />
+                </div>
+                <button type="button" className="topbar-icon-btn" style={{ width: 30, height: 30 }} onClick={() => delItem(m.id)} title="ลบ"><Icon name="trash" size={13} /></button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={addItem}><Icon name="plus" size={12} /> เพิ่มคน</button>
+          <div className="row between" style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+            <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>รวมหักประกันสังคม</span>
+            <span className="mono" style={{ fontWeight: 700, color: '#6d28d9' }}>฿ {fmt(total)}</span>
+          </div>
+        </div>
+      )}
+      <div className="field-hint" style={{ marginTop: 8 }}>หักจากช่างโดยตรง — <strong style={{ color: 'var(--ink-2)' }}>ยอดรายจ่ายที่บันทึกยังเป็นยอดเต็มก่อนหักประกันสังคม</strong> ตัวเลขนี้แค่ลดยอดโอนช่างจริง</div>
+    </div>
+  );
+}
+
+// รายชื่อลูกทีมในทีมช่าง — เก็บประวัติคนงาน เผื่อเข้า-ออก
+function TeamMembersEditor({ members, onChange }) {
+  const list = members || [];
+  const add = () => onChange([...list, { id: newId(), name: '', phone: '', active: true, joinedDate: todayStr(), leftDate: '' }]);
+  const upd = (id, patch) => onChange(list.map(m => m.id === id ? { ...m, ...patch } : m));
+  const del = (id) => onChange(list.filter(m => m.id !== id));
+  const toggleActive = (m) => upd(m.id, m.active ? { active: false, leftDate: todayStr() } : { active: true, leftDate: '' });
+  const activeCount = list.filter(m => m.active).length;
+  return (
+    <div className="field full">
+      <label className="field-label">
+        <Icon name="users" size={13} /> รายชื่อลูกทีม
+        <span style={{ fontWeight: 400, color: 'var(--ink-3)', fontSize: 11, marginLeft: 6 }}>
+          {list.length > 0 ? `ทำงานอยู่ ${activeCount} · ทั้งหมด ${list.length} คน` : '(ไว้เก็บประวัติคนงานในทีม เผื่อมีคนเข้า-ออก)'}
+        </span>
+      </label>
+      <div className="col gap-8">
+        {list.map((m) => (
+          <div key={m.id} className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap', padding: 8, borderRadius: 8, border: '1px solid var(--line)', background: m.active ? 'var(--surface)' : 'var(--surface-2)' }}>
+            <input className="input" style={{ flex: '2 1 140px', minWidth: 0 }} placeholder="ชื่อ-นามสกุล คนงาน" value={m.name} onChange={(e) => upd(m.id, { name: e.target.value })} />
+            <input className="input mono" style={{ flex: '1 1 110px', minWidth: 0 }} placeholder="เบอร์ (ถ้ามี)" value={m.phone || ''} onChange={(e) => upd(m.id, { phone: e.target.value })} />
+            <button type="button" className={"status-chip" + (m.active ? " on approve" : "")} onClick={() => toggleActive(m)}
+              title={m.active ? 'ทำงานอยู่ — กดเพื่อทำเครื่องหมายว่าออกแล้ว' : ('ออกแล้ว' + (m.leftDate ? ' ' + fmtDate(m.leftDate) : ''))}>
+              <span className="tick">{m.active ? '✓' : ''}</span> {m.active ? 'ทำงานอยู่' : 'ออกแล้ว'}
+            </button>
+            <button type="button" className="topbar-icon-btn" style={{ width: 30, height: 30 }} onClick={() => del(m.id)} title="ลบออกจากรายชื่อ"><Icon name="trash" size={13} /></button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: list.length ? 8 : 4 }} onClick={add}>
+        <Icon name="plus" size={13} /> เพิ่มคนงาน
+      </button>
+    </div>
+  );
+}
+
 function AddWorkerTeamModal({ open, onClose, onAdd }) {
   const [name,      setName]      = useState('');
   const [leader,    setLeader]    = useState('');
@@ -250,12 +365,14 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
   const [idCard,    setIdCard]    = useState('');
   const [address,   setAddress]   = useState('');
   const [docImages, setDocImages] = useState([]);
+  const [members,   setMembers]   = useState([]);
 
   useEffect(() => {
     if (open) {
       setName(''); setLeader(''); setPhone(''); setSize(1);
       setSpecialty(''); setNote(''); setImages([]);
       setNeedsDoc(false); setFullName(''); setIdCard(''); setAddress(''); setDocImages([]);
+      setMembers([]);
     }
   }, [open]);
 
@@ -265,6 +382,7 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
       name: name.trim(), leader: leader.trim(), phone: phone.trim(),
       size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
       needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(), docImages,
+      members: members.filter(m => (m.name || '').trim()),
     });
   };
 
@@ -308,6 +426,8 @@ function AddWorkerTeamModal({ open, onClose, onAdd }) {
           <window.ImageUploader images={images} onChange={setImages} max={5} />
         </div>
 
+        <TeamMembersEditor members={members} onChange={setMembers} />
+
         <DocFields
           needsDoc={needsDoc} setNeedsDoc={setNeedsDoc}
           fullName={fullName} setFullName={setFullName}
@@ -336,6 +456,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
   const [idCard,    setIdCard]    = useState('');
   const [address,   setAddress]   = useState('');
   const [docImages, setDocImages] = useState([]);
+  const [members,   setMembers]   = useState([]);
 
   useEffect(() => {
     if (open && team) {
@@ -351,6 +472,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
       setIdCard(team.idCard || '');
       setAddress(team.address || '');
       setDocImages(team.docImages || []);
+      setMembers(team.members || []);
     }
   }, [open, team]);
 
@@ -360,6 +482,7 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
       name: name.trim(), leader: leader.trim(), phone: phone.trim(),
       size: Number(size) || 1, specialty: specialty.trim(), note: note.trim(), images,
       needsDoc, fullName: fullName.trim(), idCard: idCard.trim(), address: address.trim(), docImages,
+      members: members.filter(m => (m.name || '').trim()),
     });
   };
 
@@ -406,6 +529,8 @@ function EditWorkerTeamModal({ open, onClose, team, onSave }) {
           </label>
           <window.ImageUploader images={images} onChange={setImages} max={5} />
         </div>
+
+        <TeamMembersEditor members={members} onChange={setMembers} />
 
         <DocFields
           needsDoc={needsDoc} setNeedsDoc={setNeedsDoc}
@@ -743,6 +868,10 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
     whtRate: 3,
     advanceDeduction: 0,
     retentionDeduction: 0,
+    socialSecurity: 0,
+    socialSecurityEnabled: false,
+    socialSecurityItems: [],
+    socialSecurityPeriod: '',
     docs: [],
     note: '',
     workNote: '',
@@ -770,6 +899,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
   const [teamModalOpen, setTeamModalOpen] = useState(false);
 
   const totals = useMemo(() => computeTotals(form), [form]);
+  const selectedTeam = app.workerTeams.find(t => t.id === form.workerTeamId);
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const toggleDoc = (id) => set({ docs: form.docs.includes(id) ? form.docs.filter(d => d !== id) : [...form.docs, id] });
 
@@ -959,6 +1089,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                   </div>
                   <div className="field-hint">เก็บไว้ค้ำประกันคุณภาพ — คืนเมื่องานเสร็จและตรวจรับ</div>
                 </div>
+                <SocialSecuritySection form={form} set={set} team={selectedTeam} />
                 <div className="field full">
                   <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>กดเพื่อคำนวณเร็ว:</span>
@@ -1122,9 +1253,21 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                 </div>
               )}
               <div className="summary-chip total">
-                <span className="chip-label">ยอดจ่ายสุทธิ</span>
+                <span className="chip-label">ยอดจ่ายสุทธิ (บันทึกรายจ่าย)</span>
                 <span className="chip-value">{fmt(totals.total)} <span className="chip-unit">บาท</span></span>
               </div>
+              {Number(form.socialSecurity) > 0 && (
+                <>
+                  <div className="summary-chip">
+                    <span className="chip-label">หักประกันสังคม</span>
+                    <span className="chip-value" style={{ color: '#7c3aed' }}>− {fmt(totals.socialSecurity)}</span>
+                  </div>
+                  <div className="summary-chip">
+                    <span className="chip-label">โอนช่างจริง</span>
+                    <span className="chip-value" style={{ color: 'var(--accent-strong)' }}>{fmt(totals.netPay)} <span className="chip-unit">บาท</span></span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="row gap-8 summary-bar-actions">
               <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
@@ -1238,6 +1381,10 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
     whtRate: 3,
     advanceDeduction: 0,
     retentionDeduction: 0,
+    socialSecurity: 0,
+    socialSecurityEnabled: false,
+    socialSecurityItems: [],
+    socialSecurityPeriod: '',
     docs: [],
     note: '',
     workNote: '',
@@ -1264,6 +1411,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
   const [teamModalOpen, setTeamModalOpen] = useState(false);
 
   const totals = useMemo(() => computeTotals(form), [form]);
+  const selectedTeam = app.workerTeams.find(t => t.id === form.workerTeamId);
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const toggleDoc = (id) => set({ docs: form.docs.includes(id) ? form.docs.filter(d => d !== id) : [...form.docs, id] });
 
@@ -1447,6 +1595,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
                       onChange={(e) => set({ retentionDeduction: e.target.value })} placeholder="0.00" />
                   </div>
                 </div>
+                <SocialSecuritySection form={form} set={set} team={selectedTeam} />
                 <div className="field full">
                   <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>คำนวณเงินประกันเร็ว:</span>
@@ -1602,9 +1751,21 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
                 </div>
               )}
               <div className="summary-chip total">
-                <span className="chip-label">ยอดจ่ายสุทธิ</span>
+                <span className="chip-label">ยอดจ่ายสุทธิ (บันทึกรายจ่าย)</span>
                 <span className="chip-value">{fmt(totals.total)} <span className="chip-unit">บาท</span></span>
               </div>
+              {Number(form.socialSecurity) > 0 && (
+                <>
+                  <div className="summary-chip">
+                    <span className="chip-label">หักประกันสังคม</span>
+                    <span className="chip-value" style={{ color: '#7c3aed' }}>− {fmt(totals.socialSecurity)}</span>
+                  </div>
+                  <div className="summary-chip">
+                    <span className="chip-label">โอนช่างจริง</span>
+                    <span className="chip-value" style={{ color: 'var(--accent-strong)' }}>{fmt(totals.netPay)} <span className="chip-unit">บาท</span></span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="row gap-8 summary-bar-actions">
               <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>

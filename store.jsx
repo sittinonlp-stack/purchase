@@ -261,8 +261,18 @@ const _computeTotals = (rec) => {
   const advance = Number(rec.advanceDeduction || 0);
   const retention = Number(rec.retentionDeduction || 0);
 
+  // total = ยอดรายจ่ายที่บันทึก (ยอดเต็มก่อนหักประกันสังคมเสมอ)
   total = beforeWht - wht - advance - retention;
-  return { subTotal, vat, beforeWht, wht, advance, retention, discountAmt, total };
+
+  // ประกันสังคม — หักจากช่างโดยตรง ไม่กระทบยอดรายจ่ายที่บันทึก
+  // ถ้าเปิดใช้ (socialSecurityEnabled) → รวมยอดรายคนจาก socialSecurityItems
+  // ไม่งั้น fallback เป็นตัวเลขเดิม (records เก่า)
+  const socialSecurity = rec.socialSecurityEnabled
+    ? (rec.socialSecurityItems || []).reduce((s, m) => s + Number(m.amount || 0), 0)
+    : Number(rec.socialSecurity || 0);
+  // netPay = ยอดโอนช่างจริง (หลังหักประกันสังคม)
+  const netPay = total - socialSecurity;
+  return { subTotal, vat, beforeWht, wht, advance, retention, socialSecurity, discountAmt, total, netPay };
 };
 
 // เงินประกันผลงานคงค้าง (held retention) ของทีมช่าง + โครงการ
