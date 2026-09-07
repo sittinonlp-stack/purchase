@@ -1236,7 +1236,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
               )}
               {form.whtEnabled && (
                 <div className="summary-chip">
-                  <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                  <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%{Number(form.advanceDeduction) > 0 ? ' · หลังหักเบิกล่วงหน้า' : ''}</span>
                   <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
                 </div>
               )}
@@ -1734,7 +1734,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
               )}
               {form.whtEnabled && (
                 <div className="summary-chip">
-                  <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                  <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%{Number(form.advanceDeduction) > 0 ? ' · หลังหักเบิกล่วงหน้า' : ''}</span>
                   <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
                 </div>
               )}

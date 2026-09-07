@@ -2406,7 +2406,7 @@ window.DetailDrawer = function DetailDrawer() {
           <div className="summary-rows" style={{ maxWidth: 380, marginLeft: 'auto' }}>
             <div className="summary-row"><span className="label">{rec.type === 'lump-labor' ? 'ยอดเหมารวม' : isLaborType ? 'ค่าแรงรวม' : 'ยอดก่อนภาษี'}</span><span className="value">{fmt(totals.subTotal)}</span></div>
             {Number(rec.vatRate) > 0 && <div className="summary-row"><span className="label">Vat {rec.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>}
-            {rec.whtEnabled && <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {rec.whtRate}%</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>}
+            {rec.whtEnabled && <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {rec.whtRate}%{Number(rec.advanceDeduction) > 0 ? ` (ฐาน ฿${fmt(totals.whtBase)})` : ''}</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>}
             {Number(rec.advanceDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--warn)' }}>หักเบิกล่วงหน้า</span><span className="value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span></div>}
             {Number(rec.retentionDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--info)' }}>หักเงินประกัน</span><span className="value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span></div>}
             <div className="summary-row total"><span className="label">{Number(rec.socialSecurity) > 0 ? 'ยอดสุทธิ (บันทึกรายจ่าย)' : 'ยอดสุทธิ'}</span><span className="value">{fmt(totals.total)} บาท</span></div>

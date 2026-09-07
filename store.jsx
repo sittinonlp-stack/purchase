@@ -255,11 +255,14 @@ const _computeTotals = (rec) => {
     vat = subTotal * vatRate;
     beforeWht = subTotal + vat;
   }
-  wht = subTotal * whtRate;
-
   // Labor-specific deductions
   const advance = Number(rec.advanceDeduction || 0);
   const retention = Number(rec.retentionDeduction || 0);
+
+  // หัก ณ ที่จ่าย — คิดจากยอดที่เหลือหลังหักเบิกล่วงหน้า
+  // (เบิกล่วงหน้าจ่ายไปก่อนหน้าและถูกหัก ณ ที่จ่ายไปแล้ว จึงไม่หักซ้ำบนยอดเต็ม)
+  const whtBase = Math.max(0, subTotal - advance);
+  wht = whtBase * whtRate;
 
   // total = ยอดรายจ่ายที่บันทึก (ยอดเต็มก่อนหักประกันสังคมเสมอ)
   total = beforeWht - wht - advance - retention;
@@ -272,7 +275,7 @@ const _computeTotals = (rec) => {
     : Number(rec.socialSecurity || 0);
   // netPay = ยอดโอนช่างจริง (หลังหักประกันสังคม)
   const netPay = total - socialSecurity;
-  return { subTotal, vat, beforeWht, wht, advance, retention, socialSecurity, discountAmt, total, netPay };
+  return { subTotal, vat, beforeWht, wht, whtBase, advance, retention, socialSecurity, discountAmt, total, netPay };
 };
 
 // เงินประกันผลงานคงค้าง (held retention) ของทีมช่าง + โครงการ

@@ -854,7 +854,7 @@ function PrintablePaymentApproval({ rec, company, app }) {
   const rows = [['รวมเป็นเงิน', totals.subTotal]];
   if (totals.discountAmt > 0) rows.push(['ส่วนลด', -totals.discountAmt]);
   if (totals.vat > 0)        rows.push(['ภาษีมูลค่าเพิ่ม (VAT)', totals.vat]);
-  if (totals.wht > 0)        rows.push(['หัก ณ ที่จ่าย', -totals.wht]);
+  if (totals.wht > 0)        rows.push([totals.advance > 0 ? 'หัก ณ ที่จ่าย (หลังหักเบิกล่วงหน้า)' : 'หัก ณ ที่จ่าย', -totals.wht]);
   if (totals.advance > 0)    rows.push(['หักเบิกล่วงหน้า', -totals.advance]);
   if (totals.retention > 0)  rows.push(['หักเงินประกันผลงาน', -totals.retention]);
 
