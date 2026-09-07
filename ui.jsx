@@ -275,6 +275,75 @@ function ImageUploader({ images, onChange, max = 10 }) {
 }
 window.ImageUploader = ImageUploader;
 
+// ---- Installment plan editor (form-side) — แบ่งจ่ายเป็นงวด ----
+// กำหนด "แผนงวด" (ยอดแต่ละงวด) ในฟอร์ม · การจ่ายจริง (วันที่+สลิป) ทำในหน้ารายละเอียดบิล
+function InstallmentSection({ form, set, contractTotal }) {
+  const enabled = !!form.installmentEnabled;
+  const inst = form.installments || [];
+  const planSum = inst.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const diff = Math.round((planSum - contractTotal) * 100) / 100;
+
+  const toggle = () => {
+    if (!enabled) {
+      const init = inst.length ? inst : [{ id: newId(), amount: contractTotal || '', date: '', paid: false, slips: [], note: '' }];
+      set({ installmentEnabled: true, installments: init });
+    } else {
+      set({ installmentEnabled: false });
+    }
+  };
+  const upd = (id, patch) => set({ installments: inst.map(i => i.id === id ? { ...i, ...patch } : i) });
+  const add = () => set({ installments: [...inst, { id: newId(), amount: '', date: '', paid: false, slips: [], note: '' }] });
+  const del = (id) => set({ installments: inst.filter(i => i.id !== id) });
+  const splitEqual = (n) => {
+    n = Math.max(1, Math.min(24, Math.round(Number(n) || 0)));
+    const per = Math.floor((Number(contractTotal) || 0) / n);
+    const rows = []; let acc = 0;
+    for (let k = 0; k < n; k++) { const amt = (k === n - 1) ? ((Number(contractTotal) || 0) - acc) : per; acc += amt; rows.push({ id: newId(), amount: amt, date: '', paid: false, slips: [], note: '' }); }
+    set({ installments: rows });
+  };
+
+  return (
+    <div className="field full">
+      <button type="button" className="status-chip" onClick={toggle}
+        style={enabled ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)', color: 'var(--accent-ink)' } : undefined}>
+        <span className="tick">{enabled ? '✓' : ''}</span> แบ่งจ่ายเป็นงวด
+      </button>
+      {enabled && (
+        <div style={{ marginTop: 12, border: '1px solid var(--line)', borderRadius: 10, padding: 12, background: 'var(--surface-2)' }}>
+          <div className="row gap-8" style={{ flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>แบ่งเท่ากัน:</span>
+            {[2, 3, 4].map(n => <button key={n} type="button" className="badge" style={{ cursor: 'pointer', padding: '4px 10px' }} onClick={() => splitEqual(n)}>{n} งวด</button>)}
+          </div>
+          <div className="col gap-8">
+            {inst.map((it, idx) => (
+              <div key={it.id} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: 8, background: 'var(--surface)' }}>
+                <div className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span className="badge gray" style={{ minWidth: 54, justifyContent: 'center' }}>งวด {idx + 1}</span>
+                  <div className="input-affix" style={{ flex: '1 1 130px', minWidth: 0 }}>
+                    <div className="input-affix-prefix">฿</div>
+                    <input className="input mono" type="number" min="0" step="any" placeholder="ยอดงวด" value={it.amount} onChange={e => upd(it.id, { amount: e.target.value })} disabled={it.paid} />
+                  </div>
+                  {it.paid && <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>จ่ายแล้ว</span>}
+                  <button type="button" className="topbar-icon-btn" style={{ width: 30, height: 30, opacity: it.paid ? 0.4 : 1 }} onClick={() => !it.paid && del(it.id)} title={it.paid ? 'งวดที่จ่ายแล้วลบไม่ได้' : 'ลบงวด'}><Icon name="trash" size={13} /></button>
+                </div>
+                <input className="input" style={{ marginTop: 6 }} placeholder="รายละเอียดงวด (เช่น งวดที่ 1 งานฐานราก) — ใช้ตอนออกใบอนุมัติสั่งจ่าย" value={it.detail || ''} onChange={e => upd(it.id, { detail: e.target.value })} />
+              </div>
+            ))}
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={add}><Icon name="plus" size={12} /> เพิ่มงวด</button>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line)', fontSize: 12 }}>
+            <span style={{ color: Math.abs(diff) > 0.5 ? 'var(--danger)' : 'var(--accent-ink)' }}>
+              รวมแผน ฿{fmt(planSum)} {Math.abs(diff) > 0.5 ? `— ยังไม่ตรงกับสัญญา ฿${fmt(contractTotal)} (ต่าง ฿${fmt(Math.abs(diff))})` : '✓ ตรงกับยอดสัญญา'}
+            </span>
+          </div>
+          <div className="field-hint" style={{ marginTop: 8 }}>กำหนดยอดแต่ละงวดที่นี่ · เวลาจ่ายจริงให้กด "จ่ายงวดนี้" ในหน้ารายละเอียดบิล (แนบสลิป+วันที่) · หัก ณ ที่จ่ายคิดตอนจ่ายแต่ละงวด · ต้นทุนโครงการนับเต็มตามสัญญาตั้งแต่อนุมัติ</div>
+        </div>
+      )}
+    </div>
+  );
+}
+window.InstallmentSection = InstallmentSection;
+
 // ---- Signature image picker (single image, compact) ----
 function SignatureImagePicker({ value, onChange, label = 'ลายเซ็นต์' }) {
   const inputRef = useRef(null);

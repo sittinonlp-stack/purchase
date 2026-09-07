@@ -858,6 +858,19 @@ function PrintablePaymentApproval({ rec, company, app }) {
   if (totals.advance > 0)    rows.push(['หักเบิกล่วงหน้า', -totals.advance]);
   if (totals.retention > 0)  rows.push(['หักเงินประกันผลงาน', -totals.retention]);
 
+  // ── แบ่งจ่ายเป็นงวด: ใบอนุมัติสำหรับ "งวดปัจจุบัน" (ดึงมาจากปุ่มพิมพ์) ──
+  const inst = rec._printInstallment;
+  const isInst = !!inst;
+  const whtRate = rec.whtEnabled ? Number(rec.whtRate || 0) / 100 : 0;
+  const instNo = (rec._printInstallmentIndex || 0) + 1;
+  const instCount = rec._printInstallmentCount || 0;
+  const instAmount = Number(inst?.amount || 0);
+  const instWht = instAmount * whtRate;
+  const instNet = instAmount - instWht;
+  const instPaidGross = (rec.installments || []).filter(i => i.paid).reduce((s, i) => s + Number(i.amount || 0), 0);
+  const instOutstandingAfter = Math.max(0, totals.beforeWht - instPaidGross - instAmount);
+  const payAmount = isInst ? instNet : totals.total;
+
   return (
     <div className="printable-receipt">
       {/* Header */}
@@ -879,7 +892,7 @@ function PrintablePaymentApproval({ rec, company, app }) {
         <div className="rcpt-title-box">
           <div className="rcpt-title">ใบอนุมัติสั่งจ่าย</div>
           <div className="rcpt-title-en">PAYMENT APPROVAL</div>
-          <div className="rcpt-original">สำหรับฝ่ายบัญชี</div>
+          <div className="rcpt-original">สำหรับฝ่ายบัญชี{isInst ? ` · งวดที่ ${instNo}/${instCount}` : ''}</div>
         </div>
       </div>
 
@@ -905,6 +918,17 @@ function PrintablePaymentApproval({ rec, company, app }) {
         </div>
       </div>
 
+      {/* งวด banner — เฉพาะบิลแบ่งจ่ายเป็นงวด */}
+      {isInst && (
+        <div style={{ margin: '0 0 10px', padding: '10px 14px', border: '1px solid #cabfb0', borderRadius: 8, background: '#faf7f1' }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>อนุมัติจ่าย งวดที่ {instNo} จาก {instCount} งวด</div>
+          {inst.detail && <div style={{ fontSize: 13, marginTop: 2 }}>รายละเอียด: {inst.detail}</div>}
+          <div style={{ fontSize: 12, color: '#6b6157', marginTop: 4 }}>
+            ยอดสัญญารวม {fmt(totals.beforeWht)} · จ่ายไปแล้ว {fmt(instPaidGross)} · คงเหลือหลังงวดนี้ {fmt(instOutstandingAfter)} บาท
+          </div>
+        </div>
+      )}
+
       {/* Items */}
       <table className="rcpt-items">
         <thead>
@@ -918,7 +942,16 @@ function PrintablePaymentApproval({ rec, company, app }) {
           </tr>
         </thead>
         <tbody>
-          {(rec.items || []).map((it, i) => (
+          {isInst ? (
+            <tr>
+              <td className="rcpt-num">1</td>
+              <td>{inst.detail || `${typeLabel} — งวดที่ ${instNo}/${instCount}`}<div style={{ fontSize: 11, color: '#6b6157' }}>{(rec.items || []).map(it => it.name).filter(Boolean).join(', ')}</div></td>
+              <td className="rcpt-num rcpt-mono">1</td>
+              <td>งวด</td>
+              <td className="rcpt-num rcpt-mono">{fmt(instAmount)}</td>
+              <td className="rcpt-num rcpt-mono">{fmt(instAmount)}</td>
+            </tr>
+          ) : (rec.items || []).map((it, i) => (
             <tr key={it.id || i}>
               <td className="rcpt-num">{i + 1}</td>
               <td>{it.name || '—'}</td>
@@ -928,7 +961,7 @@ function PrintablePaymentApproval({ rec, company, app }) {
               <td className="rcpt-num rcpt-mono">{fmt(Number(it.qty || 0) * Number(it.price || 0))}</td>
             </tr>
           ))}
-          {Array.from({ length: Math.max(0, 5 - (rec.items || []).length) }).map((_, i) => (
+          {Array.from({ length: Math.max(0, 5 - (isInst ? 1 : (rec.items || []).length)) }).map((_, i) => (
             <tr key={'empty-' + i} className="rcpt-empty-row"><td colSpan={6}>&nbsp;</td></tr>
           ))}
         </tbody>
@@ -938,15 +971,25 @@ function PrintablePaymentApproval({ rec, company, app }) {
       <div className="rcpt-totals">
         <div className="rcpt-totals-left">
           <div className="rcpt-amount-words">
-            <span className="rcpt-amount-words-label">จำนวนเงินที่อนุมัติจ่าย (ตัวอักษร):</span>
-            <div className="rcpt-amount-words-text">({thaiBahtText(totals.total)})</div>
+            <span className="rcpt-amount-words-label">จำนวนเงินที่อนุมัติจ่าย{isInst ? ` งวดที่ ${instNo}` : ''} (ตัวอักษร):</span>
+            <div className="rcpt-amount-words-text">({thaiBahtText(payAmount)})</div>
           </div>
         </div>
         <div className="rcpt-totals-right">
-          {rows.map(([label, val], i) => (
-            <div className="rcpt-total-row" key={i}><span>{label}</span><span className="rcpt-mono">{fmt(val)}</span></div>
-          ))}
-          <div className="rcpt-total-row rcpt-total-grand"><span>ยอดสุทธิที่ต้องจ่าย</span><span className="rcpt-mono">{fmt(totals.total)} บาท</span></div>
+          {isInst ? (
+            <>
+              <div className="rcpt-total-row"><span>ยอดงวดที่ {instNo}</span><span className="rcpt-mono">{fmt(instAmount)}</span></div>
+              {instWht > 0 && <div className="rcpt-total-row"><span>หัก ณ ที่จ่าย {rec.whtRate}%</span><span className="rcpt-mono">{fmt(-instWht)}</span></div>}
+              <div className="rcpt-total-row rcpt-total-grand"><span>ยอดสุทธิที่ต้องจ่ายงวดนี้</span><span className="rcpt-mono">{fmt(instNet)} บาท</span></div>
+            </>
+          ) : (
+            <>
+              {rows.map(([label, val], i) => (
+                <div className="rcpt-total-row" key={i}><span>{label}</span><span className="rcpt-mono">{fmt(val)}</span></div>
+              ))}
+              <div className="rcpt-total-row rcpt-total-grand"><span>ยอดสุทธิที่ต้องจ่าย</span><span className="rcpt-mono">{fmt(totals.total)} บาท</span></div>
+            </>
+          )}
         </div>
       </div>
 

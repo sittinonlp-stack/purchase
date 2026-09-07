@@ -414,6 +414,8 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
     depositReturnImages: [],
     depositReturnNote: '',
     docInfo: { name: '', taxId: '', address: '' },
+    installmentEnabled: false,
+    installments: [],
   });
 
   const [form, setForm] = useState(() => initial ? { ...initial, docInfo: { name:'', taxId:'', address:'', ...(initial.docInfo||{}) } } : blank());
@@ -654,6 +656,19 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
             </div>
           </div>
 
+          {/* Card 5: การชำระเงิน — จ่ายครั้งเดียว/แบ่งงวด */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">การชำระเงิน</div>
+                <div className="card-sub">จ่ายครั้งเดียว หรือแบ่งจ่ายเป็นงวด (ตรวจยอดคงค้างได้)</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <window.InstallmentSection form={form} set={set} contractTotal={totals.beforeWht} />
+            </div>
+          </div>
+
           {/* Summary bar — full width, below all cards */}
           <div className="card form-summary-bottom">
             <div className="card-body form-summary-bar">
@@ -737,6 +752,8 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
     docs: [],
     note: '',
     images: [],
+    installmentEnabled: false,
+    installments: [],
   });
 
   const [form, setForm] = useState(() => initial ? { ...initial } : blank());
@@ -911,6 +928,19 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
                 <label className="field-label">หมายเหตุ</label>
                 <textarea className="textarea" placeholder="เช่น ค่าออกแบบงวด 1, ค่าน้ำ-ไฟเดือน พ.ค." value={form.note} onChange={(e) => set({ note: e.target.value })} />
               </div>
+            </div>
+          </div>
+
+          {/* Card 5: การชำระเงิน — จ่ายครั้งเดียว/แบ่งงวด */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">การชำระเงิน</div>
+                <div className="card-sub">จ่ายครั้งเดียว หรือแบ่งจ่ายเป็นงวด (ตรวจยอดคงค้างได้)</div>
+              </div>
+            </div>
+            <div className="card-body">
+              <window.InstallmentSection form={form} set={set} contractTotal={totals.beforeWht} />
             </div>
           </div>
         </div>

@@ -275,7 +275,16 @@ const _computeTotals = (rec) => {
     : Number(rec.socialSecurity || 0);
   // netPay = ยอดโอนช่างจริง (หลังหักประกันสังคม)
   const netPay = total - socialSecurity;
-  return { subTotal, vat, beforeWht, wht, whtBase, advance, retention, socialSecurity, discountAmt, total, netPay };
+
+  // แบ่งจ่ายเป็นงวด — ต้นทุนนับเต็มตามสัญญา (total เดิม) · ติดตามยอดจ่าย/คงค้าง
+  const installmentEnabled = !!rec.installmentEnabled;
+  const inst = rec.installments || [];
+  const instPaidGross = inst.filter(i => i.paid).reduce((s, i) => s + Number(i.amount || 0), 0);
+  const instPlanGross = inst.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const outstanding = installmentEnabled ? Math.max(0, beforeWht - instPaidGross) : 0;
+
+  return { subTotal, vat, beforeWht, wht, whtBase, advance, retention, socialSecurity, discountAmt, total, netPay,
+    installmentEnabled, instPaidGross, instPlanGross, outstanding };
 };
 
 // เงินประกันผลงานคงค้าง (held retention) ของทีมช่าง + โครงการ

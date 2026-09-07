@@ -783,14 +783,103 @@ function PaidButton({ record }) {
   );
 }
 
+// ---- แบ่งจ่ายเป็นงวด: ตารางงวด + จ่ายทีละงวด (ในหน้ารายละเอียดบิล) ----
+function InstallmentPayPanel({ rec }) {
+  const app = window.useApp();
+  const inst = rec.installments || [];
+  const t = computeTotals(rec);
+  const whtRate = rec.whtEnabled ? Number(rec.whtRate || 0) / 100 : 0;
+  const [payId, setPayId] = useState(null);
+  const [date, setDate] = useState(todayStr());
+  const [slips, setSlips] = useState([]);
+  const [note, setNote] = useState('');
+
+  const openPay = (it) => { setPayId(it.id); setDate(it.date || todayStr()); setSlips(it.slips || []); setNote(it.note || ''); };
+  const commit = (nextInst) => {
+    const allPaid = nextInst.length > 0 && nextInst.every(i => i.paid);
+    const paidDates = nextInst.filter(i => i.paid && i.date).map(i => i.date).sort();
+    app.updateRecord(rec.id, { installments: nextInst, paid: allPaid, paidDate: allPaid ? (paidDates.slice(-1)[0] || rec.paidDate || '') : '' });
+  };
+  const savePay = () => {
+    if (!date) return app.pushToast('โปรดระบุวันที่จ่าย', 'error');
+    commit(inst.map(i => i.id === payId ? { ...i, paid: true, date, slips, note } : i));
+    app.pushToast('บันทึกจ่ายงวดแล้ว ✓'); setPayId(null);
+  };
+  const unpay = (it) => { commit(inst.map(i => i.id === it.id ? { ...i, paid: false, date: '', slips: [], note: '' } : i)); app.pushToast('ยกเลิกการจ่ายงวดนี้'); };
+
+  const paidGross = t.instPaidGross, outstanding = t.outstanding;
+  const canPay = rec.approved;
+
+  return (
+    <div className="detail-section">
+      <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>แบ่งจ่ายเป็นงวด</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden', marginBottom: 12 }}>
+        <div style={{ background: 'var(--surface-2)', padding: '10px 12px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>ยอดสัญญา</div><div className="mono" style={{ fontWeight: 600, marginTop: 2 }}>฿{fmt(t.beforeWht)}</div></div>
+        <div style={{ background: 'var(--surface-2)', padding: '10px 12px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>จ่ายแล้ว</div><div className="mono" style={{ fontWeight: 600, marginTop: 2, color: 'var(--accent-strong)' }}>฿{fmt(paidGross)}</div></div>
+        <div style={{ background: 'var(--surface-2)', padding: '10px 12px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>คงค้าง</div><div className="mono" style={{ fontWeight: 700, marginTop: 2, color: outstanding > 0 ? 'var(--warn)' : 'var(--success, #16a34a)' }}>{outstanding > 0 ? '฿' + fmt(outstanding) : '✓ ครบ'}</div></div>
+      </div>
+      {!canPay && <div className="field-hint" style={{ marginBottom: 10, color: 'var(--warn)' }}>ต้องกดอนุมัติบิลก่อน จึงจะจ่ายงวดได้</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {inst.map((it, idx) => {
+          const wht = Number(it.amount || 0) * whtRate;
+          const net = Number(it.amount || 0) - wht;
+          return (
+            <div key={it.id} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', background: it.paid ? 'rgba(5,150,105,0.05)' : 'var(--surface-2)' }}>
+              <div className="row between" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <span className="badge gray" style={{ marginRight: 8 }}>งวด {idx + 1}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>฿{fmt(it.amount)}</span>
+                  {whtRate > 0 && <span style={{ fontSize: 11.5, color: 'var(--ink-3)', marginLeft: 8 }}>หัก ณ ที่จ่าย ฿{fmt(wht)} · จ่ายจริง ฿{fmt(net)}</span>}
+                  {it.detail && <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 2 }}>{it.detail}</div>}
+                  {it.paid && it.date && <div style={{ fontSize: 11.5, color: 'var(--accent-ink)', marginTop: 3 }}>✓ จ่ายแล้ว {fmtDate(it.date)}{(it.slips || []).length > 0 ? ` · แนบสลิป ${it.slips.length}` : ''}</div>}
+                </div>
+                {it.paid
+                  ? <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => unpay(it)}>ยกเลิกจ่าย</button>
+                  : <button className="btn btn-accent btn-sm" onClick={() => canPay ? openPay(it) : app.pushToast('กรุณากดอนุมัติบิลก่อน จึงจะจ่ายงวดได้', 'error')}><Icon name="check" size={13} /> จ่ายงวดนี้</button>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {payId && ReactDOM.createPortal(
+        <div className="modal-overlay" onClick={() => setPayId(null)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h2 className="modal-title">บันทึกจ่ายงวด</h2><button className="btn-icon" onClick={() => setPayId(null)}><Icon name="x" size={16} /></button></div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="field"><label className="field-label">วันที่จ่าย <span className="req">*</span></label><input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+              <div className="field"><label className="field-label">สลิปการโอน</label><window.ImageUploader images={slips} onChange={setSlips} max={3} /></div>
+              <div className="field"><label className="field-label">หมายเหตุ (ถ้ามี)</label><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น จ่ายเงินสด / โอนบางส่วน" /></div>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setPayId(null)}>ยกเลิก</button>
+              <button className="btn btn-accent" onClick={savePay}><Icon name="check" size={14} /> บันทึกจ่ายงวด</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 // ---- ปุ่มพิมพ์ใบอนุมัติสั่งจ่าย (แสดงเมื่ออนุมัติแล้ว) — พิมพ์ได้จากแถวเลย ----
+// สร้าง record สำหรับพิมพ์ใบอนุมัติ — ถ้าแบ่งจ่ายเป็นงวด ให้ดึง "งวดปัจจุบัน" (งวดถัดไปที่ยังไม่จ่าย)
+function installmentPrintRec(record) {
+  if (!record.installmentEnabled || !(record.installments || []).length) return record;
+  const inst = record.installments;
+  let idx = inst.findIndex(i => !i.paid);
+  if (idx < 0) idx = inst.length - 1;   // จ่ายครบแล้ว → งวดสุดท้าย
+  return { ...record, _printInstallment: inst[idx], _printInstallmentIndex: idx, _printInstallmentCount: inst.length };
+}
+
 function ApprovalPrintButton({ record }) {
   const app = window.useApp();
   if (!record.approved) return null;
   const print = (e) => {
     e.stopPropagation();
     const c = window.getCompanySettings();
-    window.openPrintPopup(window.PrintablePaymentApproval, 'ใบอนุมัติสั่งจ่าย ' + record.docNo, record, c, app);
+    window.openPrintPopup(window.PrintablePaymentApproval, 'ใบอนุมัติสั่งจ่าย ' + record.docNo, installmentPrintRec(record), c, app);
   };
   return (
     <button onClick={print} title="พิมพ์ใบอนุมัติสั่งจ่าย สำหรับส่งฝ่ายบัญชี"
@@ -971,7 +1060,19 @@ const RecordRow = React.memo(function RecordRow({ r, projects, showApprove, show
       <td className="num mono" style={{ fontWeight: 500 }}>{fmt(total)}</td>
       {showPaid && (
         <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-          <PaidButton record={r} />
+          {r.installmentEnabled ? (() => {
+            const ct = computeTotals(r);
+            const paidCount = (r.installments || []).filter(i => i.paid).length;
+            const totalCount = (r.installments || []).length;
+            const done = totalCount > 0 && ct.outstanding <= 0;
+            return (
+              <button onClick={() => onOpen(r.id)} className={"status-chip" + (done ? " on paid" : "")}
+                style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }} title="แบ่งจ่ายเป็นงวด — คลิกเพื่อดู/จ่ายงวด">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span className="tick">{done ? '✓' : ''}</span> งวด {paidCount}/{totalCount}</span>
+                {!done && <span className="mono" style={{ fontSize: 10, fontWeight: 500, color: 'var(--warn)' }}>ค้าง ฿{fmt(ct.outstanding)}</span>}
+              </button>
+            );
+          })() : <PaidButton record={r} />}
         </td>
       )}
     </tr>
@@ -2199,7 +2300,7 @@ window.DetailDrawer = function DetailDrawer() {
             {rec.approved && ['material', 'machine', 'other', 'labor', 'lump-labor'].includes(rec.type) && (
               <button className="btn btn-ghost btn-sm" onClick={() => {
                 const c = window.getCompanySettings();
-                window.openPrintPopup(window.PrintablePaymentApproval, 'ใบอนุมัติสั่งจ่าย ' + rec.docNo, rec, c, app);
+                window.openPrintPopup(window.PrintablePaymentApproval, 'ใบอนุมัติสั่งจ่าย ' + rec.docNo, installmentPrintRec(rec), c, app);
               }} title="พิมพ์ใบอนุมัติสั่งจ่าย สำหรับส่งฝ่ายบัญชี">
                 <Icon name="receipt" size={13} /> ใบอนุมัติ
               </button>
@@ -2264,6 +2365,9 @@ window.DetailDrawer = function DetailDrawer() {
             </div>
           )}
         </div>
+
+        {/* แบ่งจ่ายเป็นงวด — ตารางงวด + จ่ายทีละงวด */}
+        {rec.installmentEnabled && <InstallmentPayPanel key={rec.id} rec={rec} />}
 
         {/* ตามบิล — รับใบกำกับภาษี/ใบเสร็จจากร้าน (เฉพาะโครงการที่เปิดตามบิล) */}
         {needsBill(rec, proj) && <BillReceiveSection key={rec.id} rec={rec} />}

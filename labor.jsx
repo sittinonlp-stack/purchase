@@ -879,6 +879,8 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
     images: [],
     workLogs: [],
     docInfo: { name: '', taxId: '', address: '' },
+    installmentEnabled: false,
+    installments: [],
   });
 
   const [form, setForm] = useState(() => {
@@ -1091,6 +1093,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                   <div className="field-hint">เก็บไว้ค้ำประกันคุณภาพ — คืนเมื่องานเสร็จและตรวจรับ</div>
                 </div>
                 <SocialSecuritySection form={form} set={set} team={selectedTeam} />
+                <window.InstallmentSection form={form} set={set} contractTotal={totals.beforeWht} />
                 <div className="field full">
                   <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>กดเพื่อคำนวณเร็ว:</span>
@@ -1392,6 +1395,8 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
     images: [],
     workLogs: [],
     docInfo: { name: '', taxId: '', address: '' },
+    installmentEnabled: false,
+    installments: [],
   });
 
   const [form, setForm] = useState(() => {
@@ -1597,6 +1602,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
                   </div>
                 </div>
                 <SocialSecuritySection form={form} set={set} team={selectedTeam} />
+                <window.InstallmentSection form={form} set={set} contractTotal={totals.beforeWht} />
                 <div className="field full">
                   <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>คำนวณเงินประกันเร็ว:</span>

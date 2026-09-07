@@ -128,6 +128,9 @@
       createdBy:        (row.meta || {}).createdBy || null,
       // ── ข้อมูลผู้รับเงิน (labor / lump-labor) ────
       docInfo: (row.meta || {}).docInfo || { name: '', taxId: '', address: '' },
+      // ── แบ่งจ่ายเป็นงวด (installments) ──
+      installmentEnabled: Boolean((row.meta || {}).installmentEnabled),
+      installments: (row.meta || {}).installments || [],
       // ── หมายเหตุ/คำอธิบายรายการงาน (แยกจาก note รูปภาพ) ──
       workNote: (row.meta || {}).workNote || '',
       // ── หักประกันสังคม (หักจากช่างโดยตรง ไม่กระทบยอดรายจ่าย) ──
@@ -188,6 +191,8 @@
         ...(rec.docInfo ? { docInfo: rec.docInfo } : {}),
         ...(rec.createdBy ? { createdBy: rec.createdBy } : {}),
         workNote: rec.workNote || '',
+        installmentEnabled: Boolean(rec.installmentEnabled),
+        installments: rec.installments || [],
         socialSecurity: Number(rec.socialSecurity || 0),
         socialSecurityNote: rec.socialSecurityNote || '',
         socialSecurityEnabled: Boolean(rec.socialSecurityEnabled),
@@ -647,7 +652,8 @@
         'paid', 'paidDate', 'paidSlips', 'isRetentionPayout', 'retentionReturned',
         'discountEnabled', 'discountType', 'discountValue',
         'billStatus', 'billDate', 'billNo', 'billImages', 'workNote', 'socialSecurity', 'socialSecurityNote',
-        'socialSecurityEnabled', 'socialSecurityItems', 'socialSecurityPeriod'];
+        'socialSecurityEnabled', 'socialSecurityItems', 'socialSecurityPeriod',
+        'installmentEnabled', 'installments'];
       if (META_KEYS.some(has)) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();
         const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
@@ -669,6 +675,11 @@
         if (has('socialSecurityEnabled')) newMeta.socialSecurityEnabled = Boolean(patch.socialSecurityEnabled);
         if (has('socialSecurityItems'))   newMeta.socialSecurityItems = patch.socialSecurityItems || [];
         if (has('socialSecurityPeriod'))  newMeta.socialSecurityPeriod = patch.socialSecurityPeriod || '';
+        if (has('installmentEnabled')) newMeta.installmentEnabled = Boolean(patch.installmentEnabled);
+        if (has('installments')) {
+          const arr = patch.installments || [];
+          newMeta.installments = await Promise.all(arr.map(async it => ({ ...it, slips: await uploadImages(it.slips || []) })));
+        }
         if (has('isRetentionPayout')) newMeta.isRetentionPayout = Boolean(patch.isRetentionPayout);
         if (has('retentionReturned')) newMeta.retentionReturned = Boolean(patch.retentionReturned);
         if (has('discountEnabled'))  newMeta.discountEnabled = Boolean(patch.discountEnabled);
