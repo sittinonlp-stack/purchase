@@ -4725,16 +4725,18 @@ window.LaborHistoryView = function LaborHistoryView() {
     allLabor.forEach(r => {
       const tid = r.workerTeamId || '__none__';
       if (r.isRetentionPayout) {
-        if (!r.approved) return;
-        if (!m[tid]) m[tid] = { held: 0, paid: 0, heldCount: 0, paidCount: 0 };
+        if (!r.paid) return;   // นับเฉพาะที่จ่ายคืนแล้วจริง
+        if (!m[tid]) m[tid] = { held: 0, paid: 0, heldCount: 0, paidCount: 0, heldRecords: [], paidRecords: [] };
         m[tid].paid += computeTotals(r).total;
         m[tid].paidCount++;
+        m[tid].paidRecords.push(r);
       } else {
         const ret = Number(r.retentionDeduction || 0);
-        if (ret <= 0 || r.retentionReturned) return;
-        if (!m[tid]) m[tid] = { held: 0, paid: 0, heldCount: 0, paidCount: 0 };
+        if (ret <= 0 || r.retentionReturned || !r.paid) return;   // นับเฉพาะบิลที่จ่ายแล้ว (หักเงินประกันจริง)
+        if (!m[tid]) m[tid] = { held: 0, paid: 0, heldCount: 0, paidCount: 0, heldRecords: [], paidRecords: [] };
         m[tid].held += ret;
         m[tid].heldCount++;
+        m[tid].heldRecords.push(r);
       }
     });
     // ยอดคงค้างสุทธิต่อทีม = held − paid (ไม่ติดลบ)
@@ -4749,7 +4751,7 @@ window.LaborHistoryView = function LaborHistoryView() {
   const ssoByMonth = useMemo(() => {
     const m = {};
     allLabor.forEach(r => {
-      if (!r.socialSecurityEnabled) return;
+      if (!r.socialSecurityEnabled || !r.paid) return;   // นับเฉพาะบิลที่จ่ายแล้ว (หัก ปกส. จริง)
       const amt = (r.socialSecurityItems || []).reduce((s, x) => s + Number(x.amount || 0), 0);
       if (amt <= 0) return;
       const key = r.socialSecurityPeriod || '__none__';
@@ -4910,6 +4912,29 @@ window.LaborHistoryView = function LaborHistoryView() {
                           }
                         </div>
                       </div>
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {info.heldRecords.map(r => (
+                          <div key={r.id} onClick={() => { app.setDetailId(r.id); setRetentionOpen(false); }} title="เปิดดูบิล"
+                            style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'var(--surface-2)', cursor: 'pointer', fontSize: 12 }}>
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span className="mono" style={{ color: 'var(--ink-2)' }}>{r.docNo}</span>
+                              <span style={{ color: 'var(--ink-3)' }}> · {(app.projects || []).find(p => p.id === r.projectId)?.name || 'ไม่ระบุโครงการ'} · {fmtDate(r.date)}</span>
+                            </span>
+                            <span className="mono" style={{ color: 'var(--info)', whiteSpace: 'nowrap' }}>฿{fmt(r.retentionDeduction)}</span>
+                          </div>
+                        ))}
+                        {info.paidRecords.map(r => (
+                          <div key={r.id} onClick={() => { app.setDetailId(r.id); setRetentionOpen(false); }} title="เปิดดูบิลจ่ายคืน"
+                            style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'rgba(22,163,74,0.06)', cursor: 'pointer', fontSize: 12 }}>
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span className="badge" style={{ background: 'rgba(22,163,74,0.12)', color: '#16a34a', marginRight: 6, fontSize: 10 }}>จ่ายคืน</span>
+                              <span className="mono" style={{ color: 'var(--ink-2)' }}>{r.docNo}</span>
+                              <span style={{ color: 'var(--ink-3)' }}> · {(app.projects || []).find(p => p.id === r.projectId)?.name || 'ไม่ระบุโครงการ'}</span>
+                            </span>
+                            <span className="mono" style={{ color: '#16a34a', whiteSpace: 'nowrap' }}>−฿{fmt(computeTotals(r).total)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -4953,6 +4978,22 @@ window.LaborHistoryView = function LaborHistoryView() {
                           <div className="text-small text-muted">{info.count} รายการ · {teams.join(', ')}</div>
                         </div>
                         <div className="mono" style={{ fontWeight: 700, color: '#6d28d9' }}>฿{fmt(info.total)}</div>
+                      </div>
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {info.records.map(r => {
+                          const amt = (r.socialSecurityItems || []).reduce((s, x) => s + Number(x.amount || 0), 0);
+                          const proj = (app.projects || []).find(p => p.id === r.projectId)?.name || 'ไม่ระบุโครงการ';
+                          return (
+                            <div key={r.id} onClick={() => { app.setDetailId(r.id); setSsoOpen(false); }} title="เปิดดูบิล"
+                              style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'var(--surface-2)', cursor: 'pointer', fontSize: 12 }}>
+                              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <span className="mono" style={{ color: 'var(--ink-2)' }}>{r.docNo}</span>
+                                <span style={{ color: 'var(--ink-3)' }}> · {proj} · {r.vendor || '—'}</span>
+                              </span>
+                              <span className="mono" style={{ color: '#6d28d9', whiteSpace: 'nowrap' }}>฿{fmt(amt)}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

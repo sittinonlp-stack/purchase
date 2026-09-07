@@ -659,8 +659,9 @@ window.WorkLogsEditor = WorkLogsEditor;
 function TeamHistoryPanel({ teamId, projectId, excludeId, compact }) {
   const app = window.useApp();
   if (!teamId || !projectId) return null;
+  // ประวัติ = เฉพาะบิลที่ "จ่ายแล้ว" เท่านั้น (กันสับสน — บิลที่ยังไม่อนุมัติ/จ่าย ไม่นับเป็นประวัติ)
   const records = app.records.filter(r =>
-    (r.type === 'labor' || r.type === 'lump-labor') && r.workerTeamId === teamId && r.projectId === projectId && r.id !== excludeId
+    (r.type === 'labor' || r.type === 'lump-labor') && r.workerTeamId === teamId && r.projectId === projectId && r.id !== excludeId && r.paid
   );
   const total = records.reduce((s, r) => s + computeTotals(r).total, 0);
   const advTotal = records.reduce((s, r) => s + Number(r.advanceDeduction || 0), 0);
@@ -673,7 +674,7 @@ function TeamHistoryPanel({ teamId, projectId, excludeId, compact }) {
         fontSize: 12.5, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 8
       }}>
         <Icon name="history" size={14} />
-        ยังไม่มีประวัติของทีมนี้ในโครงการนี้ — รายการนี้จะเป็นบิลแรก
+        ยังไม่มีประวัติที่จ่ายแล้วของทีมนี้ในโครงการนี้ (นับเฉพาะบิลที่จ่ายเงินแล้ว)
       </div>
     );
   }
@@ -685,7 +686,7 @@ function TeamHistoryPanel({ teamId, projectId, excludeId, compact }) {
         display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface-2)'
       }}>
         <Icon name="history" size={14} />
-        <span style={{ fontWeight: 500, fontSize: 13 }}>ประวัติทีมนี้ในโครงการเดียวกัน</span>
+        <span style={{ fontWeight: 500, fontSize: 13 }}>ประวัติทีมนี้ในโครงการเดียวกัน <span style={{ fontWeight: 400, color: 'var(--ink-3)', fontSize: 11 }}>(เฉพาะจ่ายแล้ว)</span></span>
         <span className="badge gray mono">{records.length} บิล</span>
         <div className="spacer"></div>
         <span className="mono" style={{ fontSize: 12, color: 'var(--ink-2)' }}>
