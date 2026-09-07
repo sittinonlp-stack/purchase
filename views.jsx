@@ -1211,8 +1211,8 @@ window.HistoryView = function HistoryView() {
   const unpaidRecs  = useMemo(() => allExp.filter(r => r.approved && !r.paid), [allExp]);
   const pendingCount = pendingRecs.length;
   const unpaidCount  = unpaidRecs.length;
-  const pendingSum   = useMemo(() => pendingRecs.reduce((s, r) => s + computeTotals(r).total, 0), [pendingRecs]);
-  const unpaidSum    = useMemo(() => unpaidRecs.reduce((s, r) => s + computeTotals(r).total, 0), [unpaidRecs]);
+  const pendingSum   = useMemo(() => pendingRecs.reduce((s, r) => s + computeTotals(r).cashDue, 0), [pendingRecs]);
+  const unpaidSum    = useMemo(() => unpaidRecs.reduce((s, r) => s + computeTotals(r).cashDue, 0), [unpaidRecs]);
 
   return (
     <>
@@ -4814,11 +4814,11 @@ window.LaborHistoryView = function LaborHistoryView() {
 
   // ค้างอนุมัติ — คำนวณจากรายการทั้งหมด (ไม่ขึ้นกับตัวกรอง)
   const pendingRecs  = allLabor.filter(r => !r.approved);
-  const pendingSum   = pendingRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+  const pendingSum   = pendingRecs.reduce((s, r) => s + computeTotals(r).cashDue, 0);
   const pendingCount = pendingRecs.length;
   // อนุมัติแล้ว-รอจ่าย — หายเมื่อกดจ่าย
   const unpaidRecs   = allLabor.filter(r => r.approved && !r.paid);
-  const unpaidSum    = unpaidRecs.reduce((s, r) => s + computeTotals(r).total, 0);
+  const unpaidSum    = unpaidRecs.reduce((s, r) => s + computeTotals(r).cashDue, 0);
   const unpaidCount  = unpaidRecs.length;
 
   // เงินประกันผลงานคงค้าง (retention) — แยกตามทีมช่าง (net = หักที่จ่ายคืนแล้ว)

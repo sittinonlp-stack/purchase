@@ -282,9 +282,14 @@ const _computeTotals = (rec) => {
   const instPaidGross = inst.filter(i => i.paid).reduce((s, i) => s + Number(i.amount || 0), 0);
   const instPlanGross = inst.reduce((s, i) => s + Number(i.amount || 0), 0);
   const outstanding = installmentEnabled ? Math.max(0, beforeWht - instPaidGross) : 0;
+  // ยอดสุทธิที่จ่ายไปแล้ว (หลังหัก ณ ที่จ่ายรายงวด) และยอด "ที่ยังต้องจ่ายจริง"
+  const instPaidNet = inst.filter(i => i.paid).reduce((s, i) => { const a = Number(i.amount || 0); return s + (a - a * whtRate); }, 0);
+  // cashDue = ยอดเงินที่ยังต้องจ่ายจริง — ใช้ในการ์ด "รออนุมัติ/รอจ่าย" ให้ตรงกับที่ต้องชำระ
+  // (บิลปกติ = ยอดสุทธิเต็ม · บิลแบ่งงวด = ยอดสุทธิที่เหลือหลังหักงวดที่จ่ายแล้ว)
+  const cashDue = installmentEnabled ? Math.max(0, total - instPaidNet) : total;
 
   return { subTotal, vat, beforeWht, wht, whtBase, advance, retention, socialSecurity, discountAmt, total, netPay,
-    installmentEnabled, instPaidGross, instPlanGross, outstanding };
+    installmentEnabled, instPaidGross, instPlanGross, outstanding, instPaidNet, cashDue };
 };
 
 // เงินประกันผลงานคงค้าง (held retention) ของทีมช่าง + โครงการ
@@ -350,6 +355,7 @@ window.AppProvider = function AppProvider({ children }) {
   const [lumpLaborCats, setLumpLaborCats] = useState(SEED_LUMP_LABOR_CATEGORIES);
   const [otherCats,     setOtherCats]     = useState(SEED_OTHER_CATEGORIES);
   const [workerTeams, setWorkerTeams] = useState(SEED_WORKER_TEAMS);
+  const [laborContracts, setLaborContracts] = useState([]);
   const [records,     setRecords]     = useState(seedRecords());
   // record ของโครงการที่เก็บถาวร — โหลดเมื่อเปิดแท็บ "เก็บถาวร" เท่านั้น (ไม่ปนกับ records หลัก)
   const [archivedRecords, setArchivedRecords] = useState([]);
@@ -408,7 +414,8 @@ window.AppProvider = function AppProvider({ children }) {
       }
 
       const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
-              lumpLaborCats: llc, otherCats: oc, workerTeams: teams, records: recs } = await window.db.loadAll();
+              lumpLaborCats: llc, otherCats: oc, workerTeams: teams, records: recs,
+              laborContracts: lcon } = await window.db.loadAll();
 
       setProjects(ps);
       setMatCats(mc.length   ? mc  : SEED_MAT_CATEGORIES);
@@ -427,6 +434,7 @@ window.AppProvider = function AppProvider({ children }) {
       }
 
       setWorkerTeams(teams);
+      setLaborContracts(lcon || []);
       setRecords(recs);
       setDbOnline(true);
       loadedUserIdRef.current = userId; // ✓ data loaded — mark for skip on next SIGNED_IN
@@ -689,7 +697,7 @@ window.AppProvider = function AppProvider({ children }) {
     const creator = userProfile
       ? { id: userProfile.id, name: userProfile.full_name || userProfile.email || '', at: new Date().toISOString() }
       : (rec.createdBy || null);
-    const newRec = { ...rec, id: newId(), createdBy: creator };
+    const newRec = { ...rec, id: rec.id || newId(), createdBy: creator };
     setRecords((r) => [newRec, ...r]);
     if (dbOnline) dbSync(window.db.insertRecord(newRec), 'insertRecord');
     return newRec;
@@ -914,6 +922,24 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteWorkerTeam(id), 'deleteWorkerTeam');
   }, [dbOnline, dbSync]);
 
+  // ── Labor contracts (สัญญาค่าแรง) ─────────────────────
+  const addLaborContract = useCallback((c) => {
+    const con = { status: 'open', installments: [], ...c, id: c.id || newId() };
+    setLaborContracts((cs) => [...cs, con]);
+    if (dbOnline) dbSync(window.db.insertLaborContract(con), 'insertLaborContract');
+    return con;
+  }, [dbOnline, dbSync]);
+
+  const updateLaborContract = useCallback((id, patch) => {
+    setLaborContracts((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    if (dbOnline) dbSync(window.db.updateLaborContract(id, patch), 'updateLaborContract');
+  }, [dbOnline, dbSync]);
+
+  const deleteLaborContract = useCallback((id) => {
+    setLaborContracts((cs) => cs.filter((c) => c.id !== id));
+    if (dbOnline) dbSync(window.db.deleteLaborContract(id), 'deleteLaborContract');
+  }, [dbOnline, dbSync]);
+
   // ── Update own profile (name / avatar_url) ───────────
   const updateMyProfile = useCallback(async (patch) => {
     if (!userProfile?.id) return;
@@ -934,18 +960,20 @@ window.AppProvider = function AppProvider({ children }) {
     lumpLaborCats, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
     otherCats, addOtherCat, updateOtherCat, deleteOtherCat,
     workerTeams, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
+    laborContracts, addLaborContract, updateLaborContract, deleteLaborContract,
     records, addRecord, updateRecord, deleteRecord, hydrateRecord,
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
        addLaborCat, updateLaborCat, deleteLaborCat, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
        addOtherCat, updateOtherCat, deleteOtherCat,
-       addWorkerTeam, updateWorkerTeam, deleteWorkerTeam, pushToast, updateMyProfile]);
+       addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
+       addLaborContract, updateLaborContract, deleteLaborContract, pushToast, updateMyProfile]);
 
   // ── Render guards ─────────────────────────────────────
   if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;

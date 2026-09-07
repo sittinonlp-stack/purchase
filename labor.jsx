@@ -315,6 +315,178 @@ function SocialSecuritySection({ form, set, team }) {
   );
 }
 
+// ── สัญญาค่าแรง: กำหนดค่าแรงรวม+งวดงาน แล้วออกใบเบิกรายงวด (บิลแยกแต่ละรอบ) ──
+// จัดการ submit — คืน true เสมอ (จัดการเองแล้ว): สร้าง/อัปเดตสัญญา + mark งวดที่เบิก + ส่ง record
+function handleContractSubmit(app, form, onSubmit) {
+  if (!form.withdrawIds || form.withdrawIds.length === 0) { app.pushToast('โปรดเลือกงวดที่จะเบิกรอบนี้', 'error'); return true; }
+  const recId = newId();
+  let contractId = form.contractId;
+  let installments;
+  let catId = '';
+  if (!contractId) {
+    const d = form.contractDraft || { title: '', installments: [] };
+    const validInst = (d.installments || []).filter(g => Number(g.amount) > 0);
+    if (!validInst.length) { app.pushToast('โปรดกำหนดงวดงาน (ยอด) ในสัญญา', 'error'); return true; }
+    if (!d.categoryId) { app.pushToast('โปรดเลือกหมวดหมู่งานของสัญญา (สำหรับลงบัญชี)', 'error'); return true; }
+    const con = app.addLaborContract({
+      projectId: form.projectId, teamId: form.workerTeamId, categoryId: d.categoryId || '',
+      title: (d.title || form.vendor || '').trim(),
+      total: validInst.reduce((s, g) => s + Number(g.amount || 0), 0),
+      installments: validInst.map(g => ({ ...g, amount: Number(g.amount || 0), withdrawnDocId: g.withdrawnDocId || null })),
+    });
+    contractId = con.id;
+    installments = con.installments;
+    catId = con.categoryId || '';
+  } else {
+    const con = (app.laborContracts || []).find(c => c.id === contractId);
+    installments = con ? con.installments : [];
+    catId = con ? (con.categoryId || '') : '';
+  }
+  const next = installments.map(g => form.withdrawIds.includes(g.id)
+    ? { ...g, withdrawnDocId: recId, withdrawnDocNo: form.docNo, withdrawnDate: form.date } : g);
+  const allWd = next.length > 0 && next.every(g => g.withdrawnDocId);
+  app.updateLaborContract(contractId, { installments: next, total: next.reduce((s, g) => s + Number(g.amount || 0), 0), status: allWd ? 'closed' : 'open' });
+  const items = installments.filter(g => form.withdrawIds.includes(g.id))
+    .map(g => ({ id: newId(), name: g.detail || 'งวดงาน', categoryId: catId, qty: 1, unit: 'งวด', price: Number(g.amount || 0) }));
+  onSubmit({ ...form, id: recId, contractId, items });
+  return true;
+}
+
+function LaborContractSection({ form, set, cats }) {
+  const app = window.useApp();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const useContract = !!form.useContract;
+  const existing = form.contractId ? (app.laborContracts || []).find(c => c.id === form.contractId) : null;
+  const draft = form.contractDraft || { title: '', installments: [] };
+  const inst = existing ? existing.installments : (draft.installments || []);
+  const catId = existing ? (existing.categoryId || '') : (draft.categoryId || '');
+  const catName = (cats || []).find(c => c.id === catId)?.name || '';
+  const total = inst.reduce((s, g) => s + Number(g.amount || 0), 0);
+  const withdrawIds = form.withdrawIds || [];
+  const withdrawnTotal = inst.filter(g => g.withdrawnDocId).reduce((s, g) => s + Number(g.amount || 0), 0);
+  const outstanding = total - withdrawnTotal;
+  const selectedTotal = inst.filter(g => withdrawIds.includes(g.id)).reduce((s, g) => s + Number(g.amount || 0), 0);
+
+  const syncItems = (ids) => {
+    const items = inst.filter(g => ids.includes(g.id)).map(g => ({ id: newId(), name: g.detail || 'งวดงาน', categoryId: catId, qty: 1, unit: 'งวด', price: Number(g.amount || 0) }));
+    set({ withdrawIds: ids, items: items.length ? items : [{ id: newId(), name: '', categoryId: catId, qty: 1, unit: 'งวด', price: 0 }] });
+  };
+  const toggleWithdraw = (g) => { if (g.withdrawnDocId) return; syncItems(withdrawIds.includes(g.id) ? withdrawIds.filter(x => x !== g.id) : [...withdrawIds, g.id]); };
+
+  const enableNew = () => set({ useContract: true, contractId: '', contractDraft: { title: form.vendor || '', installments: [{ id: newId(), detail: '', amount: '', withdrawnDocId: null }] }, withdrawIds: [] });
+  const chooseExisting = (c) => { set({ useContract: true, contractId: c.id, contractDraft: null, withdrawIds: [] }); setPickerOpen(false); };
+  const disable = () => set({ useContract: false, contractId: '', contractDraft: null, withdrawIds: [] });
+
+  const updDraftGvd = (id, patch) => set({ contractDraft: { ...draft, installments: (draft.installments || []).map(g => g.id === id ? { ...g, ...patch } : g) } });
+  const addDraftGvd = () => set({ contractDraft: { ...draft, installments: [...(draft.installments || []), { id: newId(), detail: '', amount: '', withdrawnDocId: null }] } });
+  const delDraftGvd = (id) => set({ contractDraft: { ...draft, installments: (draft.installments || []).filter(g => g.id !== id) } });
+  const addExistingGvd = () => { const nx = [...existing.installments, { id: newId(), detail: 'งานเพิ่มเติม', amount: 0, withdrawnDocId: null }]; app.updateLaborContract(existing.id, { installments: nx, total: nx.reduce((s, g) => s + Number(g.amount || 0), 0) }); };
+
+  const openContracts = (app.laborContracts || []).filter(c => c.status !== 'closed' && (c.installments || []).some(g => !g.withdrawnDocId));
+
+  if (!useContract) {
+    return (
+      <div className="field full">
+        <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPickerOpen(true)}><Icon name="history" size={13} /> เลือกสัญญาค่าแรงเดิม</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={enableNew}><Icon name="plus" size={13} /> สร้างสัญญาค่าแรง (แบ่งงวด)</button>
+          <span className="field-hint" style={{ alignSelf: 'center', margin: 0 }}>หรือกรอกรายการงานปกติด้านล่างสำหรับเบิกครั้งเดียว</span>
+        </div>
+        {pickerOpen && ReactDOM.createPortal(
+          <div className="modal-overlay" onClick={() => setPickerOpen(false)}>
+            <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header"><h2 className="modal-title">เลือกสัญญาค่าแรง (ที่ค้างเบิก)</h2><button className="btn-icon" onClick={() => setPickerOpen(false)}><Icon name="x" size={16} /></button></div>
+              <div className="modal-body">
+                {openContracts.length === 0 ? <div className="text-small text-muted" style={{ textAlign: 'center', padding: '16px 0' }}>ยังไม่มีสัญญาค่าแรงที่ค้างเบิก — กด "สร้างสัญญาค่าแรง" เพื่อเริ่ม</div> : openContracts.map(c => {
+                  const proj = (app.projects || []).find(p => p.id === c.projectId);
+                  const team = (app.workerTeams || []).find(t => t.id === c.teamId);
+                  const out = Number(c.total || 0) - (c.installments || []).filter(g => g.withdrawnDocId).reduce((s, g) => s + Number(g.amount || 0), 0);
+                  const wdCount = (c.installments || []).filter(g => g.withdrawnDocId).length;
+                  return (
+                    <div key={c.id} className="row gap-8" style={{ padding: '10px 12px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
+                      <div onClick={() => chooseExisting(c)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                        <div className="row between"><strong>{c.title || (team ? team.name : 'สัญญาค่าแรง')}</strong><span className="mono" style={{ color: 'var(--warn)' }}>ค้าง ฿{fmt(out)}</span></div>
+                        <div className="text-small text-muted">{proj ? proj.name : '—'}{team ? ' · ' + team.name : ''} · ค่าแรงรวม ฿{fmt(c.total)} · ค้างเบิก {(c.installments || []).filter(g => !g.withdrawnDocId).length} งวด</div>
+                      </div>
+                      {app.isAdmin && (
+                        <button type="button" className="topbar-icon-btn" style={{ width: 30, height: 30, flexShrink: 0 }} title="ลบสัญญา"
+                          onClick={() => { if (confirm('ลบสัญญา "' + (c.title || (team ? team.name : 'ค่าแรง')) + '"?' + (wdCount > 0 ? '\n\n⚠️ สัญญานี้เบิกไปแล้ว ' + wdCount + ' งวด — ใบเบิกเดิมจะยังอยู่ แต่จะไม่ผูกกับสัญญานี้อีก' : ''))) app.deleteLaborContract(c.id); }}>
+                          <Icon name="trash" size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>, document.body)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="field full">
+      <div style={{ border: '1px solid var(--accent)', borderRadius: 10, padding: 12, background: 'var(--accent-soft)' }}>
+        <div className="row between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+          <strong style={{ color: 'var(--accent-ink)' }}>{existing ? 'สัญญาค่าแรง' : 'สัญญาค่าแรงใหม่'}{existing?.title ? ' · ' + existing.title : ''}</strong>
+          <div className="row gap-8">
+            {existing && app.isAdmin && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}
+                onClick={() => { const wd = (existing.installments || []).filter(g => g.withdrawnDocId).length; if (confirm('ลบสัญญานี้ (' + (existing.title || 'ค่าแรง') + ')?' + (wd > 0 ? '\n\n⚠️ เบิกไปแล้ว ' + wd + ' งวด — ใบเบิกเดิมยังอยู่ แต่จะไม่ผูกกับสัญญานี้อีก' : ''))) { app.deleteLaborContract(existing.id); disable(); } }}>
+                <Icon name="trash" size={12} /> ลบสัญญา
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={disable}>ยกเลิกโหมดสัญญา</button>
+          </div>
+        </div>
+        {existing
+          ? (existing.categoryId ? <div style={{ fontSize: 12, color: 'var(--ink-2)', marginBottom: 10 }}>หมวดหมู่งาน: <strong>{catName || '—'}</strong></div> : null)
+          : (
+            <div className="field" style={{ marginBottom: 10 }}>
+              <label className="field-label">หมวดหมู่งาน (สำหรับลงบัญชี) <span className="req">*</span></label>
+              <select className="select" value={draft.categoryId || ''} onChange={e => set({ contractDraft: { ...draft, categoryId: e.target.value } })}>
+                <option value="">— เลือกหมวดหมู่งาน —</option>
+                {(cats || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ background: 'var(--surface)', padding: '8px 10px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>ค่าแรงรวม</div><div className="mono" style={{ fontWeight: 600 }}>฿{fmt(total)}</div></div>
+          <div style={{ background: 'var(--surface)', padding: '8px 10px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>เบิกไปแล้ว</div><div className="mono" style={{ fontWeight: 600, color: 'var(--accent-strong)' }}>฿{fmt(withdrawnTotal)}</div></div>
+          <div style={{ background: 'var(--surface)', padding: '8px 10px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>ค้างเบิก</div><div className="mono" style={{ fontWeight: 700, color: outstanding > 0 ? 'var(--warn)' : 'var(--success, #16a34a)' }}>฿{fmt(outstanding)}</div></div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {inst.map((g, idx) => {
+            const withdrawn = !!g.withdrawnDocId;
+            const selected = withdrawIds.includes(g.id);
+            return (
+              <div key={g.id} className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--line)', background: withdrawn ? 'var(--surface-2)' : (selected ? 'rgba(5,150,105,0.10)' : 'var(--surface)') }}>
+                <span className="badge gray" style={{ minWidth: 48, justifyContent: 'center' }}>งวด {idx + 1}</span>
+                {existing
+                  ? <span style={{ flex: '1 1 130px', minWidth: 0, fontSize: 13 }}>{g.detail || '—'}</span>
+                  : <input className="input" style={{ flex: '1 1 120px', minWidth: 0 }} placeholder="รายละเอียดงวด" value={g.detail} onChange={e => updDraftGvd(g.id, { detail: e.target.value })} />}
+                {existing
+                  ? <span className="mono" style={{ fontWeight: 600 }}>฿{fmt(g.amount)}</span>
+                  : <div className="input-affix" style={{ width: 120 }}><div className="input-affix-prefix">฿</div><input className="input mono" type="number" min="0" step="any" placeholder="ยอด" value={g.amount} onChange={e => updDraftGvd(g.id, { amount: e.target.value })} /></div>}
+                {withdrawn
+                  ? <button type="button" className="badge" style={{ background: 'var(--info-soft)', color: '#1a4fb0', cursor: 'pointer' }} onClick={() => app.setDetailId(g.withdrawnDocId)} title="เปิดดูใบเบิกของงวดนี้">เบิกแล้ว · {g.withdrawnDocNo || 'ดูบิล'}</button>
+                  : <button type="button" className={"status-chip" + (selected ? " on approve" : "")} onClick={() => toggleWithdraw(g)}><span className="tick">{selected ? '✓' : ''}</span> เบิกรอบนี้</button>}
+                {!existing && <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => delDraftGvd(g.id)} title="ลบงวด"><Icon name="trash" size={12} /></button>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="row gap-8" style={{ marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={existing ? addExistingGvd : addDraftGvd}><Icon name="plus" size={12} /> เพิ่มรายละเอียดงาน (งวด)</button>
+          {withdrawIds.length > 0 && <span style={{ fontSize: 12.5, color: 'var(--accent-ink)' }}>เบิกรอบนี้ {withdrawIds.length} งวด = <strong className="mono">฿{fmt(selectedTotal)}</strong></span>}
+        </div>
+        <div className="field-hint" style={{ marginTop: 8 }}>ยอดบิลนี้ = งวดที่ติ๊ก "เบิกรอบนี้" · รอบถัดไปสร้างบิลใหม่แล้วกด "เลือกสัญญาค่าแรงเดิม" เพื่อเบิกงวดที่เหลือ · งวดที่เบิกแล้วคลิกดูบิลได้</div>
+      </div>
+    </div>
+  );
+}
+window.LaborContractSection = LaborContractSection;
+
 // รายชื่อลูกทีมในทีมช่าง — เก็บประวัติคนงาน เผื่อเข้า-ออก
 function TeamMembersEditor({ members, onChange }) {
   const list = members || [];
@@ -881,6 +1053,10 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
     docInfo: { name: '', taxId: '', address: '' },
     installmentEnabled: false,
     installments: [],
+    useContract: false,
+    contractId: '',
+    contractDraft: null,
+    withdrawIds: [],
   });
 
   const [form, setForm] = useState(() => {
@@ -923,6 +1099,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
   const handleSubmit = () => {
     if (!form.projectId)   return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.workerTeamId) return app.pushToast('โปรดเลือกทีมช่างก่อนบันทึก', 'error');
+    if (form.useContract) return handleContractSubmit(app, form, onSubmit);
     if (form.isRetentionPayout) {
       if (!(Number(form.items?.[0]?.price) > 0)) return app.pushToast('โปรดระบุยอดเงินประกันที่จ่ายคืน', 'error');
     } else
@@ -1037,6 +1214,18 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
 
           {/* Card 2: items — ซ่อนในโหมดจ่ายคืนเงินประกัน (กรอกยอดในพาเนลด้านบนแทน) */}
           {!form.isRetentionPayout && (
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">สัญญาค่าแรง / งวดงาน</div>
+                <div className="card-sub">เลือกสัญญาเดิมเพื่อเบิกงวดถัดไป หรือสร้างสัญญาใหม่แบ่งงวด (ถ้าเบิกครั้งเดียวข้ามได้)</div>
+              </div>
+            </div>
+            <div className="card-body"><window.LaborContractSection form={form} set={set} cats={app.laborCats} /></div>
+          </div>
+          )}
+
+          {!form.isRetentionPayout && !form.useContract && (
           <div className="card">
             <div className="card-header">
               <div>
@@ -1397,6 +1586,10 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
     docInfo: { name: '', taxId: '', address: '' },
     installmentEnabled: false,
     installments: [],
+    useContract: false,
+    contractId: '',
+    contractDraft: null,
+    withdrawIds: [],
   });
 
   const [form, setForm] = useState(() => {
@@ -1437,6 +1630,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
   const handleSubmit = () => {
     if (!form.projectId)    return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.workerTeamId) return app.pushToast('โปรดเลือกทีมช่างก่อนบันทึก', 'error');
+    if (form.useContract) return handleContractSubmit(app, form, onSubmit);
     if (form.isRetentionPayout) {
       if (!(Number(form.items?.[0]?.price) > 0)) return app.pushToast('โปรดระบุยอดเงินประกันที่จ่ายคืน', 'error');
     } else
@@ -1548,6 +1742,18 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
 
           {/* Card 2: items — ซ่อนในโหมดจ่ายคืนเงินประกัน */}
           {!form.isRetentionPayout && (
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">สัญญาค่าแรง / งวดงาน</div>
+                <div className="card-sub">เลือกสัญญาเดิมเพื่อเบิกงวดถัดไป หรือสร้างสัญญาใหม่แบ่งงวด (ถ้าเบิกครั้งเดียวข้ามได้)</div>
+              </div>
+            </div>
+            <div className="card-body"><window.LaborContractSection form={form} set={set} cats={app.lumpLaborCats} /></div>
+          </div>
+          )}
+
+          {!form.isRetentionPayout && !form.useContract && (
           <div className="card">
             <div className="card-header">
               <div>
