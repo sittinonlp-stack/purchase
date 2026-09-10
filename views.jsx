@@ -2208,6 +2208,39 @@ window.TeamsView = function TeamsView() {
 };
 
 // ---- Detail drawer ----
+// เปลี่ยนประเภทเอกสาร — แก้กรณีลงผิดประเภท (ย้ายวัสดุ↔เครื่องจักร↔ค่าแรง↔อื่นๆ)
+const CONVERTIBLE_TYPES = [
+  { id: 'material', label: 'จัดซื้อวัสดุ' },
+  { id: 'machine', label: 'เช่าเครื่องจักร' },
+  { id: 'labor', label: 'ค่าแรง' },
+  { id: 'lump-labor', label: 'ค่าแรงเหมาจ่าย' },
+  { id: 'other', label: 'ค่าใช้จ่ายอื่นๆ' },
+];
+function TypeChanger({ rec }) {
+  const app = window.useApp();
+  if (window.isIncome(rec) || !CONVERTIBLE_TYPES.some(t => t.id === rec.type)) return null;
+  const change = (e) => {
+    const nt = e.target.value;
+    if (!nt || nt === rec.type) return;
+    const label = CONVERTIBLE_TYPES.find(t => t.id === nt)?.label || nt;
+    const warnLink = (rec.contractId || rec.installmentEnabled)
+      ? '\n\n⚠️ เอกสารนี้ผูกกับสัญญา/แบ่งงวด — ควรเช็คความถูกต้องหลังย้าย' : '';
+    if (window.confirm('ย้ายเอกสาร ' + rec.docNo + ' ไปเป็นประเภท "' + label + '"?\n\nยอดเงินและรายการยังอยู่ครบ · เลขที่เอกสารไม่เปลี่ยน · หมวดหมู่รายการอาจต้องเลือกใหม่ให้ตรงประเภท' + warnLink)) {
+      app.updateRecord(rec.id, { type: nt });
+      app.pushToast('ย้ายประเภทเอกสารแล้ว → ' + label);
+    }
+  };
+  return (
+    <div className="detail-section">
+      <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>เปลี่ยนประเภทเอกสาร</h3>
+      <select className="select" value={rec.type} onChange={change} style={{ maxWidth: 280 }}>
+        {CONVERTIBLE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+      </select>
+      <div className="field-hint" style={{ marginTop: 8 }}>ใช้แก้กรณีลงผิดประเภท (เช่น ลงวัสดุ แต่จริงเป็นค่าแรง) — ยอดเงิน/รายการยังอยู่ครบ ไม่ต้องลบทำใหม่</div>
+    </div>
+  );
+}
+
 window.DetailDrawer = function DetailDrawer() {
   const app = window.useApp();
   const rec = app.records.find(r => r.id === app.detailId);
@@ -2365,6 +2398,9 @@ window.DetailDrawer = function DetailDrawer() {
             </div>
           )}
         </div>
+
+        {/* เปลี่ยนประเภทเอกสาร — แก้กรณีลงผิดประเภท */}
+        <TypeChanger rec={rec} />
 
         {/* แบ่งจ่ายเป็นงวด — ตารางงวด + จ่ายทีละงวด */}
         {rec.installmentEnabled && <InstallmentPayPanel key={rec.id} rec={rec} />}
