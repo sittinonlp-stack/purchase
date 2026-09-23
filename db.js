@@ -72,6 +72,22 @@
     };
   }
 
+  // ── สัญญารับเงินลูกค้า (income_contracts) ──
+  function dbIncomeContract(row) {
+    return {
+      id: row.id, projectId: row.project_id || '', client: row.client || '',
+      title: row.title || '', total: Number(row.total || 0),
+      installments: row.installments || [], status: row.status || 'open', meta: row.meta || {},
+    };
+  }
+  function jsIncomeContract(c) {
+    return {
+      id: c.id, project_id: c.projectId || null, client: c.client || '',
+      title: c.title || '', total: Number(c.total || 0),
+      installments: c.installments || [], status: c.status || 'open', meta: c.meta || {},
+    };
+  }
+
   function dbRecord(row) {
     // record_items and work_logs are joined via Supabase select
     const items = (row.record_items || [])
@@ -151,6 +167,8 @@
       installments: (row.meta || {}).installments || [],
       // ── อ้างอิงสัญญาค่าแรง (ใบเบิกรายงวด) ──
       contractId: (row.meta || {}).contractId || '',
+      // ── อ้างอิงงวดงานรับเงินลูกค้า (บันทึกรายรับรายงวด) ──
+      incomeContractId: (row.meta || {}).incomeContractId || '',
       // ── หมายเหตุ/คำอธิบายรายการงาน (แยกจาก note รูปภาพ) ──
       workNote: (row.meta || {}).workNote || '',
       // ── หักประกันสังคม (หักจากช่างโดยตรง ไม่กระทบยอดรายจ่าย) ──
@@ -214,6 +232,7 @@
         installmentEnabled: Boolean(rec.installmentEnabled),
         installments: rec.installments || [],
         contractId: rec.contractId || '',
+        incomeContractId: rec.incomeContractId || '',
         socialSecurity: Number(rec.socialSecurity || 0),
         socialSecurityNote: rec.socialSecurityNote || '',
         socialSecurityEnabled: Boolean(rec.socialSecurityEnabled),
@@ -380,8 +399,15 @@
           if (!cErr) laborContracts = (cRows || []).map(dbContract);
         } catch (e) { /* ตาราง labor_contracts ยังไม่มี */ }
 
+        // สัญญารับเงินลูกค้า — โหลดแยกเช่นกัน
+        let incomeContracts = [];
+        try {
+          const { data: icRows, error: icErr } = await client.from('income_contracts').select('*').order('created_at');
+          if (!icErr) incomeContracts = (icRows || []).map(dbIncomeContract);
+        } catch (e) { /* ตาราง income_contracts ยังไม่มี */ }
+
         return {
-          laborContracts,
+          laborContracts, incomeContracts,
           projects:        (projects    || []).map(dbProject),
           matCats:         (matCats     || []).map(dbCat),
           machCats:        (machCats    || []).map(dbCat),
@@ -511,6 +537,29 @@
     },
     async deleteLaborContract(id) {
       const { error } = await window.supabaseClient.from('labor_contracts').delete().eq('id', id);
+      if (error) throw error;
+    },
+
+    // ── Income contracts (สัญญารับเงินลูกค้า) ──
+    async insertIncomeContract(c) {
+      const { error } = await window.supabaseClient.from('income_contracts').insert(jsIncomeContract(c));
+      if (error) throw error;
+    },
+    async updateIncomeContract(id, patch) {
+      const dbPatch = {};
+      if ('projectId'    in patch) dbPatch.project_id   = patch.projectId || null;
+      if ('client'       in patch) dbPatch.client       = patch.client || '';
+      if ('title'        in patch) dbPatch.title        = patch.title || '';
+      if ('total'        in patch) dbPatch.total        = Number(patch.total || 0);
+      if ('installments' in patch) dbPatch.installments = patch.installments || [];
+      if ('status'       in patch) dbPatch.status       = patch.status || 'open';
+      if ('meta'         in patch) dbPatch.meta         = patch.meta || {};
+      if (Object.keys(dbPatch).length === 0) return;
+      const { error } = await window.supabaseClient.from('income_contracts').update(dbPatch).eq('id', id);
+      if (error) throw error;
+    },
+    async deleteIncomeContract(id) {
+      const { error } = await window.supabaseClient.from('income_contracts').delete().eq('id', id);
       if (error) throw error;
     },
 
@@ -706,7 +755,7 @@
         'discountEnabled', 'discountType', 'discountValue',
         'billStatus', 'billDate', 'billNo', 'billImages', 'workNote', 'socialSecurity', 'socialSecurityNote',
         'socialSecurityEnabled', 'socialSecurityItems', 'socialSecurityPeriod',
-        'installmentEnabled', 'installments', 'contractId'];
+        'installmentEnabled', 'installments', 'contractId', 'incomeContractId'];
       if (META_KEYS.some(has)) {
         const { data: row } = await client.from('records').select('meta').eq('id', id).single();
         const newMeta = { ...(row?.meta || {}), ...(patch.meta || {}) };
@@ -734,6 +783,7 @@
           newMeta.installments = await Promise.all(arr.map(async it => ({ ...it, slips: await uploadImages(it.slips || []) })));
         }
         if (has('contractId')) newMeta.contractId = patch.contractId || '';
+        if (has('incomeContractId')) newMeta.incomeContractId = patch.incomeContractId || '';
         if (has('isRetentionPayout')) newMeta.isRetentionPayout = Boolean(patch.isRetentionPayout);
         if (has('retentionReturned')) newMeta.retentionReturned = Boolean(patch.retentionReturned);
         if (has('discountEnabled'))  newMeta.discountEnabled = Boolean(patch.discountEnabled);

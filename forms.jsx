@@ -989,6 +989,158 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
   );
 };
 
+// ── งวดงานรับเงินลูกค้า: กำหนดมูลค่า+งวด แล้วออกบันทึกรายรับรายงวด ──
+// งวดถือว่า "รับแล้ว" เมื่อผูกกับบิล (receivedDocId) หรือทำเครื่องหมายยกมา (receivedHistorical)
+const incGvdReceived = (g) => !!g.receivedDocId || !!g.receivedHistorical;
+function handleIncomeContractSubmit(app, form, onSubmit) {
+  if (!form.receiveIds || form.receiveIds.length === 0) { app.pushToast('โปรดเลือกงวดที่จะรับเงินรอบนี้', 'error'); return true; }
+  const recId = newId();
+  let contractId = form.incomeContractId;
+  let installments;
+  if (!contractId) {
+    const d = form.incomeContractDraft || { title: '', installments: [] };
+    const validInst = (d.installments || []).filter(g => Number(g.amount) > 0);
+    if (!validInst.length) { app.pushToast('โปรดกำหนดงวดรับเงิน (ยอด)', 'error'); return true; }
+    const con = app.addIncomeContract({
+      projectId: form.projectId, client: (form.vendor || d.title || '').trim(),
+      title: (d.title || form.vendor || '').trim(),
+      total: validInst.reduce((s, g) => s + Number(g.amount || 0), 0),
+      installments: validInst.map(g => ({ ...g, amount: Number(g.amount || 0), receivedDocId: g.receivedDocId || null })),
+    });
+    contractId = con.id;
+    installments = con.installments;
+  } else {
+    const con = (app.incomeContracts || []).find(c => c.id === contractId);
+    installments = con ? con.installments : [];
+  }
+  const next = installments.map(g => form.receiveIds.includes(g.id)
+    ? { ...g, receivedDocId: recId, receivedDocNo: form.docNo, receivedDate: form.date } : g);
+  const allRec = next.length > 0 && next.every(incGvdReceived);
+  app.updateIncomeContract(contractId, { installments: next, total: next.reduce((s, g) => s + Number(g.amount || 0), 0), status: allRec ? 'closed' : 'open' });
+  const items = installments.filter(g => form.receiveIds.includes(g.id))
+    .map(g => ({ id: newId(), name: g.detail || 'งวดรับเงิน', categoryId: '', qty: 1, unit: 'งวด', price: Number(g.amount || 0) }));
+  onSubmit({ ...form, id: recId, incomeContractId: contractId, items });
+  return true;
+}
+
+function IncomeContractSection({ form, set }) {
+  const app = window.useApp();
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const useC = !!form.useIncomeContract;
+  const existing = form.incomeContractId ? (app.incomeContracts || []).find(c => c.id === form.incomeContractId) : null;
+  const draft = form.incomeContractDraft || { title: '', installments: [] };
+  const inst = existing ? existing.installments : (draft.installments || []);
+  const total = inst.reduce((s, g) => s + Number(g.amount || 0), 0);
+  const receiveIds = form.receiveIds || [];
+  const receivedTotal = inst.filter(incGvdReceived).reduce((s, g) => s + Number(g.amount || 0), 0);
+  const outstanding = total - receivedTotal;
+  const selectedTotal = inst.filter(g => receiveIds.includes(g.id)).reduce((s, g) => s + Number(g.amount || 0), 0);
+
+  const syncItems = (ids) => {
+    const items = inst.filter(g => ids.includes(g.id)).map(g => ({ id: newId(), name: g.detail || 'งวดรับเงิน', categoryId: '', qty: 1, unit: 'งวด', price: Number(g.amount || 0) }));
+    set({ receiveIds: ids, items: items.length ? items : [{ id: newId(), name: '', categoryId: '', qty: 1, unit: 'งวด', price: 0 }] });
+  };
+  const toggleReceive = (g) => { if (incGvdReceived(g)) return; syncItems(receiveIds.includes(g.id) ? receiveIds.filter(x => x !== g.id) : [...receiveIds, g.id]); };
+  const toggleHistorical = (g) => { const on = !g.receivedHistorical; updDraftGvd(g.id, { receivedHistorical: on, receivedDate: on ? todayStr() : '' }); if (on && receiveIds.includes(g.id)) syncItems(receiveIds.filter(x => x !== g.id)); };
+  const enableNew = () => set({ useIncomeContract: true, incomeContractId: '', incomeContractDraft: { title: form.vendor || '', installments: [{ id: newId(), detail: '', amount: '', receivedDocId: null }] }, receiveIds: [] });
+  const chooseExisting = (c) => { set({ useIncomeContract: true, incomeContractId: c.id, incomeContractDraft: null, receiveIds: [] }); setPickerOpen(false); };
+  const disable = () => set({ useIncomeContract: false, incomeContractId: '', incomeContractDraft: null, receiveIds: [] });
+  const updDraftGvd = (id, patch) => set({ incomeContractDraft: { ...draft, installments: (draft.installments || []).map(g => g.id === id ? { ...g, ...patch } : g) } });
+  const addDraftGvd = () => set({ incomeContractDraft: { ...draft, installments: [...(draft.installments || []), { id: newId(), detail: '', amount: '', receivedDocId: null }] } });
+  const delDraftGvd = (id) => set({ incomeContractDraft: { ...draft, installments: (draft.installments || []).filter(g => g.id !== id) } });
+  const addExistingGvd = () => { const nx = [...existing.installments, { id: newId(), detail: 'งวดเพิ่มเติม', amount: 0, receivedDocId: null }]; app.updateIncomeContract(existing.id, { installments: nx, total: nx.reduce((s, g) => s + Number(g.amount || 0), 0) }); };
+  const openContracts = (app.incomeContracts || []).filter(c => c.status !== 'closed' && (c.installments || []).some(g => !incGvdReceived(g)));
+
+  if (!useC) {
+    return (
+      <div className="col gap-8">
+        <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPickerOpen(true)}><Icon name="history" size={13} /> เลือกงวดงานลูกค้าเดิม</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={enableNew}><Icon name="plus" size={13} /> ตั้งงวดงานรับเงินลูกค้า</button>
+          <span className="text-small text-muted" style={{ alignSelf: 'center' }}>หรือกรอกรายการด้านล่างสำหรับรับครั้งเดียว</span>
+        </div>
+        {pickerOpen && ReactDOM.createPortal(
+          <div className="modal-overlay" onClick={() => setPickerOpen(false)}>
+            <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header"><h2 className="modal-title">เลือกงวดงานรับเงินลูกค้า (ที่ค้างรับ)</h2><button className="btn-icon" onClick={() => setPickerOpen(false)}><Icon name="x" size={16} /></button></div>
+              <div className="modal-body">
+                {openContracts.length === 0 ? <div className="text-small text-muted" style={{ textAlign: 'center', padding: '16px 0' }}>ยังไม่มีงวดงานลูกค้าที่ค้างรับ — กด "ตั้งงวดงานรับเงินลูกค้า" เพื่อเริ่ม</div> : openContracts.map(c => {
+                  const proj = (app.projects || []).find(p => p.id === c.projectId);
+                  const out = Number(c.total || 0) - (c.installments || []).filter(incGvdReceived).reduce((s, g) => s + Number(g.amount || 0), 0);
+                  return (
+                    <div key={c.id} onClick={() => chooseExisting(c)} style={{ padding: '10px 12px', borderBottom: '1px solid var(--line)', cursor: 'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div className="row between"><strong>{c.title || (proj ? proj.name : 'งวดงานลูกค้า')}</strong><span className="mono" style={{ color: 'var(--warn)' }}>ค้างรับ ฿{fmt(out)}</span></div>
+                      <div className="text-small text-muted">{proj ? proj.name : '—'}{c.client ? ' · ' + c.client : ''} · มูลค่า ฿{fmt(c.total)} · ค้างรับ {(c.installments || []).filter(g => !incGvdReceived(g)).length} งวด</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>, document.body)}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--accent)', borderRadius: 10, padding: 12, background: 'var(--accent-soft)' }}>
+      <div className="row between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+        <strong style={{ color: 'var(--accent-ink)' }}>{existing ? 'งวดงานรับเงินลูกค้า' : 'ตั้งงวดงานรับเงินลูกค้า'}{existing?.title ? ' · ' + existing.title : ''}</strong>
+        <div className="row gap-8">
+          {existing && app.isAdmin && (
+            <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}
+              onClick={() => { const rc = (existing.installments || []).filter(g => g.receivedDocId).length; if (confirm('ลบงวดงานลูกค้านี้?' + (rc > 0 ? '\n\n⚠️ รับไปแล้ว ' + rc + ' งวด — บันทึกรายรับเดิมยังอยู่' : ''))) { app.deleteIncomeContract(existing.id); disable(); } }}><Icon name="trash" size={12} /> ลบ</button>
+          )}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={disable}>ยกเลิกโหมดงวด</button>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ background: 'var(--surface)', padding: '8px 10px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>มูลค่าโครงการ</div><div className="mono" style={{ fontWeight: 600 }}>฿{fmt(total)}</div></div>
+        <div style={{ background: 'var(--surface)', padding: '8px 10px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>รับแล้ว</div><div className="mono" style={{ fontWeight: 600, color: 'var(--accent-strong)' }}>฿{fmt(receivedTotal)}</div></div>
+        <div style={{ background: 'var(--surface)', padding: '8px 10px' }}><div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>ค้างรับ</div><div className="mono" style={{ fontWeight: 700, color: outstanding > 0 ? 'var(--warn)' : 'var(--success, #16a34a)' }}>฿{fmt(outstanding)}</div></div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {inst.map((g, idx) => {
+          const byBill = !!g.receivedDocId;
+          const hist = !!g.receivedHistorical && !byBill;
+          const received = byBill || hist;
+          const selected = receiveIds.includes(g.id);
+          return (
+            <div key={g.id} className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--line)', background: received ? 'var(--surface-2)' : (selected ? 'rgba(5,150,105,0.10)' : 'var(--surface)') }}>
+              <span className="badge gray" style={{ minWidth: 48, justifyContent: 'center' }}>งวด {idx + 1}</span>
+              {existing
+                ? <span style={{ flex: '1 1 130px', minWidth: 0, fontSize: 13 }}>{g.detail || '—'}</span>
+                : <input className="input" style={{ flex: '1 1 120px', minWidth: 0 }} placeholder="รายละเอียดงวด (เช่น เสร็จฐานราก)" value={g.detail} onChange={e => updDraftGvd(g.id, { detail: e.target.value })} />}
+              {existing
+                ? <span className="mono" style={{ fontWeight: 600 }}>฿{fmt(g.amount)}</span>
+                : <div className="input-affix" style={{ width: 120 }}><div className="input-affix-prefix">฿</div><input className="input mono" type="number" min="0" step="any" placeholder="ยอด" value={g.amount} onChange={e => updDraftGvd(g.id, { amount: e.target.value })} /></div>}
+              {byBill ? (
+                <button type="button" className="badge" style={{ background: 'var(--info-soft)', color: '#1a4fb0', cursor: 'pointer' }} onClick={() => app.setDetailId(g.receivedDocId)} title="เปิดดูบันทึกรายรับของงวดนี้">รับแล้ว · {g.receivedDocNo || 'ดูบิล'}</button>
+              ) : hist ? (
+                existing
+                  ? <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>รับแล้ว (ยกมา)</span>
+                  : <button type="button" className="status-chip on approve" onClick={() => toggleHistorical(g)} title="กดเพื่อยกเลิก 'รับแล้ว'"><span className="tick">✓</span> รับแล้ว (ยกมา)</button>
+              ) : (
+                <>
+                  {!existing && <button type="button" className="status-chip" onClick={() => toggleHistorical(g)} title="งวดนี้เคยรับมาก่อนแล้ว (ยกมา ไม่ออกบิลใหม่)"><span className="tick"></span> รับแล้ว</button>}
+                  <button type="button" className={"status-chip" + (selected ? " on approve" : "")} onClick={() => toggleReceive(g)}><span className="tick">{selected ? '✓' : ''}</span> รับงวดนี้</button>
+                </>
+              )}
+              {!existing && <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => delDraftGvd(g.id)} title="ลบงวด"><Icon name="trash" size={12} /></button>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="row gap-8" style={{ marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={existing ? addExistingGvd : addDraftGvd}><Icon name="plus" size={12} /> เพิ่มงวด (งานเพิ่ม)</button>
+        {receiveIds.length > 0 && <span style={{ fontSize: 12.5, color: 'var(--accent-ink)' }}>รับรอบนี้ {receiveIds.length} งวด = <strong className="mono">฿{fmt(selectedTotal)}</strong></span>}
+      </div>
+      <div className="text-small text-muted" style={{ marginTop: 8 }}>ยอดรายรับบิลนี้ = งวดที่ติ๊ก "รับงวดนี้" · รอบถัดไปสร้างบันทึกใหม่แล้วกด "เลือกงวดงานลูกค้าเดิม" · งวดที่รับแล้วคลิกดูบิลได้</div>
+    </div>
+  );
+}
+window.IncomeContractSection = IncomeContractSection;
+
 // ---- IncomeForm (บันทึกรายรับ) ----
 window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
   const app = window.useApp();
@@ -1011,6 +1163,10 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
     note: '',
     images: [],
     accountingPosted: false,
+    useIncomeContract: false,
+    incomeContractId: '',
+    incomeContractDraft: null,
+    receiveIds: [],
   });
 
   const [form, setForm] = useState(() => initial
@@ -1042,6 +1198,7 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
   const handleSubmit = () => {
     if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.vendor.trim()) return app.pushToast('โปรดระบุแหล่งที่มาของรายรับ / ผู้จ่าย', 'error');
+    if (form.useIncomeContract) return handleIncomeContractSubmit(app, form, onSubmit);
     if (!form.items.some(it => it.name.trim() && Number(it.price) > 0)) return app.pushToast('โปรดเพิ่มรายการรายรับอย่างน้อย 1 รายการ', 'error');
     onSubmit(form);
   };
@@ -1113,7 +1270,19 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
             </div>
           </div>
 
+          {/* Card 1.5: งวดงานรับเงินลูกค้า */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">งวดงานรับเงินลูกค้า</div>
+                <div className="card-sub">ตั้งงวดรับเงินตามสัญญาลูกค้า แล้วเลือกว่ารอบนี้รับงวดไหน (ถ้ารับครั้งเดียว ข้ามได้)</div>
+              </div>
+            </div>
+            <div className="card-body"><window.IncomeContractSection form={form} set={set} /></div>
+          </div>
+
           {/* Card 2: รายการรายรับ */}
+          {!form.useIncomeContract && (
           <div className="card">
             <div className="card-header">
               <div>
@@ -1156,6 +1325,7 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
               </button>
             </div>
           </div>
+          )}
 
           {/* Card 3: บัญชี (เครื่องหมายถูกสีเขียว) */}
           <div className="card">
