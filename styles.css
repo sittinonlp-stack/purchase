@@ -940,16 +940,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   cursor: pointer;
 }
 .history-table tbody tr:hover { background: var(--surface-2); }
-/* แถวที่อนุมัติแล้วแต่ยังไม่จ่าย — กระพริบเบา ๆ เตือนฝ่ายจัดซื้อ (หยุดเมื่อจ่ายแล้ว) */
-@keyframes rowApprovedPulse {
-  0%, 100% { background-color: rgba(239, 68, 68, 0.05); }
-  50%      { background-color: rgba(239, 68, 68, 0.15); }
-}
-.history-table tbody tr.pulse-approved { animation: rowApprovedPulse 1.9s ease-in-out infinite; }
-.history-table tbody tr.pulse-approved:hover { animation: none; background: var(--surface-2); }
-@media (prefers-reduced-motion: reduce) {
-  .history-table tbody tr.pulse-approved { animation: none; background-color: rgba(239, 68, 68, 0.09); }
-}
+/* แถวที่อนุมัติแล้วแต่ยังไม่จ่าย — เน้นสีนิ่ง + แถบซ้ายสีแดง (ไม่กระพริบ กันอาการเลค) */
+.history-table tbody tr.pulse-approved { background-color: rgba(239, 68, 68, 0.07); }
+.history-table tbody tr.pulse-approved td:first-child { box-shadow: inset 3px 0 0 var(--danger, #dc2626); }
+.history-table tbody tr.pulse-approved:hover { background: var(--surface-2); }
 .history-table tr:last-child td { border-bottom: none; }
 .history-table .num { font-family: 'JetBrains Mono'; text-align: right; font-feature-settings: "tnum"; }
 .history-table th.num { text-align: right; }
