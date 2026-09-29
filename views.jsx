@@ -3319,7 +3319,7 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
         <td class="r">${fmtI(v.count)}</td>
       </tr>`).join('');
 
-  const detailRows = !includeDetails ? '' : filtered.map((r,i)=>{
+  const detailRows = !includeDetails ? '' : expenseRecs.map((r,i)=>{
     const p=getProj(r.projectId);
     const tot=computeTotals(r).total;
     return `<tr class="${i%2===0?'alt':''}">
@@ -3329,6 +3329,21 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p?.name||'—'}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.vendor||'—'}</td>
       <td class="r bold">฿${fmtN(tot)}</td>
+    </tr>`;
+  }).join('');
+
+  // รายละเอียดรายรับของโครงการ (แยกเป็นเซกชันของตัวเอง)
+  const incomeRows = incomeRecs.map((r,i)=>{
+    const p=getProj(r.projectId);
+    const gross=computeTotals(r).total;
+    const detail=(r.items||[]).map(it=>it.name).filter(Boolean).join(', ') || r.period || '—';
+    return `<tr class="${i%2===0?'alt':''}">
+      <td class="mono" style="font-size:10px">${r.docNo}</td>
+      <td style="white-space:nowrap">${fmtD(r.date)}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p?.name||'—'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.vendor||'—'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${detail}</td>
+      <td class="r bold" style="color:#059669">฿${fmtN(gross)}</td>
     </tr>`;
   }).join('');
 
@@ -3387,11 +3402,15 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 /* Print button */
 .print-btn{background:#d97706;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-family:'Prompt',sans-serif;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
 .print-wrap{text-align:center;padding:24px;border-bottom:2px dashed #e7e5e4;margin-bottom:20px}
+@media screen{ body[contenteditable="true"] td:focus, body[contenteditable="true"] th:focus, body[contenteditable="true"] .header-title:focus, body[contenteditable="true"] .section-title:focus{ outline:2px solid #0ea5e9; background:#e0f2fe } }
 </style></head><body>
 
 <div class="no-print print-wrap">
-  <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
-  <p style="margin-top:10px;font-size:11px;color:#78716c">เลือก "บันทึกเป็น PDF" ในกล่องโต้ตอบการพิมพ์</p>
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
+  </div>
+  <p style="margin-top:10px;font-size:11px;color:#78716c">กด "แก้ไขรายงาน" เพื่อพิมพ์เพิ่ม/แก้ตัวเลขในหน้านี้ได้ (รูปแบบสวยเหมือนเดิม) แล้วค่อยบันทึกเป็น PDF — การแก้ในหน้านี้ใช้กับไฟล์นี้เท่านั้น ไม่กระทบข้อมูลในระบบ</p>
 </div>
 
 <!-- HEADER -->
@@ -3496,14 +3515,37 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
   </table>
 </div>
 
-${includeDetails && filtered.length > 0 ? `
+${incomeRecs.length > 0 ? `
+<!-- SECTION 4: Income details -->
+<div class="section">
+  <div class="section-header" style="border-left-color:#059669">
+    <div class="section-num" style="background:#059669">4</div>
+    <div class="section-title">รายละเอียดรายรับของโครงการ (${incomeRecs.length} รายการ)</div>
+  </div>
+  <table>
+    <thead><tr style="background:#065f46">
+      <th style="width:104px">เลขที่</th>
+      <th style="width:78px">วันที่</th>
+      <th>โครงการ</th><th>ผู้จ่าย / ลูกค้า</th><th>รายละเอียด / งวดงาน</th>
+      <th class="r" style="width:118px">ยอดรับ</th>
+    </tr></thead>
+    <tbody>${incomeRows}</tbody>
+    <tfoot>
+      <tr><td colspan="5" style="background:#064e3b">รวมรับจริง (Gross)</td><td class="r" style="background:#064e3b">฿${fmtN(incomeGross)}</td></tr>
+      <tr><td colspan="5" style="background:#065f46">หักค่าดำเนินการ 15%</td><td class="r" style="background:#065f46">−฿${fmtN(incomeFee)}</td></tr>
+      <tr><td colspan="5" style="background:#047857">ยอดรับสุทธิ</td><td class="r" style="background:#047857">฿${fmtN(incomeNet)}</td></tr>
+    </tfoot>
+  </table>
+</div>` : ''}
+
+${includeDetails && expenseRecs.length > 0 ? `
 <div class="page-break"></div>
 
-<!-- SECTION 4: All records -->
+<!-- SECTION 5: All expense records -->
 <div class="section">
   <div class="section-header">
-    <div class="section-num">4</div>
-    <div class="section-title">รายการทั้งหมด (${filtered.length} รายการ)</div>
+    <div class="section-num">5</div>
+    <div class="section-title">รายการรายจ่ายทั้งหมด (${expenseRecs.length} รายการ)</div>
   </div>
   <table>
     <thead><tr>
@@ -3524,9 +3566,12 @@ ${includeDetails && filtered.length > 0 ? `
 </div>
 
 <script>
-  document.fonts && document.fonts.ready
-    ? document.fonts.ready.then(()=>setTimeout(()=>window.print(),400))
-    : setTimeout(()=>window.print(),1200);
+  function toggleEdit(btn){
+    var on = document.body.getAttribute('contenteditable') !== 'true';
+    document.body.setAttribute('contenteditable', on ? 'true' : 'false');
+    btn.textContent = on ? '✓ กำลังแก้ไข — กดเพื่อจบ' : '✏️ แก้ไขรายงานก่อนบันทึก';
+    btn.style.background = on ? '#059669' : '#0ea5e9';
+  }
 </script>
 </body></html>`;
 
