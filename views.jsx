@@ -3255,9 +3255,6 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
     <tr>
       <td><span class="badge" style="background:${typeBg(s.t)};color:${typeClr(s.t)}">${s.label}</span></td>
       <td class="r">${fmtI(s.count)}</td>
-      <td class="r">฿${fmtN(s.sub)}</td>
-      <td class="r">฿${fmtN(s.vat)}</td>
-      <td class="r">฿${fmtN(s.wht)}</td>
       <td class="r bold">฿${fmtN(s.net)}</td>
     </tr>`).join('');
 
@@ -3343,7 +3340,7 @@ body{font-family:'Prompt',sans-serif;font-size:12px;color:#1c1917;background:#ff
 .header-right strong{color:#fff;font-weight:600}
 
 /* KPI cards */
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
 .kpi{background:#fafaf9;border:1px solid #e7e5e4;border-radius:10px;padding:14px 16px}
 .kpi.accent{background:#d97706;border-color:#d97706;color:#fff}
 .kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.65;margin-bottom:6px}
@@ -3423,11 +3420,6 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
     <div class="kpi-value" style="color:${netBalance>=0?'#059669':'#dc2626'}">${netBalance<0?'−':''}฿${fmtN(Math.abs(netBalance))}</div>
     <div class="kpi-sub">${netBalance>=0?'เกินดุล':'ขาดดุล'}</div>
   </div>
-  <div class="kpi">
-    <div class="kpi-label">VAT / หัก ณ ที่จ่าย</div>
-    <div class="kpi-value">฿${fmtN(gVat)}</div>
-    <div class="kpi-sub">WHT ฿${fmtN(gWht)} · ก่อน VAT ฿${fmtN(gSub)}</div>
-  </div>
 </div>
 
 <!-- SECTION 1: By type -->
@@ -3438,20 +3430,14 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
   </div>
   <table>
     <thead><tr>
-      <th style="width:180px">ประเภทรายการ</th>
-      <th class="r" style="width:80px">จำนวน (บิล)</th>
-      <th class="r">ยอดก่อน VAT</th>
-      <th class="r">VAT</th>
-      <th class="r">หัก ณ ที่จ่าย</th>
-      <th class="r">ยอดสุทธิ</th>
+      <th>ประเภทรายการ</th>
+      <th class="r" style="width:120px">จำนวน (บิล)</th>
+      <th class="r" style="width:200px">ยอดรวม (รวม VAT / หัก ณ ที่จ่ายแล้ว)</th>
     </tr></thead>
     <tbody>${typeRows}</tbody>
     <tfoot><tr>
       <td>รวมรายจ่ายทั้งหมด</td>
       <td class="r">${fmtI(expenseRecs.length)}</td>
-      <td class="r">฿${fmtN(gSub)}</td>
-      <td class="r">฿${fmtN(gVat)}</td>
-      <td class="r">฿${fmtN(gWht)}</td>
       <td class="r">฿${fmtN(gNet)}</td>
     </tr></tfoot>
   </table>
