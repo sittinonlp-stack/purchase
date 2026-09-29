@@ -1147,7 +1147,7 @@ window.HistoryView = function HistoryView() {
 
   // ── รายการวัสดุ/เครื่องจักร/อื่นๆ ทั้งหมด (ก่อนกรอง) ──
   const allExp = useMemo(() => app.records.filter(r =>
-    r.type !== 'quick-receipt' && r.type !== 'receipt' &&
+    r.type !== 'receipt' &&
     r.type !== 'tax-invoice'   && r.type !== 'invoice' &&
     r.type !== 'labor'         && r.type !== 'lump-labor' &&
     !window.isIncome(r)
@@ -2215,6 +2215,7 @@ const CONVERTIBLE_TYPES = [
   { id: 'labor', label: 'ค่าแรง' },
   { id: 'lump-labor', label: 'ค่าแรงเหมาจ่าย' },
   { id: 'other', label: 'ค่าใช้จ่ายอื่นๆ' },
+  { id: 'quick-receipt', label: 'บิลด่วน (รูปถ่ายใบเสร็จ)' },
 ];
 function TypeChanger({ rec }) {
   const app = window.useApp();
@@ -2471,8 +2472,8 @@ window.DetailDrawer = function DetailDrawer() {
           </div>
         )}
 
-        {/* Items table — ซ่อนสำหรับ quick-receipt */}
-        {!isQuickReceipt && <div className="detail-section">
+        {/* Items table — quick-receipt แสดงเมื่อมีรายการ (ดูยอด/รายละเอียดได้) */}
+        {(!isQuickReceipt || (rec.items || []).length > 0) && <div className="detail-section">
           <h3 style={{ fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{isLaborType ? `รายการงาน (${rec.items.length})` : `รายการ (${rec.items.length})`}</h3>
           <div style={{ overflowX: 'auto' }}>
           <table className="items-table" style={{ minWidth: 360 }}>
