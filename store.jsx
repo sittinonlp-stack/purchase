@@ -357,6 +357,9 @@ window.AppProvider = function AppProvider({ children }) {
   const [workerTeams, setWorkerTeams] = useState(SEED_WORKER_TEAMS);
   const [laborContracts, setLaborContracts] = useState([]);
   const [incomeContracts, setIncomeContracts] = useState([]);
+  // บัญชีบริษัท (เฉพาะ admin) — non-admin จะได้ [] จาก RLS
+  const [companyExpenses, setCompanyExpenses] = useState([]);
+  const [companyExpenseCats, setCompanyExpenseCats] = useState([]);
   const [records,     setRecords]     = useState(seedRecords());
   // record ของโครงการที่เก็บถาวร — โหลดเมื่อเปิดแท็บ "เก็บถาวร" เท่านั้น (ไม่ปนกับ records หลัก)
   const [archivedRecords, setArchivedRecords] = useState([]);
@@ -416,7 +419,8 @@ window.AppProvider = function AppProvider({ children }) {
 
       const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
               lumpLaborCats: llc, otherCats: oc, workerTeams: teams, records: recs,
-              laborContracts: lcon, incomeContracts: icon } = await window.db.loadAll();
+              laborContracts: lcon, incomeContracts: icon,
+              companyExpenses: cexp, companyExpenseCats: ccats } = await window.db.loadAll();
 
       setProjects(ps);
       setMatCats(mc.length   ? mc  : SEED_MAT_CATEGORIES);
@@ -437,6 +441,8 @@ window.AppProvider = function AppProvider({ children }) {
       setWorkerTeams(teams);
       setLaborContracts(lcon || []);
       setIncomeContracts(icon || []);
+      setCompanyExpenses(cexp || []);
+      setCompanyExpenseCats(ccats || []);
       setRecords(recs);
       setDbOnline(true);
       loadedUserIdRef.current = userId; // ✓ data loaded — mark for skip on next SIGNED_IN
@@ -522,6 +528,8 @@ window.AppProvider = function AppProvider({ children }) {
             setLumpLaborCats(SEED_LUMP_LABOR_CATEGORIES);
             setOtherCats(SEED_OTHER_CATEGORIES);
             setWorkerTeams(SEED_WORKER_TEAMS);
+            setCompanyExpenses([]);
+            setCompanyExpenseCats([]);
             setRecords(seedRecords());
           } else if (event === 'TOKEN_REFRESHED' && s) {
             // Token was refreshed silently — keep current data, just update session
@@ -960,6 +968,42 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteIncomeContract(id), 'deleteIncomeContract');
   }, [dbOnline, dbSync]);
 
+  // ── บัญชีบริษัท: รายจ่ายบริษัท (เฉพาะ admin) ──────────
+  const addCompanyExpense = useCallback((e) => {
+    const ne = { note: '', meta: {}, ...e, id: e.id || newId(), amount: Number(e.amount || 0) };
+    setCompanyExpenses((xs) => [ne, ...xs]);
+    if (dbOnline) dbSync(window.db.insertCompanyExpense(ne), 'insertCompanyExpense');
+    return ne;
+  }, [dbOnline, dbSync]);
+
+  const updateCompanyExpense = useCallback((id, patch) => {
+    setCompanyExpenses((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    if (dbOnline) dbSync(window.db.updateCompanyExpense(id, patch), 'updateCompanyExpense');
+  }, [dbOnline, dbSync]);
+
+  const deleteCompanyExpense = useCallback((id) => {
+    setCompanyExpenses((xs) => xs.filter((x) => x.id !== id));
+    if (dbOnline) dbSync(window.db.deleteCompanyExpense(id), 'deleteCompanyExpense');
+  }, [dbOnline, dbSync]);
+
+  // ── บัญชีบริษัท: ประเภทค่าใช้จ่าย (เฉพาะ admin) ───────
+  const addCompanyCat = useCallback((c) => {
+    const nc = { color: '#9ca3af', ...c, id: c.id || newId() };
+    setCompanyExpenseCats((cs) => [...cs, nc]);
+    if (dbOnline) dbSync(window.db.insertCompanyCat(nc), 'insertCompanyCat');
+    return nc;
+  }, [dbOnline, dbSync]);
+
+  const updateCompanyCat = useCallback((id, patch) => {
+    setCompanyExpenseCats((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    if (dbOnline) dbSync(window.db.updateCompanyCat(id, patch), 'updateCompanyCat');
+  }, [dbOnline, dbSync]);
+
+  const deleteCompanyCat = useCallback((id) => {
+    setCompanyExpenseCats((cs) => cs.filter((c) => c.id !== id));
+    if (dbOnline) dbSync(window.db.deleteCompanyCat(id), 'deleteCompanyCat');
+  }, [dbOnline, dbSync]);
+
   // ── Update own profile (name / avatar_url) ───────────
   const updateMyProfile = useCallback(async (patch) => {
     if (!userProfile?.id) return;
@@ -982,12 +1026,14 @@ window.AppProvider = function AppProvider({ children }) {
     workerTeams, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
     laborContracts, addLaborContract, updateLaborContract, deleteLaborContract,
     incomeContracts, addIncomeContract, updateIncomeContract, deleteIncomeContract,
+    companyExpenses, addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
+    companyExpenseCats, addCompanyCat, updateCompanyCat, deleteCompanyCat,
     records, addRecord, updateRecord, deleteRecord, hydrateRecord,
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
@@ -995,7 +1041,9 @@ window.AppProvider = function AppProvider({ children }) {
        addOtherCat, updateOtherCat, deleteOtherCat,
        addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
        addLaborContract, updateLaborContract, deleteLaborContract,
-       addIncomeContract, updateIncomeContract, deleteIncomeContract, pushToast, updateMyProfile]);
+       addIncomeContract, updateIncomeContract, deleteIncomeContract,
+       addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
+       addCompanyCat, updateCompanyCat, deleteCompanyCat, pushToast, updateMyProfile]);
 
   // ── Render guards ─────────────────────────────────────
   if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;

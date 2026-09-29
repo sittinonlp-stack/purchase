@@ -88,6 +88,20 @@
     };
   }
 
+  // ── บัญชีบริษัท (company finance) — เฉพาะ admin ──
+  function dbCompanyExpense(row) {
+    return {
+      id: row.id, date: row.date || '', category: row.category || '',
+      amount: Number(row.amount || 0), note: row.note || '', meta: row.meta || {},
+    };
+  }
+  function jsCompanyExpense(e) {
+    return {
+      id: e.id, date: e.date || null, category: e.category || '',
+      amount: Number(e.amount || 0), note: e.note || '', meta: e.meta || {},
+    };
+  }
+
   function dbRecord(row) {
     // record_items and work_logs are joined via Supabase select
     const items = (row.record_items || [])
@@ -406,8 +420,19 @@
           if (!icErr) incomeContracts = (icRows || []).map(dbIncomeContract);
         } catch (e) { /* ตาราง income_contracts ยังไม่มี */ }
 
+        // บัญชีบริษัท — โหลดแยก (RLS เฉพาะ admin: non-admin จะได้ [] · ตารางอาจยังไม่มี → ไม่ให้ทั้งแอปพัง)
+        let companyExpenses = [], companyExpenseCats = [];
+        try {
+          const [{ data: ceRows, error: ceErr }, { data: cecRows, error: cecErr }] = await Promise.all([
+            client.from('company_expenses').select('*').order('date', { ascending: false }),
+            client.from('company_expense_categories').select('*').order('created_at'),
+          ]);
+          if (!ceErr)  companyExpenses    = (ceRows  || []).map(dbCompanyExpense);
+          if (!cecErr) companyExpenseCats = (cecRows || []).map(dbCat);
+        } catch (e) { /* ตารางบัญชีบริษัทยังไม่มี หรือไม่มีสิทธิ์ */ }
+
         return {
-          laborContracts, incomeContracts,
+          laborContracts, incomeContracts, companyExpenses, companyExpenseCats,
           projects:        (projects    || []).map(dbProject),
           matCats:         (matCats     || []).map(dbCat),
           machCats:        (machCats    || []).map(dbCat),
@@ -560,6 +585,43 @@
     },
     async deleteIncomeContract(id) {
       const { error } = await window.supabaseClient.from('income_contracts').delete().eq('id', id);
+      if (error) throw error;
+    },
+
+    // ── บัญชีบริษัท (company finance) — เฉพาะ admin ──
+    async insertCompanyExpense(e) {
+      const { error } = await window.supabaseClient.from('company_expenses').insert(jsCompanyExpense(e));
+      if (error) throw error;
+    },
+    async updateCompanyExpense(id, patch) {
+      const dbPatch = {};
+      if ('date'     in patch) dbPatch.date     = patch.date || null;
+      if ('category' in patch) dbPatch.category = patch.category || '';
+      if ('amount'   in patch) dbPatch.amount   = Number(patch.amount || 0);
+      if ('note'     in patch) dbPatch.note     = patch.note || '';
+      if ('meta'     in patch) dbPatch.meta     = patch.meta || {};
+      if (Object.keys(dbPatch).length === 0) return;
+      const { error } = await window.supabaseClient.from('company_expenses').update(dbPatch).eq('id', id);
+      if (error) throw error;
+    },
+    async deleteCompanyExpense(id) {
+      const { error } = await window.supabaseClient.from('company_expenses').delete().eq('id', id);
+      if (error) throw error;
+    },
+    async insertCompanyCat(c) {
+      const { error } = await window.supabaseClient.from('company_expense_categories').insert(jsCat(c));
+      if (error) throw error;
+    },
+    async updateCompanyCat(id, patch) {
+      const dbPatch = {};
+      if ('name'  in patch) dbPatch.name  = patch.name || '';
+      if ('color' in patch) dbPatch.color = patch.color || '#9ca3af';
+      if (Object.keys(dbPatch).length === 0) return;
+      const { error } = await window.supabaseClient.from('company_expense_categories').update(dbPatch).eq('id', id);
+      if (error) throw error;
+    },
+    async deleteCompanyCat(id) {
+      const { error } = await window.supabaseClient.from('company_expense_categories').delete().eq('id', id);
       if (error) throw error;
     },
 

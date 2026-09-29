@@ -4999,3 +4999,506 @@ window.IncomeHistoryView = function IncomeHistoryView() {
     </>
   );
 };
+
+// ============================================================
+// บัญชีบริษัท (Company Finance) — เฉพาะ admin
+//   • รายรับบริษัท = ค่าดำเนินการ + กำไร 15% ของยอดรับจากลูกค้า (auto)
+//   • รายจ่ายบริษัท = บันทึกเอง แยกประเภท
+//   • สถานะ กำไร/ขาดทุน = รายรับ − รายจ่าย
+//   • รายงาน PDF: เลือกประเภทค่าใช้จ่ายที่จะนำมาลบกับรายรับ
+// ============================================================
+const COMPANY_FEE_RATE = 0.15;
+
+// ---- PDF รายงานบัญชีบริษัท ----
+function doExportCompanyPDF({ fromDate, toDate, incomeGross, companyIncome, expenses, catRows, selectedNames }) {
+  const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtI = v => Number(v||0).toLocaleString('th-TH');
+  const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  const now  = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
+
+  const expenseTotal = expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const profit = companyIncome - expenseTotal;
+
+  const catSummaryRows = catRows.map(c=>`
+    <tr>
+      <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color};margin-right:8px"></span>${c.name}</td>
+      <td class="r">${fmtI(c.count)}</td>
+      <td class="r bold">฿${fmtN(c.total)}</td>
+      <td style="padding:10px 14px;width:130px">
+        <div style="background:#f0ede8;border-radius:99px;height:6px">
+          <div style="height:6px;border-radius:99px;background:${c.color};width:${expenseTotal>0?Math.round((c.total/expenseTotal)*100):0}%"></div>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  const detailRows = expenses.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map((e,i)=>`
+    <tr class="${i%2===0?'alt':''}">
+      <td style="white-space:nowrap">${fmtD(e.date)}</td>
+      <td>${e.category||'—'}</td>
+      <td style="max-width:260px">${e.note||'—'}</td>
+      <td class="r bold">฿${fmtN(e.amount)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="th"><head>
+<meta charset="UTF-8">
+<title>รายงานบัญชีบริษัท ${fromDate} – ${toDate}</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',sans-serif;font-size:12px;color:#1c1917;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4;margin:16mm 14mm}
+@media print{.no-print{display:none!important}.page-break{page-break-before:always}}
+.report-header{background:#1c1917;color:#fff;padding:22px 28px;display:flex;justify-content:space-between;align-items:flex-start}
+.logo{width:46px;height:46px;background:#d97706;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0}
+.header-left{display:flex;gap:16px;align-items:center}
+.header-title{font-size:18px;font-weight:700;letter-spacing:-0.3px;line-height:1.3}
+.header-sub{font-size:11px;color:#a8a29e;margin-top:3px}
+.header-right{text-align:right;font-size:11px;color:#a8a29e;line-height:2}
+.header-right strong{color:#fff;font-weight:600}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+.kpi{border-radius:10px;padding:16px 18px;border:1px solid #e7e5e4;background:#fafaf9}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.7;margin-bottom:6px}
+.kpi-value{font-size:19px;font-weight:700;letter-spacing:-0.5px;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:10px;margin-top:4px;opacity:.75}
+.section{margin:20px 0}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;border-left:4px solid #d97706;padding-left:10px}
+.section-title{font-size:13px;font-weight:700}
+.section-num{width:22px;height:22px;border-radius:6px;background:#d97706;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+thead tr{background:#292524;color:#fff}
+thead th{padding:9px 14px;text-align:left;font-weight:600;font-size:10.5px;white-space:nowrap}
+tbody td{padding:8.5px 14px;border-bottom:1px solid #f5f5f4;vertical-align:middle}
+tbody tr.alt td{background:#fafaf9}
+tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-size:11.5px}
+.r{text-align:right;font-variant-numeric:tabular-nums}
+.bold{font-weight:700}
+.report-footer{margin-top:28px;padding-top:14px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;font-size:10px;color:#78716c}
+.print-btn{background:#d97706;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-family:'Prompt',sans-serif;font-weight:600;cursor:pointer}
+.print-wrap{text-align:center;padding:24px;border-bottom:2px dashed #e7e5e4;margin-bottom:20px}
+@media screen{body[contenteditable="true"] td:focus,body[contenteditable="true"] th:focus,body[contenteditable="true"] .header-title:focus,body[contenteditable="true"] .section-title:focus{outline:2px solid #0ea5e9;background:#e0f2fe}}
+</style></head><body>
+
+<div class="no-print print-wrap">
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
+  </div>
+  <p style="margin-top:10px;font-size:11px;color:#78716c">กด "แก้ไขรายงาน" เพื่อพิมพ์เพิ่ม/แก้ตัวเลขในหน้านี้ได้ แล้วค่อยบันทึกเป็น PDF — การแก้ในหน้านี้ใช้กับไฟล์นี้เท่านั้น ไม่กระทบข้อมูลในระบบ</p>
+</div>
+
+<div class="report-header">
+  <div class="header-left">
+    <div class="logo">฿</div>
+    <div>
+      <div class="header-title">รายงานบัญชีบริษัท (ภายใน)</div>
+      <div class="header-sub">รายรับค่าดำเนินการ ${(COMPANY_FEE_RATE*100).toFixed(0)}% · รายจ่ายบริษัท · กำไร/ขาดทุน</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div>📅 ช่วงเวลา: <strong>${fmtD(fromDate)} – ${fmtD(toDate)}</strong></div>
+    <div>ประเภทค่าใช้จ่ายที่รวม: <strong>${selectedNames.length} ประเภท</strong></div>
+    <div>สร้างเมื่อ: <strong>${now}</strong></div>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi" style="background:#ecfdf5;border-color:#a7f3d0">
+    <div class="kpi-label" style="color:#059669">รายรับบริษัท (ค่าดำเนินการ ${(COMPANY_FEE_RATE*100).toFixed(0)}%)</div>
+    <div class="kpi-value" style="color:#059669">฿${fmtN(companyIncome)}</div>
+    <div class="kpi-sub">คิดจากยอดรับลูกค้า ฿${fmtN(incomeGross)}</div>
+  </div>
+  <div class="kpi" style="background:#fff7ed;border-color:#fed7aa">
+    <div class="kpi-label" style="color:#c2410c">รายจ่ายบริษัท (ที่เลือก)</div>
+    <div class="kpi-value" style="color:#c2410c">฿${fmtN(expenseTotal)}</div>
+    <div class="kpi-sub">${fmtI(expenses.length)} รายการ · ${selectedNames.length} ประเภท</div>
+  </div>
+  <div class="kpi" style="background:${profit>=0?'#ecfdf5':'#fef2f2'};border-color:${profit>=0?'#a7f3d0':'#fecaca'}">
+    <div class="kpi-label" style="color:${profit>=0?'#059669':'#dc2626'}">${profit>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'} (รับ−จ่าย)</div>
+    <div class="kpi-value" style="color:${profit>=0?'#059669':'#dc2626'}">${profit<0?'−':''}฿${fmtN(Math.abs(profit))}</div>
+    <div class="kpi-sub">${profit>=0?'บริษัทมีกำไร':'บริษัทขาดทุน'}</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><div class="section-num">1</div><div class="section-title">สรุปรายจ่ายแยกตามประเภท</div></div>
+  <table>
+    <thead><tr><th>ประเภทค่าใช้จ่าย</th><th class="r" style="width:90px">จำนวน</th><th class="r" style="width:140px">ยอดรวม</th><th style="width:150px">สัดส่วน</th></tr></thead>
+    <tbody>${catSummaryRows||'<tr><td colspan="4" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีรายจ่ายในประเภทที่เลือก</td></tr>'}</tbody>
+    <tfoot><tr><td>รวมรายจ่ายทั้งหมด</td><td class="r">${fmtI(expenses.length)}</td><td class="r">฿${fmtN(expenseTotal)}</td><td></td></tr></tfoot>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-header" style="border-left-color:#059669"><div class="section-num" style="background:#059669">2</div><div class="section-title">สรุปกำไร/ขาดทุน</div></div>
+  <table>
+    <tbody>
+      <tr><td>รายรับบริษัท — ค่าดำเนินการ ${(COMPANY_FEE_RATE*100).toFixed(0)}% (จากยอดรับลูกค้า ฿${fmtN(incomeGross)})</td><td class="r bold" style="color:#059669;width:160px">฿${fmtN(companyIncome)}</td></tr>
+      <tr><td>หัก รายจ่ายบริษัท (${selectedNames.length} ประเภทที่เลือก)</td><td class="r bold" style="color:#c2410c">−฿${fmtN(expenseTotal)}</td></tr>
+    </tbody>
+    <tfoot><tr><td style="background:${profit>=0?'#047857':'#b91c1c'}">${profit>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}</td><td class="r" style="background:${profit>=0?'#047857':'#b91c1c'}">${profit<0?'−':''}฿${fmtN(Math.abs(profit))}</td></tr></tfoot>
+  </table>
+</div>
+
+${expenses.length>0?`
+<div class="section">
+  <div class="section-header"><div class="section-num">3</div><div class="section-title">รายการรายจ่ายทั้งหมด (${expenses.length} รายการ)</div></div>
+  <table>
+    <thead><tr><th style="width:90px">วันที่</th><th style="width:180px">ประเภท</th><th>หมายเหตุ</th><th class="r" style="width:130px">จำนวนเงิน</th></tr></thead>
+    <tbody>${detailRows}</tbody>
+  </table>
+</div>`:''}
+
+<div class="report-footer">
+  <span>ForHouse Cost — บัญชีบริษัท (เอกสารภายใน) &nbsp;❖&nbsp; ${now}</span>
+  <span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span>
+</div>
+
+<script>
+  function toggleEdit(btn){
+    var on = document.body.getAttribute('contenteditable') !== 'true';
+    document.body.setAttribute('contenteditable', on ? 'true' : 'false');
+    btn.textContent = on ? '✓ กำลังแก้ไข — กดเพื่อจบ' : '✏️ แก้ไขรายงานก่อนบันทึก';
+    btn.style.background = on ? '#059669' : '#0ea5e9';
+  }
+</script>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=960,height=750');
+  if (!win) { alert('กรุณาอนุญาต Popup ในเบราว์เซอร์เพื่อดูรายงาน PDF'); return; }
+  win.document.write(html); win.document.close();
+}
+
+// ---- Modal: เพิ่ม/แก้ไขรายจ่ายบริษัท ----
+function CompanyExpenseModal({ open, onClose, initial }) {
+  const app = window.useApp();
+  const cats = app.companyExpenseCats || [];
+  const [date, setDate]   = useState(initial?.date || todayStr());
+  const [cat, setCat]     = useState(initial?.category || (cats[0]?.name || ''));
+  const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '');
+  const [note, setNote]   = useState(initial?.note || '');
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(initial?.date || todayStr());
+    setCat(initial?.category || (cats[0]?.name || ''));
+    setAmount(initial?.amount != null ? String(initial.amount) : '');
+    setNote(initial?.note || '');
+  }, [open, initial]); // eslint-disable-line
+
+  const save = () => {
+    if (!cat) return app.pushToast('โปรดเลือกประเภทค่าใช้จ่าย', 'error');
+    if (!(Number(amount) > 0)) return app.pushToast('โปรดระบุจำนวนเงิน', 'error');
+    const payload = { date, category: cat, amount: Number(amount), note: note.trim() };
+    if (initial?.id) { app.updateCompanyExpense(initial.id, payload); app.pushToast('แก้ไขรายจ่ายเรียบร้อย'); }
+    else { app.addCompanyExpense(payload); app.pushToast('บันทึกรายจ่ายบริษัทแล้ว'); }
+    onClose();
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title={initial?.id ? 'แก้ไขรายจ่ายบริษัท' : 'เพิ่มรายจ่ายบริษัท'} width={460}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={save}><Icon name="save" size={13}/> บันทึก</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        <div><label style={LS}>วันที่</label><input type="date" style={IS} value={date} onChange={e=>setDate(e.target.value)} /></div>
+        <div>
+          <label style={LS}>ประเภทค่าใช้จ่าย</label>
+          {cats.length === 0
+            ? <div className="text-small text-muted">ยังไม่มีประเภท — กด "จัดการประเภท" ในหน้าบัญชีบริษัทเพื่อเพิ่มก่อน</div>
+            : <select style={{ ...IS, cursor:'pointer' }} value={cat} onChange={e=>setCat(e.target.value)}>
+                {cats.map(c=>(<option key={c.id} value={c.name}>{c.name}</option>))}
+              </select>}
+        </div>
+        <div><label style={LS}>จำนวนเงิน (บาท)</label><input type="number" min="0" step="any" style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" /></div>
+        <div><label style={LS}>หมายเหตุ / รายละเอียด</label><input style={IS} value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น เงินเดือน ก.ย. / ค่าเช่าออฟฟิศ" /></div>
+      </div>
+    </window.Modal>
+  );
+}
+
+// ---- Modal: จัดการประเภทค่าใช้จ่ายบริษัท ----
+function CompanyCatManagerModal({ open, onClose }) {
+  const app = window.useApp();
+  const cats = app.companyExpenseCats || [];
+  const [name, setName]   = useState('');
+  const [color, setColor] = useState('#6366f1');
+
+  const add = () => {
+    if (!name.trim()) return app.pushToast('โปรดระบุชื่อประเภท', 'error');
+    app.addCompanyCat({ name: name.trim(), color });
+    setName(''); app.pushToast('เพิ่มประเภทแล้ว');
+  };
+  const del = (c) => { if (confirm(`ลบประเภท "${c.name}"?\n(รายจ่ายเดิมที่ใช้ประเภทนี้ยังอยู่ ไม่ถูกลบ)`)) app.deleteCompanyCat(c.id); };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', outline:'none', boxSizing:'border-box' };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title="จัดการประเภทค่าใช้จ่ายบริษัท" width={480}
+      footer={<div style={{ display:'flex', justifyContent:'flex-end' }}><button className="btn btn-ghost" onClick={onClose}>ปิด</button></div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <div className="row gap-8" style={{ alignItems:'center' }}>
+          <input type="color" value={color} onChange={e=>setColor(e.target.value)} style={{ width:36, height:36, border:'1px solid var(--line)', borderRadius:8, background:'none', cursor:'pointer', flexShrink:0 }} />
+          <input style={{ ...IS, flex:1 }} value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อประเภทใหม่ เช่น ค่าซ่อมบำรุงรถ" onKeyDown={e=>{ if(e.key==='Enter') add(); }} />
+          <button className="btn btn-accent btn-sm" onClick={add}><Icon name="plus" size={13}/> เพิ่ม</button>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:320, overflowY:'auto' }}>
+          {cats.length === 0 && <div className="text-small text-muted" style={{ textAlign:'center', padding:'12px 0' }}>ยังไม่มีประเภท</div>}
+          {cats.map(c=>(
+            <div key={c.id} className="row between" style={{ padding:'8px 10px', border:'1px solid var(--line)', borderRadius:8 }}>
+              <span className="row gap-8" style={{ alignItems:'center' }}>
+                <span style={{ width:12, height:12, borderRadius:'50%', background:c.color, display:'inline-block' }} />
+                {c.name}
+              </span>
+              <button className="topbar-icon-btn" style={{ width:30, height:30, color:'var(--danger)' }} onClick={()=>del(c)} title="ลบประเภท"><Icon name="trash" size={13}/></button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </window.Modal>
+  );
+}
+
+// ---- Modal: ส่งออกรายงานบัญชีบริษัท (เลือกประเภทได้) ----
+function CompanyReportModal({ open, onClose }) {
+  const app = window.useApp();
+  const firstOfMonth = () => { const d=new Date(); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfYear  = () => { const d=new Date(); d.setMonth(0); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfLastMon = () => { const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); };
+  const lastOfLastMon  = () => { const d=new Date(); d.setDate(0); return d.toISOString().slice(0,10); };
+
+  const [fromDate, setFromDate] = useState(firstOfYear);
+  const [toDate, setToDate]     = useState(todayStr);
+  const [selected, setSelected] = useState(null); // null = ยังไม่ init → เลือกทั้งหมด
+
+  // รายชื่อประเภททั้งหมด = ประเภทที่ตั้งไว้ ∪ ประเภทที่มีในรายจ่ายจริง (กันประเภทที่ถูกลบ)
+  const allNames = useMemo(() => {
+    const s = new Set((app.companyExpenseCats||[]).map(c=>c.name));
+    (app.companyExpenses||[]).forEach(e=>{ if(e.category) s.add(e.category); });
+    return Array.from(s);
+  }, [app.companyExpenseCats, app.companyExpenses]);
+
+  const sel = selected === null ? allNames : selected;
+  const toggle = (n) => setSelected(cur => { const base = cur===null?allNames:cur; return base.includes(n) ? base.filter(x=>x!==n) : [...base, n]; });
+  const allOn = sel.length === allNames.length;
+  const setAll = () => setSelected(allOn ? [] : allNames);
+
+  const PRESETS = [
+    { label:'เดือนนี้', from:firstOfMonth, to:()=>todayStr() },
+    { label:'เดือนที่แล้ว', from:firstOfLastMon, to:lastOfLastMon },
+    { label:'ปีนี้', from:firstOfYear, to:()=>todayStr() },
+  ];
+
+  const colorOf = (n) => (app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af';
+
+  const run = () => {
+    const inRange = (d) => d && d>=fromDate && d<=toDate;
+    const incomeGross = (app.records||[]).filter(r=>window.isIncome(r) && inRange(r.date)).reduce((s,r)=>s+computeTotals(r).total,0);
+    const companyIncome = incomeGross * COMPANY_FEE_RATE;
+    const expenses = (app.companyExpenses||[]).filter(e=>inRange(e.date) && sel.includes(e.category));
+    const catRows = sel.map(n=>{
+      const es = expenses.filter(e=>e.category===n);
+      return { name:n, color:colorOf(n), count:es.length, total:es.reduce((s,e)=>s+Number(e.amount||0),0) };
+    }).filter(c=>c.count>0).sort((a,b)=>b.total-a.total);
+    try {
+      doExportCompanyPDF({ fromDate, toDate, incomeGross, companyIncome, expenses, catRows, selectedNames: sel });
+      app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
+      onClose();
+    } catch(e) { console.error('[CompanyReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title="ส่งออกรายงานบัญชีบริษัท" width={540}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={run} disabled={sel.length===0}><Icon name="receipt" size={13}/> สร้าง PDF</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+        <div>
+          <div style={LS}>ช่วงเวลาสำเร็จรูป</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {PRESETS.map(p=>(<button key={p.label} className="btn btn-ghost btn-sm" style={{ fontSize:12 }} onClick={()=>{ setFromDate(p.from()); setToDate(p.to()); }}>{p.label}</button>))}
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>ตั้งแต่วันที่</label><input type="date" style={IS} value={fromDate} onChange={e=>setFromDate(e.target.value)} /></div>
+          <div><label style={LS}>ถึงวันที่</label><input type="date" style={IS} value={toDate} onChange={e=>setToDate(e.target.value)} /></div>
+        </div>
+        <div>
+          <div className="row between" style={{ marginBottom:8 }}>
+            <span style={LS}>ประเภทค่าใช้จ่ายที่จะนำมาลบกับรายรับ</span>
+            <button className="btn btn-ghost btn-sm" style={{ fontSize:11.5 }} onClick={setAll}>{allOn?'ไม่เลือกทั้งหมด':'เลือกทั้งหมด'}</button>
+          </div>
+          {allNames.length === 0 ? <div className="text-small text-muted">ยังไม่มีประเภทค่าใช้จ่าย</div> : (
+            <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:240, overflowY:'auto' }}>
+              {allNames.map(n=>{
+                const on = sel.includes(n);
+                return (
+                  <div key={n} className="row gap-8" style={{ alignItems:'center', padding:'7px 10px', border:'1px solid var(--line)', borderRadius:8, cursor:'pointer', background: on?'rgba(217,119,6,0.06)':'transparent' }} onClick={()=>toggle(n)}>
+                    <div style={{ width:18, height:18, borderRadius:5, border:'2px solid', borderColor: on?'#d97706':'var(--ink-4)', background: on?'#d97706':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      {on && <Icon name="check" size={11} stroke={3} style={{ color:'#fff' }} />}
+                    </div>
+                    <span style={{ width:11, height:11, borderRadius:'50%', background:colorOf(n), display:'inline-block' }} />
+                    <span style={{ fontSize:13 }}>{n}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="text-small text-muted" style={{ marginTop:8 }}>รายงานจะนำเฉพาะยอดของประเภทที่เลือก มาลบกับรายรับ ({(COMPANY_FEE_RATE*100).toFixed(0)}% ของยอดรับลูกค้า) แล้วสรุปกำไร/ขาดทุน</div>
+        </div>
+      </div>
+    </window.Modal>
+  );
+}
+
+// ---- หน้าบัญชีบริษัท ----
+window.CompanyFinanceView = function CompanyFinanceView() {
+  const app = window.useApp();
+  const [range, setRange]   = useState('all'); // all | year | month
+  const [expModal, setExpModal] = useState({ open:false, initial:null });
+  const [catOpen, setCatOpen]   = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const bounds = useMemo(() => {
+    const d = new Date();
+    if (range === 'year')  return { from: new Date(d.getFullYear(),0,1).toISOString().slice(0,10), to: '9999-12-31' };
+    if (range === 'month') return { from: new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10), to: '9999-12-31' };
+    return { from: '0000-01-01', to: '9999-12-31' };
+  }, [range]);
+  const inRange = (s) => s && s>=bounds.from && s<=bounds.to;
+
+  const incomeRecs = (app.records||[]).filter(r=>window.isIncome(r) && inRange(r.date));
+  const incomeGross = incomeRecs.reduce((s,r)=>s+computeTotals(r).total,0);
+  const companyIncome = incomeGross * COMPANY_FEE_RATE;
+  const expenses = (app.companyExpenses||[]).filter(e=>inRange(e.date)).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const expenseTotal = expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const profit = companyIncome - expenseTotal;
+  const colorOf = (n) => (app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af';
+
+  const byCat = useMemo(() => {
+    const m = {};
+    expenses.forEach(e=>{ const k=e.category||'—'; if(!m[k]) m[k]={name:k,color:colorOf(k),count:0,total:0}; m[k].count++; m[k].total+=Number(e.amount||0); });
+    return Object.values(m).sort((a,b)=>b.total-a.total);
+  }, [expenses, app.companyExpenseCats]);
+
+  const RANGES = [ {k:'all',label:'ทั้งหมด'}, {k:'year',label:'ปีนี้'}, {k:'month',label:'เดือนนี้'} ];
+
+  const card = (label, value, sub, color, bg, border) => (
+    <div style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'16px 18px' }}>
+      <div style={{ fontSize:11, fontWeight:600, letterSpacing:.3, color, opacity:.85, marginBottom:6 }}>{label}</div>
+      <div className="mono" style={{ fontSize:22, fontWeight:700, color, letterSpacing:-.5 }}>{value}</div>
+      {sub && <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">บัญชีบริษัท</h1>
+          <div className="page-sub">รายรับค่าดำเนินการ {(COMPANY_FEE_RATE*100).toFixed(0)}% (auto จากยอดรับลูกค้า) · รายจ่ายบริษัท · กำไร/ขาดทุน — เห็นเฉพาะผู้ดูแลระบบ</div>
+        </div>
+        <div className="row gap-8" style={{ flexWrap:'wrap' }}>
+          <button className="btn btn-ghost" onClick={()=>setCatOpen(true)}><Icon name="tag" size={14}/> จัดการประเภท</button>
+          <button className="btn btn-ghost" onClick={()=>setReportOpen(true)}><Icon name="download" size={14}/> ส่งออกรายงาน</button>
+          <button className="btn btn-accent" onClick={()=>setExpModal({ open:true, initial:null })}><Icon name="plus" size={14}/> เพิ่มรายจ่าย</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ display:'flex', flexDirection:'column', gap:18 }}>
+        {/* ช่วงเวลา */}
+        <div className="row gap-8" style={{ flexWrap:'wrap' }}>
+          {RANGES.map(r=>(
+            <button key={r.k} className={"btn btn-sm " + (range===r.k?'btn-accent':'btn-ghost')} onClick={()=>setRange(r.k)}>{r.label}</button>
+          ))}
+        </div>
+
+        {/* KPI */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:12 }}>
+          {card(`รายรับบริษัท (ค่าดำเนินการ ${(COMPANY_FEE_RATE*100).toFixed(0)}%)`, '฿'+fmt(companyIncome), `จากยอดรับลูกค้า ฿${fmt(incomeGross)} · ${incomeRecs.length} รายการ`, '#059669', 'rgba(5,150,105,0.07)', 'rgba(5,150,105,0.25)')}
+          {card('รายจ่ายบริษัท', '฿'+fmt(expenseTotal), `${expenses.length} รายการ`, '#c2410c', 'rgba(217,119,6,0.07)', 'rgba(217,119,6,0.25)')}
+          {card(profit>=0?'กำไรสุทธิ (รับ−จ่าย)':'ขาดทุนสุทธิ (รับ−จ่าย)', (profit<0?'−':'')+'฿'+fmt(Math.abs(profit)), profit>=0?'บริษัทมีกำไร':'บริษัทขาดทุน', profit>=0?'#059669':'#dc2626', profit>=0?'rgba(5,150,105,0.07)':'rgba(220,38,38,0.07)', profit>=0?'rgba(5,150,105,0.25)':'rgba(220,38,38,0.25)')}
+        </div>
+
+        {/* สรุปตามประเภท */}
+        {byCat.length > 0 && (
+          <div>
+            <div className="text-small text-muted" style={{ marginBottom:8 }}>รายจ่ายแยกตามประเภท</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {byCat.map(c=>(
+                <div key={c.name} className="row between" style={{ padding:'8px 10px', border:'1px solid var(--line)', borderRadius:8 }}>
+                  <span className="row gap-8" style={{ alignItems:'center' }}>
+                    <span style={{ width:11, height:11, borderRadius:'50%', background:c.color, display:'inline-block' }} />
+                    {c.name} <span className="text-small text-muted">· {c.count} รายการ</span>
+                  </span>
+                  <span className="mono" style={{ fontWeight:600 }}>฿{fmt(c.total)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* รายการรายจ่าย */}
+      <div className="card" style={{ marginTop:16 }}>
+        <div className="row between" style={{ marginBottom:12, flexWrap:'wrap', gap:8 }}>
+          <strong>รายการรายจ่ายบริษัท</strong>
+          <span className="text-small text-muted">{expenses.length} รายการ · รวม <strong className="mono" style={{ color:'var(--ink-1)' }}>฿{fmt(expenseTotal)}</strong></span>
+        </div>
+        {expenses.length === 0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="chart" size={28}/></div>
+            <div className="empty-title">ยังไม่มีรายจ่ายบริษัท</div>
+            <div className="empty-sub">กด "เพิ่มรายจ่าย" เพื่อบันทึกรายการแรก</div>
+          </div>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table className="table" style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ textAlign:'left', color:'var(--ink-3)', fontSize:12 }}>
+                  <th style={{ padding:'8px 10px' }}>วันที่</th>
+                  <th style={{ padding:'8px 10px' }}>ประเภท</th>
+                  <th style={{ padding:'8px 10px' }}>หมายเหตุ</th>
+                  <th style={{ padding:'8px 10px', textAlign:'right' }}>จำนวนเงิน</th>
+                  <th style={{ padding:'8px 10px', width:80 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map(e=>(
+                  <tr key={e.id} style={{ borderTop:'1px solid var(--line)' }}>
+                    <td style={{ padding:'9px 10px', whiteSpace:'nowrap' }}>{fmtDate(e.date)}</td>
+                    <td style={{ padding:'9px 10px' }}>
+                      <span className="row gap-8" style={{ alignItems:'center' }}>
+                        <span style={{ width:9, height:9, borderRadius:'50%', background:colorOf(e.category), display:'inline-block' }} />
+                        {e.category||'—'}
+                      </span>
+                    </td>
+                    <td style={{ padding:'9px 10px', color:'var(--ink-2)' }}>{e.note||'—'}</td>
+                    <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:600 }} className="mono">฿{fmt(e.amount)}</td>
+                    <td style={{ padding:'9px 10px' }}>
+                      <div className="row gap-8" style={{ justifyContent:'flex-end' }}>
+                        <button className="topbar-icon-btn" style={{ width:30, height:30 }} onClick={()=>setExpModal({ open:true, initial:e })} title="แก้ไข"><Icon name="edit" size={13}/></button>
+                        <button className="topbar-icon-btn" style={{ width:30, height:30, color:'var(--danger)' }} onClick={()=>{ if(confirm('ลบรายจ่ายนี้?')){ app.deleteCompanyExpense(e.id); app.pushToast('ลบรายจ่ายแล้ว'); } }} title="ลบ"><Icon name="trash" size={13}/></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <CompanyExpenseModal open={expModal.open} initial={expModal.initial} onClose={()=>setExpModal({ open:false, initial:null })} />
+      <CompanyCatManagerModal open={catOpen} onClose={()=>setCatOpen(false)} />
+      <CompanyReportModal open={reportOpen} onClose={()=>setReportOpen(false)} />
+    </>
+  );
+};

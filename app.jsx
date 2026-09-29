@@ -87,6 +87,7 @@ function Shell() {
   if (view === 'teams')        { title = 'ทีมช่าง'; sub = 'จัดการทีมช่างและประวัติ'; }
   if (view === 'users')        { title = 'จัดการผู้ใช้'; sub = 'กำหนดสิทธิ์การเข้าถึง'; }
   if (view === 'deposits')     { title = 'เงินประกันสินค้า'; sub = 'ติดตามเงินมัดจำและสถานะการรับคืน'; }
+  if (view === 'company-finance') { title = 'บัญชีบริษัท'; sub = 'รายรับค่าดำเนินการ 15% · รายจ่ายบริษัท · กำไร/ขาดทุน'; }
 
   const initial = app.editingId ? app.records.find(r => r.id === app.editingId) : null;
   const clearEditing = () => app.setEditingId(null);
@@ -144,6 +145,7 @@ function Shell() {
           {view === 'categories' && <window.CategoriesView />}
           {view === 'teams'      && <window.TeamsView />}
           {view === 'users'      && app.isAdmin && <window.UsersView />}
+          {view === 'company-finance' && app.isAdmin && <window.CompanyFinanceView />}
           {view === 'deposits'   && <window.DepositsView />}
           {view === 'new-labor' && (
             <window.LaborForm
