@@ -1110,7 +1110,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
       if (!di.taxId?.trim())   return app.pushToast('โปรดระบุเลขบัตรประชาชน/เลขผู้เสียภาษี', 'error');
       if (!di.address?.trim()) return app.pushToast('โปรดระบุที่อยู่ สำหรับออกเอกสาร', 'error');
     }
-    onSubmit(form);
+    onSubmit((window.migrateFillOn() && app.isAdmin) ? window.withAllStatuses(form) : form);
   };
 
   const isEditing = !!initial;
@@ -1463,6 +1463,7 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
               )}
             </div>
             <div className="row gap-8 summary-bar-actions">
+              <window.MigrateModeToggle />
               <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
               <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
             </div>
@@ -1641,7 +1642,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
       if (!di.taxId?.trim())   return app.pushToast('โปรดระบุเลขบัตรประชาชน/เลขผู้เสียภาษี', 'error');
       if (!di.address?.trim()) return app.pushToast('โปรดระบุที่อยู่ สำหรับออกเอกสาร', 'error');
     }
-    onSubmit(form);
+    onSubmit((window.migrateFillOn() && app.isAdmin) ? window.withAllStatuses(form) : form);
   };
 
   const isEditing = !!initial;
@@ -1981,6 +1982,7 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
               )}
             </div>
             <div className="row gap-8 summary-bar-actions">
+              <window.MigrateModeToggle />
               <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> {isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
               <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
             </div>

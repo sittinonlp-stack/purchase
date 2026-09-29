@@ -437,7 +437,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
       if (!di.taxId?.trim())   return app.pushToast('โปรดระบุเลขบัตรประชาชน/เลขผู้เสียภาษี', 'error');
       if (!di.address?.trim()) return app.pushToast('โปรดระบุที่อยู่ สำหรับออกเอกสาร', 'error');
     }
-    onSubmit(form);
+    onSubmit((window.migrateFillOn() && app.isAdmin) ? window.withAllStatuses(form) : form);
   };
 
   const title = type === 'machine' ? 'บันทึกการเช่าเครื่องจักร' : 'บันทึกการจัดซื้อวัสดุ';
@@ -706,6 +706,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                 </div>
               </div>
               <div className="row gap-8 summary-bar-actions">
+                <window.MigrateModeToggle />
                 <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
                 <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
               </div>
@@ -768,7 +769,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
     if (!form.projectId) return app.pushToast('โปรดเลือกโครงการก่อนบันทึก', 'error');
     if (!form.vendor.trim()) return app.pushToast('โปรดระบุชื่อผู้รับเงิน / ผู้ให้บริการ', 'error');
     if (!form.items.some(it => it.name.trim() && Number(it.qty) > 0)) return app.pushToast('โปรดเพิ่มรายการอย่างน้อย 1 รายการ', 'error');
-    onSubmit(form);
+    onSubmit((window.migrateFillOn() && app.isAdmin) ? window.withAllStatuses(form) : form);
   };
 
   return (
@@ -977,6 +978,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
                 </div>
               </div>
               <div className="row gap-8 summary-bar-actions">
+                <window.MigrateModeToggle />
                 <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
                 <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
               </div>
@@ -1200,7 +1202,7 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
     if (!form.vendor.trim()) return app.pushToast('โปรดระบุแหล่งที่มาของรายรับ / ผู้จ่าย', 'error');
     if (form.useIncomeContract) return handleIncomeContractSubmit(app, form, onSubmit);
     if (!form.items.some(it => it.name.trim() && Number(it.price) > 0)) return app.pushToast('โปรดเพิ่มรายการรายรับอย่างน้อย 1 รายการ', 'error');
-    onSubmit(form);
+    onSubmit((window.migrateFillOn() && app.isAdmin) ? window.withAllStatuses(form) : form);
   };
 
   const isEditing = !!initial;
@@ -1386,6 +1388,7 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
                 </div>
               </div>
               <div className="row gap-8 summary-bar-actions">
+                <window.MigrateModeToggle />
                 <button className="btn btn-accent" onClick={handleSubmit}><Icon name="save" size={14} /> บันทึก</button>
                 <button className="btn btn-ghost" onClick={onCancel}>ยกเลิก</button>
               </div>

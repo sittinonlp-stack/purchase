@@ -344,6 +344,26 @@ function InstallmentSection({ form, set, contractTotal }) {
 }
 window.InstallmentSection = InstallmentSection;
 
+// ---- โหมดย้ายข้อมูลเก่า: บันทึกแล้วตั้งสถานะครบ (อนุมัติ+ลงบัญชี+จ่ายแล้ว) ----
+window.migrateFillOn = () => { try { return localStorage.getItem('migrateFillStatus') === '1'; } catch { return false; } };
+window.withAllStatuses = (rec) => {
+  const d = rec.date || new Date().toISOString().slice(0, 10);
+  return { ...rec, approved: true, approvedDate: rec.approvedDate || d, accountingPosted: true, paid: true, paidDate: rec.paidDate || d };
+};
+function MigrateModeToggle() {
+  const app = window.useApp();
+  const [on, setOn] = useState(() => window.migrateFillOn());
+  if (!app.isAdmin) return null;   // เฉพาะแอดมินเท่านั้น
+  const toggle = () => { const v = !on; setOn(v); try { localStorage.setItem('migrateFillStatus', v ? '1' : '0'); } catch {} };
+  return (
+    <button type="button" onClick={toggle} className={"status-chip" + (on ? " on approve" : "")}
+      title="สำหรับย้ายข้อมูลเก่า: เมื่อบันทึกจะตั้ง อนุมัติ + ลงบัญชี + จ่ายแล้ว ให้อัตโนมัติ">
+      <span className="tick">{on ? '✓' : ''}</span> ย้ายข้อมูล: ตั้งสถานะครบทันที
+    </button>
+  );
+}
+window.MigrateModeToggle = MigrateModeToggle;
+
 // ---- Signature image picker (single image, compact) ----
 function SignatureImagePicker({ value, onChange, label = 'ลายเซ็นต์' }) {
   const inputRef = useRef(null);
