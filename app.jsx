@@ -80,8 +80,6 @@ function Shell() {
   if (view === 'receipts-list')  { title = 'ประวัติใบเสร็จรับเงิน'; sub = 'ใบเสร็จที่ออกให้ลูกค้าทั้งหมด'; }
   if (view === 'tax-invoices-list') { title = 'ประวัติใบกำกับภาษี'; sub = 'ใบกำกับภาษีที่ออกให้ลูกค้าทั้งหมด'; }
   if (view === 'invoices-list')  { title = 'ประวัติใบแจ้งหนี้'; sub = 'ใบแจ้งหนี้ที่ตั้งเบิกกับลูกค้า'; }
-  if (view === 'quick-receipt') { title = 'ถ่ายรูปใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
-  if (view === 'receipts')     { title = 'รูปถ่ายใบเสร็จ'; sub = 'บิลด่วนจากมือถือ'; }
   if (view === 'history')       { title = 'ประวัติทั้งหมด'; sub = 'รายการย้อนหลัง'; }
   if (view === 'labor-history') { title = 'ประวัติการเบิกค่าแรง'; sub = 'ค่าแรงรายวัน และค่าแรงเหมาจ่าย'; }
   if (view === 'projects')     { title = 'โครงการ'; sub = 'จัดการโครงการ'; }
@@ -140,8 +138,6 @@ function Shell() {
               onCancel={() => { clearEditing(); app.setView('history'); }}
             />
           )}
-          {view === 'quick-receipt' && <window.QuickReceiptView key={'qr-' + (app.editingId || 'new')} />}
-          {view === 'receipts'   && <window.ReceiptsView />}
           {view === 'history'       && <window.HistoryView />}
           {view === 'labor-history' && <window.LaborHistoryView />}
           {view === 'projects'   && <window.ProjectsView />}

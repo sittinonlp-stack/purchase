@@ -1102,36 +1102,6 @@ function ImageLightbox({ images, index, onClose, onChange }) {
 }
 window.ImageLightbox = ImageLightbox;
 
-// ---- Quick Receipt FAB (Floating Action Button) ----
-function QuickReceiptFab() {
-  const app = window.useApp();
-  const [hovered, setHovered] = useState(false);
-
-  // ซ่อนในหน้าฟอร์มทุกชนิด — ป้องกัน FAB บังปุ่มบันทึกรายการ
-  const FORM_VIEWS = ['quick-receipt', 'new-material', 'new-machine', 'new-labor', 'new-lump-labor', 'new-other', 'new-receipt', 'new-tax-invoice', 'new-invoice'];
-  if (FORM_VIEWS.includes(app.view)) return null;
-
-  return (
-    <button
-      className="fab"
-      onClick={() => app.setView('quick-receipt')}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title="ถ่ายรูปใบเสร็จด่วน"
-      aria-label="ถ่ายรูปใบเสร็จด่วน"
-    >
-      {/* Label tooltip — แสดงเมื่อ hover บน desktop */}
-      <span className={'fab-label' + (hovered ? ' visible' : '')}>
-        ถ่ายรูปด่วน
-      </span>
-      <span className="fab-icon">
-        <Icon name="camera" size={24} stroke={1.75} />
-      </span>
-    </button>
-  );
-}
-window.QuickReceiptFab = QuickReceiptFab;
-
 // ---- Doc tab strip — สลับระหว่างเอกสาร (ออก / ประวัติ) ในหน้าเดียว ----
 function DocTabStrip({ mode }) {
   const app = window.useApp();
