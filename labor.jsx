@@ -771,9 +771,13 @@ function LaborItemsTable({ items, setItems, cats, onAddCat }) {
         </tbody>
       </table>
       <datalist id="labor-units">{units.map(u => <option key={u} value={u} />)}</datalist>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={addItem} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
-        <Icon name="plus" size={13} /> เพิ่มรายการงาน
-      </button>
+      <div className="row gap-8" style={{ alignSelf: 'flex-start', marginTop: 4, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>
+          <Icon name="plus" size={13} /> เพิ่มรายการงาน
+        </button>
+        <window.ScanItemsButton unitFallback="ตร.ม."
+          onScanned={(rows) => setItems([...items.filter(it => (it.name || '').trim()), ...rows])} />
+      </div>
     </div>
   );
 }
@@ -1548,9 +1552,13 @@ function LumpLaborItemsTable({ items, setItems, cats, onAddCat }) {
         </tbody>
       </table>
       <datalist id="lump-labor-units">{units.map(u => <option key={u} value={u} />)}</datalist>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={addItem} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
-        <Icon name="plus" size={13} /> เพิ่มรายการเหมา
-      </button>
+      <div className="row gap-8" style={{ alignSelf: 'flex-start', marginTop: 4, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>
+          <Icon name="plus" size={13} /> เพิ่มรายการเหมา
+        </button>
+        <window.ScanItemsButton unitFallback="เหมา"
+          onScanned={(rows) => setItems([...items.filter(it => (it.name || '').trim()), ...rows])} />
+      </div>
     </div>
   );
 }
