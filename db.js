@@ -431,8 +431,15 @@
           if (!cecErr) companyExpenseCats = (cecRows || []).map(dbCat);
         } catch (e) { /* ตารางบัญชีบริษัทยังไม่มี หรือไม่มีสิทธิ์ */ }
 
+        // ตั้งค่าส่วนกลาง (key-value) เช่น ยอดยกมาจากปีก่อน
+        let appSettings = {};
+        try {
+          const { data: asRows, error: asErr } = await client.from('app_settings').select('*');
+          if (!asErr) (asRows || []).forEach(r => { appSettings[r.key] = Number(r.num_value || 0); });
+        } catch (e) { /* ตาราง app_settings ยังไม่มี */ }
+
         return {
-          laborContracts, incomeContracts, companyExpenses, companyExpenseCats,
+          laborContracts, incomeContracts, companyExpenses, companyExpenseCats, appSettings,
           projects:        (projects    || []).map(dbProject),
           matCats:         (matCats     || []).map(dbCat),
           machCats:        (machCats    || []).map(dbCat),
@@ -622,6 +629,13 @@
     },
     async deleteCompanyCat(id) {
       const { error } = await window.supabaseClient.from('company_expense_categories').delete().eq('id', id);
+      if (error) throw error;
+    },
+
+    // ── ตั้งค่าส่วนกลาง (app_settings) ──
+    async upsertAppSetting(key, numValue) {
+      const { error } = await window.supabaseClient.from('app_settings')
+        .upsert({ key, num_value: Number(numValue || 0), updated_at: new Date().toISOString() }, { onConflict: 'key' });
       if (error) throw error;
     },
 

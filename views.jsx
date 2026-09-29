@@ -52,6 +52,46 @@ function monthLabelTH(ym) {
     .toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
 }
 
+// ยอดยกมาจากปีก่อน (นับเป็นรับ ไม่หัก 15%) — แก้ไขได้เฉพาะ admin
+function CarryoverEditor() {
+  const app = window.useApp();
+  const amount = Number(app.carryoverIncome || 0);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(String(amount));
+  useEffect(() => { setVal(String(Number(app.carryoverIncome || 0))); }, [app.carryoverIncome]);
+  const save = () => { app.setCarryoverIncome(Number(val) || 0); setEditing(false); app.pushToast('บันทึกยอดยกมาแล้ว'); };
+
+  return (
+    <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: 'rgba(5,150,105,0.12)', color: '#059669' }}>
+        <Icon name="money" size={22} />
+      </div>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>ยอดยกมาจากปีก่อน</div>
+        <div className="text-small text-muted">นับเป็นรับ (ไม่หัก 15%) · รวมในยอดรับมุมมอง “ทุกช่วงเวลา” และรายงาน PDF</div>
+      </div>
+      <div className="row gap-8" style={{ alignItems: 'center', flexShrink: 0 }}>
+        {editing && app.isAdmin ? (
+          <>
+            <div className="input-affix" style={{ width: 190 }}>
+              <div className="input-affix-prefix">฿</div>
+              <window.MoneyInput className="input mono" value={val} onChange={setVal} autoFocus placeholder="0" />
+            </div>
+            <button className="btn btn-accent btn-sm" onClick={save}><Icon name="save" size={13} /> บันทึก</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setVal(String(amount)); setEditing(false); }}>ยกเลิก</button>
+          </>
+        ) : (
+          <>
+            <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: '#059669' }}>฿{fmt(amount)}</span>
+            {app.isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}><Icon name="edit" size={13} /> แก้ไข</button>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 window.DashboardView = function DashboardView() {
   const app = window.useApp();
 
@@ -97,11 +137,13 @@ window.DashboardView = function DashboardView() {
     const incomeRecs  = periodRecords.filter(r => window.isIncome(r));
     const incomeGross = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const incomeFee   = incomeGross * 0.15;          // ค่าดำเนินการ 15%
-    const incomeTotal = incomeGross - incomeFee;      // ยอดรับสุทธิหลังหัก
+    // ยอดยกมาจากปีก่อน — นับเป็นรับ (ไม่หัก 15%) · รวมเฉพาะมุมมอง "ทั้งหมด"
+    const carry       = periodMode === 'all' ? Number(app.carryoverIncome || 0) : 0;
+    const incomeTotal = (incomeGross - incomeFee) + carry; // ยอดรับสุทธิหลังหัก + ยกมา
     const incomeCount = incomeRecs.length;
     const netTotal    = incomeTotal - totalAmount;    // คงเหลือสุทธิ (รับหลังหัก − จ่าย)
-    return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, depositTotal, depositCount, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal };
-  }, [periodRecords]);
+    return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, depositTotal, depositCount, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal, carry };
+  }, [periodRecords, periodMode, app.carryoverIncome]);
 
   // by-project chart (รายจ่ายจริงเท่านั้น)
   const byProject = useMemo(() => {
@@ -298,11 +340,13 @@ window.DashboardView = function DashboardView() {
         </div>
       )}
 
+      <CarryoverEditor />
+
       <div className="stat-grid">
         <div className="stat">
           <div className="stat-label">ยอดรับทั้งหมด (หักค่าดำเนินการ 15%)</div>
           <div className="stat-value mono" style={{ color:'#059669' }}>฿{fmt(stats.incomeTotal)}</div>
-          <div className="stat-delta"><Icon name="money" size={11} stroke={2.5} /> รับจริง ฿{fmt(stats.incomeGross)} − ค่าดำเนินการ ฿{fmt(stats.incomeFee)}</div>
+          <div className="stat-delta"><Icon name="money" size={11} stroke={2.5} /> รับจริง ฿{fmt(stats.incomeGross)} − ค่าดำเนินการ ฿{fmt(stats.incomeFee)}{stats.carry > 0 ? ` + ยกมา ฿${fmt(stats.carry)}` : ''}</div>
           <div className="stat-icon green"><Icon name="money" size={18} /></div>
         </div>
         <div className="stat">
@@ -1139,6 +1183,7 @@ window.HistoryView = function HistoryView() {
   const [billFilter, setBillFilter] = useState(false); // true = เฉพาะที่ยังรอรับใบกำกับภาษีจากร้าน
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo]     = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
 
   // ── lookup โครงการ (ใช้เช็ค trackBills สำหรับฟีเจอร์ตามบิล) ──
   const projById = useMemo(() => {
@@ -1324,6 +1369,10 @@ window.HistoryView = function HistoryView() {
               <Icon name="check" size={13} /> ปิดรายการเดิม
             </button>
           )}
+          <button className="btn btn-accent btn-sm" onClick={() => setReportOpen(true)}
+            title="ส่งออกรายงานสรุปการจัดซื้อ (วัสดุ/เครื่องจักร/อื่นๆ) เป็น PDF">
+            <Icon name="download" size={13} /> ส่งออกรายงานจัดซื้อ
+          </button>
           <div className="spacer"></div>
           <div className="text-small text-muted">
             พบ <strong style={{ color: 'var(--ink-1)' }} className="mono">{filtered.length}</strong> รายการ ·
@@ -1357,6 +1406,7 @@ window.HistoryView = function HistoryView() {
           </div>
         </div>
       )}
+      <window.ExpenseReportModal open={reportOpen} onClose={() => setReportOpen(false)} scope="purchase" />
     </>
   );
 };
@@ -3178,7 +3228,7 @@ function doExportExcel(records, projects, fromDate, toDate, projId) {
 }
 
 // ---- PDF export (print window) ----
-function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails) {
+function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails, carryover) {
   const filtered = records
     .filter(r => {
       if (!r.date || r.date < fromDate || r.date > toDate) return false;
@@ -3220,11 +3270,13 @@ function doExportPDF(records, projects, fromDate, toDate, projId, includeDetails
     return {t,label:typeLbl(t),count:recs.length,sub,vat,wht,net};
   }).filter(Boolean);
 
-  // รายรับ — หักค่าดำเนินการ 15% + คงเหลือสุทธิ
+  // รายรับ — หักค่าดำเนินการ 15% + ยอดยกมาจากปีก่อน (ไม่หัก 15%) + คงเหลือสุทธิ
   const incomeGross = incomeRecs.reduce((s,r)=>s+computeTotals(r).total,0);
   const incomeFee   = incomeGross * 0.15;
   const incomeNet   = incomeGross - incomeFee;
-  const netBalance  = incomeNet - gNet;
+  const carry       = Number(carryover || 0);
+  const incomeNetC  = incomeNet + carry;        // ยอดรับสุทธิรวมยอดยกมา
+  const netBalance  = incomeNetC - gNet;
 
   const byP = {};
   expenseRecs.forEach(r=>{
@@ -3406,9 +3458,9 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 <!-- KPI -->
 <div class="kpi-grid">
   <div class="kpi" style="background:#ecfdf5;border-color:#a7f3d0">
-    <div class="kpi-label" style="color:#059669">ยอดรับสุทธิ (หักค่าดำเนินการ 15%)</div>
-    <div class="kpi-value" style="color:#059669">฿${fmtN(incomeNet)}</div>
-    <div class="kpi-sub">รับจริง ฿${fmtN(incomeGross)} − ค่าดำเนินการ ฿${fmtN(incomeFee)}</div>
+    <div class="kpi-label" style="color:#059669">ยอดรับสุทธิ (หักค่าดำเนินการ 15%${carry>0?' + ยกมา':''})</div>
+    <div class="kpi-value" style="color:#059669">฿${fmtN(incomeNetC)}</div>
+    <div class="kpi-sub">รับจริง ฿${fmtN(incomeGross)} − ค่าดำเนินการ ฿${fmtN(incomeFee)}${carry>0?` + ยกมา ฿${fmtN(carry)}`:''}</div>
   </div>
   <div class="kpi accent">
     <div class="kpi-label">ยอดจ่ายสุทธิรวม</div>
@@ -3495,7 +3547,8 @@ ${incomeRecs.length > 0 ? `
     <tfoot>
       <tr><td colspan="5" style="background:#064e3b">รวมรับจริง (Gross)</td><td class="r" style="background:#064e3b">฿${fmtN(incomeGross)}</td></tr>
       <tr><td colspan="5" style="background:#065f46">หักค่าดำเนินการ 15%</td><td class="r" style="background:#065f46">−฿${fmtN(incomeFee)}</td></tr>
-      <tr><td colspan="5" style="background:#047857">ยอดรับสุทธิ</td><td class="r" style="background:#047857">฿${fmtN(incomeNet)}</td></tr>
+      ${carry>0?`<tr><td colspan="5" style="background:#065f46">บวก ยอดยกมาจากปีก่อน (ไม่หัก 15%)</td><td class="r" style="background:#065f46">+฿${fmtN(carry)}</td></tr>`:''}
+      <tr><td colspan="5" style="background:#047857">ยอดรับสุทธิ${carry>0?' (รวมยกมา)':''}</td><td class="r" style="background:#047857">฿${fmtN(incomeNetC)}</td></tr>
     </tfoot>
   </table>
 </div>` : ''}
@@ -3588,7 +3641,7 @@ function ExportReportModal({ open, onClose }) {
           app.pushToast('ส่งออก Excel สำเร็จ');
           onClose();
         } else {
-          doExportPDF(app.records, app.projects, fromDate, toDate, projId, includeDetails);
+          doExportPDF(app.records, app.projects, fromDate, toDate, projId, includeDetails, app.carryoverIncome);
           app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
           onClose();
         }
@@ -3713,6 +3766,226 @@ function ExportReportModal({ open, onClose }) {
   );
 }
 
+// ---- รายงานรายจ่ายเฉพาะกลุ่ม (จัดซื้อ / ค่าแรง) — รายจ่ายล้วน ไม่มีรายรับ/กำไร/15% ----
+function doExportExpenseReport(records, projects, fromDate, toDate, projId, opts) {
+  const { title = 'รายงานสรุปรายจ่าย', subtitle = '', typeKeys = [], includeDetails = true, accent = '#d97706' } = opts || {};
+  const recs = records.filter(r => {
+    if (!r.date || r.date < fromDate || r.date > toDate) return false;
+    if (projId && projId !== 'all' && r.projectId !== projId) return false;
+    return typeKeys.includes(r.type) && !window.isIncome(r);
+  }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const getProj = id => projects.find(p => p.id === id);
+  const typeLbl = t => t==='material'?'วัสดุ/อุปกรณ์':t==='machine'?'เช่าเครื่องจักร':t==='lump-labor'?'ค่าแรงเหมาจ่าย':t==='other'?'ค่าใช้จ่ายอื่นๆ':'ค่าแรงรายวัน';
+  const typeClr = t => t==='material'?'#d97706':t==='machine'?'#0ea5e9':t==='other'?'#6366f1':t==='lump-labor'?'#16a34a':'#8b5cf6';
+  const typeBg  = t => t==='material'?'#fef3c7':t==='machine'?'#e0f2fe':t==='other'?'#e0e7ff':t==='lump-labor'?'#dcfce7':'#ede9fe';
+  const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtI = v => Number(v||0).toLocaleString('th-TH');
+  const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  const now = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
+  const projName = projId&&projId!=='all'?(getProj(projId)?.name||'ไม่ระบุ'):'ทุกโครงการ';
+
+  let gNet = 0;
+  const typeSummary = typeKeys.map(t => {
+    const rs = recs.filter(r => r.type === t); if (!rs.length) return null;
+    const net = rs.reduce((s,r)=>s+computeTotals(r).total,0); gNet += net;
+    return { t, label: typeLbl(t), count: rs.length, net };
+  }).filter(Boolean);
+
+  const byP = {};
+  recs.forEach(r => { const k=r.projectId; if(!byP[k])byP[k]={total:0,count:0}; byP[k].total+=computeTotals(r).total; byP[k].count++; });
+  const byWeek = {};
+  recs.forEach(r => { const d=new Date(r.date+'T00:00:00'); const dow=d.getDay(); const mon=new Date(d); mon.setDate(d.getDate()-(dow===0?6:dow-1)); const wk=mon.toISOString().slice(0,10); if(!byWeek[wk])byWeek[wk]={total:0,count:0,label:fmtD(wk)}; byWeek[wk].total+=computeTotals(r).total; byWeek[wk].count++; });
+
+  const nProjects = Object.keys(byP).length;
+  const typeRows = typeSummary.map(s=>`<tr><td><span class="badge" style="background:${typeBg(s.t)};color:${typeClr(s.t)}">${s.label}</span></td><td class="r">${fmtI(s.count)}</td><td class="r bold">฿${fmtN(s.net)}</td></tr>`).join('');
+  const projRows = Object.entries(byP).sort((a,b)=>b[1].total-a[1].total).map(([pid,v])=>{const p=getProj(pid);const w=gNet>0?Math.round(v.total/gNet*100):0;return `<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p?.color||'#999'};margin-right:7px"></span>${p?.name||'ไม่ระบุ'}</td><td class="mono">${p?.code||'—'}</td><td class="r bold">฿${fmtN(v.total)}</td><td class="r">${fmtI(v.count)}</td><td style="padding:10px 14px;width:120px"><div style="background:#f0ede8;border-radius:99px;height:6px"><div style="height:6px;border-radius:99px;background:${p?.color||accent};width:${w}%"></div></div></td></tr>`;}).join('');
+  const weekRows = Object.entries(byWeek).sort((a,b)=>a[0].localeCompare(b[0])).map(([,v],i)=>`<tr class="${i%2===0?'alt':''}"><td>${v.label}</td><td class="r bold">฿${fmtN(v.total)}</td><td class="r">${fmtI(v.count)}</td></tr>`).join('');
+  const detailRows = !includeDetails ? '' : recs.map((r,i)=>{const p=getProj(r.projectId);return `<tr class="${i%2===0?'alt':''}"><td class="mono" style="font-size:10px">${r.docNo||'—'}</td><td style="white-space:nowrap">${fmtD(r.date)}</td><td><span class="badge" style="background:${typeBg(r.type)};color:${typeClr(r.type)};font-size:9px">${typeLbl(r.type)}</span></td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p?.name||'—'}</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.vendor||'—'}</td><td class="r bold">฿${fmtN(computeTotals(r).total)}</td></tr>`;}).join('');
+
+  const html = `<!DOCTYPE html><html lang="th"><head>
+<meta charset="UTF-8"><title>${title} ${fromDate} – ${toDate}</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',sans-serif;font-size:12px;color:#1c1917;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4;margin:16mm 14mm}
+@media print{.no-print{display:none!important}.page-break{page-break-before:always}}
+.report-header{background:#1c1917;color:#fff;padding:22px 28px;display:flex;justify-content:space-between;align-items:flex-start}
+.logo{width:46px;height:46px;background:${accent};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0}
+.header-left{display:flex;gap:16px;align-items:center}
+.header-title{font-size:18px;font-weight:700;letter-spacing:-0.3px;line-height:1.3}
+.header-sub{font-size:11px;color:#a8a29e;margin-top:3px}
+.header-right{text-align:right;font-size:11px;color:#a8a29e;line-height:2}
+.header-right strong{color:#fff;font-weight:600}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+.kpi{background:#fafaf9;border:1px solid #e7e5e4;border-radius:10px;padding:14px 16px}
+.kpi.accent{background:${accent};border-color:${accent};color:#fff}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.65;margin-bottom:6px}
+.kpi-value{font-size:18px;font-weight:700;letter-spacing:-0.5px;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:10px;margin-top:4px;opacity:.7}
+.section{margin:20px 0}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;border-left:4px solid ${accent};padding-left:10px}
+.section-title{font-size:13px;font-weight:700}
+.section-num{width:22px;height:22px;border-radius:6px;background:${accent};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+thead tr{background:#292524;color:#fff}
+thead th{padding:9px 14px;text-align:left;font-weight:600;font-size:10.5px;white-space:nowrap}
+tbody td{padding:8.5px 14px;border-bottom:1px solid #f5f5f4;vertical-align:middle}
+tbody tr.alt td{background:#fafaf9}
+tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-size:11.5px}
+.r{text-align:right;font-variant-numeric:tabular-nums}.bold{font-weight:700}
+.mono{font-family:'JetBrains Mono','Courier New',monospace;font-size:10.5px}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+.report-footer{margin-top:28px;padding-top:14px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;font-size:10px;color:#78716c}
+.print-btn{background:${accent};color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-family:'Prompt',sans-serif;font-weight:600;cursor:pointer}
+.print-wrap{text-align:center;padding:24px;border-bottom:2px dashed #e7e5e4;margin-bottom:20px}
+@media screen{body[contenteditable="true"] td:focus,body[contenteditable="true"] th:focus{outline:2px solid #0ea5e9;background:#e0f2fe}}
+</style></head><body>
+<div class="no-print print-wrap">
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
+  </div>
+  <p style="margin-top:10px;font-size:11px;color:#78716c">กด "แก้ไขรายงาน" เพื่อพิมพ์เพิ่ม/แก้ตัวเลขในหน้านี้ได้ แล้วค่อยบันทึกเป็น PDF — ใช้กับไฟล์นี้เท่านั้น ไม่กระทบข้อมูลในระบบ</p>
+</div>
+<div class="report-header">
+  <div class="header-left"><div class="logo">${title.includes('ค่าแรง')?'จ':'ซ'}</div><div>
+    <div class="header-title">${title}</div><div class="header-sub">${subtitle||'ระบบบันทึกต้นทุนงานรับเหมาก่อสร้าง'}</div>
+  </div></div>
+  <div class="header-right">
+    <div>📅 ช่วงเวลา: <strong>${fmtD(fromDate)} – ${fmtD(toDate)}</strong></div>
+    <div>🏗 โครงการ: <strong>${projName}</strong></div>
+    <div>จำนวนรายการ: <strong>${recs.length} บิล</strong></div>
+    <div>สร้างเมื่อ: <strong>${now}</strong></div>
+  </div>
+</div>
+<div class="kpi-grid">
+  <div class="kpi accent"><div class="kpi-label">ยอดจ่ายรวม</div><div class="kpi-value">฿${fmtN(gNet)}</div><div class="kpi-sub">${recs.length} รายการ</div></div>
+  <div class="kpi"><div class="kpi-label">จำนวนบิล</div><div class="kpi-value">${fmtI(recs.length)}</div><div class="kpi-sub">ในช่วงเวลาที่เลือก</div></div>
+  <div class="kpi"><div class="kpi-label">จำนวนโครงการ</div><div class="kpi-value">${fmtI(nProjects)}</div><div class="kpi-sub">ที่มีรายจ่าย</div></div>
+</div>
+<div class="section">
+  <div class="section-header"><div class="section-num">1</div><div class="section-title">สรุปยอดแยกตามประเภท</div></div>
+  <table><thead><tr><th>ประเภทรายการ</th><th class="r" style="width:120px">จำนวน (บิล)</th><th class="r" style="width:180px">ยอดรวม</th></tr></thead>
+  <tbody>${typeRows||'<tr><td colspan="3" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีข้อมูล</td></tr>'}</tbody>
+  <tfoot><tr><td>รวมทั้งหมด</td><td class="r">${fmtI(recs.length)}</td><td class="r">฿${fmtN(gNet)}</td></tr></tfoot></table>
+</div>
+<div class="section">
+  <div class="section-header"><div class="section-num">2</div><div class="section-title">สรุปยอดแยกตามโครงการ (สูง→ต่ำ)</div></div>
+  <table><thead><tr><th>ชื่อโครงการ</th><th style="width:100px">รหัส</th><th class="r">รวม</th><th class="r" style="width:60px">บิล</th><th style="width:130px">สัดส่วน</th></tr></thead>
+  <tbody>${projRows||'<tr><td colspan="5" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีข้อมูล</td></tr>'}</tbody></table>
+</div>
+<div class="section">
+  <div class="section-header"><div class="section-num">3</div><div class="section-title">แนวโน้มรายสัปดาห์</div></div>
+  <table><thead><tr><th>สัปดาห์ (วันจันทร์)</th><th class="r">รวม</th><th class="r">บิล</th></tr></thead>
+  <tbody>${weekRows||'<tr><td colspan="3" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีข้อมูล</td></tr>'}</tbody></table>
+</div>
+${includeDetails && recs.length>0 ? `<div class="page-break"></div>
+<div class="section">
+  <div class="section-header"><div class="section-num">4</div><div class="section-title">รายการทั้งหมด (${recs.length} รายการ)</div></div>
+  <table><thead><tr><th style="width:110px">เลขที่บิล</th><th style="width:80px">วันที่</th><th style="width:120px">ประเภท</th><th>โครงการ</th><th>ผู้ขาย / ทีมช่าง</th><th class="r" style="width:120px">ยอดรวม</th></tr></thead>
+  <tbody>${detailRows}</tbody></table>
+</div>` : ''}
+<div class="report-footer"><span>ForHouse Cost — ${title} &nbsp;❖&nbsp; ${now}</span><span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span></div>
+<script>function toggleEdit(btn){var on=document.body.getAttribute('contenteditable')!=='true';document.body.setAttribute('contenteditable',on?'true':'false');btn.textContent=on?'✓ กำลังแก้ไข — กดเพื่อจบ':'✏️ แก้ไขรายงานก่อนบันทึก';btn.style.background=on?'#059669':'#0ea5e9';}</script>
+</body></html>`;
+  const win = window.open('', '_blank', 'width=960,height=750');
+  if (!win) { alert('กรุณาอนุญาต Popup ในเบราว์เซอร์เพื่อดูรายงาน PDF'); return; }
+  win.document.write(html); win.document.close();
+}
+
+// ---- Modal ส่งออกรายงานรายจ่าย (จัดซื้อ / ค่าแรง) ----
+function ExpenseReportModal({ open, onClose, scope }) {
+  const app = window.useApp();
+  const CFG = scope === 'labor'
+    ? { title: 'รายงานสรุปค่าแรง', subtitle: 'ค่าแรงรายวัน และค่าแรงเหมาจ่าย', typeKeys: ['labor', 'lump-labor'], accent: '#7c3aed', label: 'รายงานค่าแรง' }
+    : { title: 'รายงานสรุปการจัดซื้อ', subtitle: 'วัสดุ · เช่าเครื่องจักร · ค่าใช้จ่ายอื่นๆ', typeKeys: ['material', 'machine', 'other'], accent: '#d97706', label: 'รายงานจัดซื้อ' };
+
+  const firstOfMonth   = () => { const d=new Date(); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfYear    = () => { const d=new Date(); d.setMonth(0); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfLastMon = () => { const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); };
+  const lastOfLastMon  = () => { const d=new Date(); d.setDate(0); return d.toISOString().slice(0,10); };
+  const firstOfWeek    = () => { const d=new Date(); const day=d.getDay(); const diff=day===0?-6:1-day; d.setDate(d.getDate()+diff); return d.toISOString().slice(0,10); };
+
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate]     = useState(todayStr);
+  const [projId, setProjId]     = useState('all');
+  const [includeDetails, setIncludeDetails] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const PRESETS = [
+    { label:'สัปดาห์นี้', from:firstOfWeek, to:()=>todayStr() },
+    { label:'เดือนนี้', from:firstOfMonth, to:()=>todayStr() },
+    { label:'เดือนที่แล้ว', from:firstOfLastMon, to:lastOfLastMon },
+    { label:'ปีนี้', from:firstOfYear, to:()=>todayStr() },
+  ];
+
+  const preview = useMemo(() => {
+    const rs = (app.records||[]).filter(r => {
+      if (!r.date || r.date < fromDate || r.date > toDate) return false;
+      if (projId !== 'all' && r.projectId !== projId) return false;
+      return CFG.typeKeys.includes(r.type) && !window.isIncome(r);
+    });
+    return { count: rs.length, total: rs.reduce((s,r)=>s+computeTotals(r).total,0) };
+  }, [app.records, fromDate, toDate, projId, scope]);
+
+  const run = () => {
+    setBusy(true);
+    setTimeout(() => {
+      try {
+        doExportExpenseReport(app.records, app.projects, fromDate, toDate, projId,
+          { title: CFG.title, subtitle: CFG.subtitle, typeKeys: CFG.typeKeys, accent: CFG.accent, includeDetails });
+        app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
+        onClose();
+      } catch(e) { console.error('[ExpenseReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
+      finally { setBusy(false); }
+    }, 60);
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title={'ส่งออก' + CFG.label} width={540}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose} disabled={busy}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={run} disabled={busy || preview.count===0}><Icon name="receipt" size={13}/> {busy?'กำลังสร้าง…':'สร้าง PDF'}</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+        <div>
+          <div style={LS}>ช่วงเวลาสำเร็จรูป</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {PRESETS.map(p=>(<button key={p.label} className="btn btn-ghost btn-sm" style={{ fontSize:12 }} onClick={()=>{ setFromDate(p.from()); setToDate(p.to()); }}>{p.label}</button>))}
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>ตั้งแต่วันที่</label><input type="date" style={IS} value={fromDate} onChange={e=>setFromDate(e.target.value)} /></div>
+          <div><label style={LS}>ถึงวันที่</label><input type="date" style={IS} value={toDate} onChange={e=>setToDate(e.target.value)} /></div>
+        </div>
+        <div>
+          <label style={LS}>โครงการ</label>
+          <select style={{ ...IS, cursor:'pointer' }} value={projId} onChange={e=>setProjId(e.target.value)}>
+            <option value="all">ทุกโครงการ</option>
+            {app.projects.map(p=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+          </select>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'var(--bg-2)', borderRadius:9, border:'1px solid var(--line)', cursor:'pointer' }} onClick={()=>setIncludeDetails(v=>!v)}>
+          <div style={{ width:18, height:18, borderRadius:5, border:'2px solid', borderColor: includeDetails ? '#d97706' : 'var(--ink-4)', background: includeDetails ? '#d97706' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            {includeDetails && <Icon name="check" size={11} stroke={3} style={{ color:'#fff' }} />}
+          </div>
+          <div><div style={{ fontSize:13, fontWeight:500 }}>รวมรายการทั้งหมดใน PDF</div><div style={{ fontSize:11, color:'var(--ink-3)', marginTop:1 }}>แสดงตารางบิลทุกรายการ (หน้าถัดไป)</div></div>
+        </div>
+        <div style={{ padding:'14px 16px', borderRadius:10, background: preview.count>0 ? 'rgba(217,119,6,0.07)' : 'var(--bg-2)', border:`1px solid ${preview.count>0 ? 'rgba(217,119,6,0.25)' : 'var(--line)'}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+          <div style={{ fontSize:13, fontWeight:600 }}>{preview.count>0 ? `${fmtInt(preview.count)} รายการที่จะส่งออก` : 'ไม่มีรายการในช่วงนี้'}</div>
+          {preview.count>0 && <div className="mono" style={{ fontSize:13, fontWeight:700 }}>฿{fmt(preview.total)}</div>}
+        </div>
+      </div>
+    </window.Modal>
+  );
+}
+window.ExpenseReportModal = ExpenseReportModal;
+
 
 // ============================================================
 // LaborHistoryView — ประวัติการเบิกค่าแรง (labor + lump-labor)
@@ -3728,6 +4001,7 @@ window.LaborHistoryView = function LaborHistoryView() {
   const [approveFilter, setApproveFilter] = useState('all'); // all | pending | approved
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo]     = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
 
   const allLabor = useMemo(() =>
     app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor'),
@@ -3849,6 +4123,10 @@ window.LaborHistoryView = function LaborHistoryView() {
           <div className="page-sub">ค่าแรงรายวัน และค่าแรงเหมาจ่าย — รายการย้อนหลังทั้งหมด</div>
         </div>
         <div className="row gap-8 dash-actions">
+          <button className="btn btn-ghost" onClick={() => setReportOpen(true)}
+            title="ส่งออกรายงานสรุปค่าแรง (รายวัน + เหมาจ่าย) เป็น PDF">
+            <Icon name="download" size={14} /> รายงานค่าแรง
+          </button>
           <button className="btn btn-ghost" onClick={() => app.setView('new-labor')}>
             <Icon name="hammer" size={14} /> บันทึกค่าแรง
           </button>
@@ -4156,6 +4434,7 @@ window.LaborHistoryView = function LaborHistoryView() {
           </div>
         </div>
       )}
+      <window.ExpenseReportModal open={reportOpen} onClose={() => setReportOpen(false)} scope="labor" />
     </>
   );
 };
@@ -4487,7 +4766,7 @@ function CompanyExpenseModal({ open, onClose, initial }) {
                 {cats.map(c=>(<option key={c.id} value={c.name}>{c.name}</option>))}
               </select>}
         </div>
-        <div><label style={LS}>จำนวนเงิน (บาท)</label><input type="number" min="0" step="any" style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" /></div>
+        <div><label style={LS}>จำนวนเงิน (บาท)</label><window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={amount} onChange={setAmount} placeholder="0.00" /></div>
         <div><label style={LS}>หมายเหตุ / รายละเอียด</label><input style={IS} value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น เงินเดือน ก.ย. / ค่าเช่าออฟฟิศ" /></div>
       </div>
     </window.Modal>

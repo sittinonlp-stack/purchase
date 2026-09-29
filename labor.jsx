@@ -297,7 +297,7 @@ function SocialSecuritySection({ form, set, team }) {
                 {m.role === 'leader' && <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>หัวหน้า</span>}
                 <div className="input-affix" style={{ flex: '1 1 110px', minWidth: 0 }}>
                   <div className="input-affix-prefix">฿</div>
-                  <input className="input mono" type="number" min="0" step="any" placeholder="0.00" value={m.amount} onChange={(e) => updItem(m.id, { amount: e.target.value })} />
+                  <window.MoneyInput className="input mono" placeholder="0.00" value={m.amount} onChange={(v) => updItem(m.id, { amount: v })} />
                 </div>
                 <button type="button" className="topbar-icon-btn" style={{ width: 30, height: 30 }} onClick={() => delItem(m.id)} title="ลบ"><Icon name="trash" size={13} /></button>
               </div>
@@ -467,7 +467,7 @@ function LaborContractSection({ form, set, cats }) {
                   : <input className="input" style={{ flex: '1 1 120px', minWidth: 0 }} placeholder="รายละเอียดงวด" value={g.detail} onChange={e => updDraftGvd(g.id, { detail: e.target.value })} />}
                 {existing
                   ? <span className="mono" style={{ fontWeight: 600 }}>฿{fmt(g.amount)}</span>
-                  : <div className="input-affix" style={{ width: 120 }}><div className="input-affix-prefix">฿</div><input className="input mono" type="number" min="0" step="any" placeholder="ยอด" value={g.amount} onChange={e => updDraftGvd(g.id, { amount: e.target.value })} /></div>}
+                  : <div className="input-affix" style={{ width: 120 }}><div className="input-affix-prefix">฿</div><window.MoneyInput className="input mono" placeholder="ยอด" value={g.amount} onChange={v => updDraftGvd(g.id, { amount: v })} /></div>}
                 {withdrawn
                   ? <button type="button" className="badge" style={{ background: 'var(--info-soft)', color: '#1a4fb0', cursor: 'pointer' }} onClick={() => app.setDetailId(g.withdrawnDocId)} title="เปิดดูใบเบิกของงวดนี้">เบิกแล้ว · {g.withdrawnDocNo || 'ดูบิล'}</button>
                   : <button type="button" className={"status-chip" + (selected ? " on approve" : "")} onClick={() => toggleWithdraw(g)}><span className="tick">{selected ? '✓' : ''}</span> เบิกรอบนี้</button>}
@@ -755,8 +755,8 @@ function LaborItemsTable({ items, setItems, cats, onAddCat }) {
                 <input className="cell-input" list="labor-units" value={it.unit} onChange={(e) => updateItem(it.id, { unit: e.target.value })} />
               </td>
               <td data-label="ค่าแรง/หน่วย">
-                <input className="cell-input num" type="number" min="0" step="any" value={it.price}
-                  onChange={(e) => updateItem(it.id, { price: e.target.value })} />
+                <window.MoneyInput className="cell-input num" value={it.price}
+                  onChange={(v) => updateItem(it.id, { price: v })} />
               </td>
               <td className="num mono" data-label="รวม" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
                 {fmt(Number(it.qty || 0) * Number(it.price || 0))}
@@ -998,8 +998,8 @@ function RetentionPayoutSection({ form, set, app, initial }) {
                 <label className="field-label">ยอดที่จ่ายคืนงวดนี้</label>
                 <div className="input-affix">
                   <div className="input-affix-prefix">฿</div>
-                  <input className="input mono" type="number" min="0" step="any"
-                    value={payoutAmount || ''} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+                  <window.MoneyInput className="input mono"
+                    value={payoutAmount || ''} onChange={(v) => setAmount(v)} placeholder="0.00" />
                 </div>
                 {held > 0 && (
                   <button type="button" className="badge" style={{ cursor: 'pointer', padding: '4px 10px', marginTop: 8 }}
@@ -1268,8 +1268,8 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                   </label>
                   <div className="input-affix">
                     <div className="input-affix-prefix">฿</div>
-                    <input className="input mono" type="number" min="0" step="any" value={form.advanceDeduction}
-                      onChange={(e) => set({ advanceDeduction: e.target.value })} placeholder="0.00" />
+                    <window.MoneyInput className="input mono" value={form.advanceDeduction}
+                      onChange={(v) => set({ advanceDeduction: v })} placeholder="0.00" />
                   </div>
                   <div className="field-hint">เงินที่ช่างเคยเบิกไปก่อนแล้ว นำมาหักออกจากงวดนี้</div>
                 </div>
@@ -1280,8 +1280,8 @@ window.LaborForm = function LaborForm({ initial, onSubmit, onCancel }) {
                   </label>
                   <div className="input-affix">
                     <div className="input-affix-prefix">฿</div>
-                    <input className="input mono" type="number" min="0" step="any" value={form.retentionDeduction}
-                      onChange={(e) => set({ retentionDeduction: e.target.value })} placeholder="0.00" />
+                    <window.MoneyInput className="input mono" value={form.retentionDeduction}
+                      onChange={(v) => set({ retentionDeduction: v })} placeholder="0.00" />
                   </div>
                   <div className="field-hint">เก็บไว้ค้ำประกันคุณภาพ — คืนเมื่องานเสร็จและตรวจรับ</div>
                 </div>
@@ -1536,8 +1536,8 @@ function LumpLaborItemsTable({ items, setItems, cats, onAddCat }) {
                   onChange={(e) => updateItem(it.id, { unit: e.target.value })} />
               </td>
               <td data-label="ราคา/หน่วย">
-                <input className="cell-input num" type="number" min="0" step="any" value={it.price}
-                  onChange={(e) => updateItem(it.id, { price: e.target.value })} />
+                <window.MoneyInput className="cell-input num" value={it.price}
+                  onChange={(v) => updateItem(it.id, { price: v })} />
               </td>
               <td className="num mono" data-label="รวม" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
                 {fmt(Number(it.qty || 0) * Number(it.price || 0))}
@@ -1801,8 +1801,8 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
                   </label>
                   <div className="input-affix">
                     <div className="input-affix-prefix">฿</div>
-                    <input className="input mono" type="number" min="0" step="any" value={form.advanceDeduction}
-                      onChange={(e) => set({ advanceDeduction: e.target.value })} placeholder="0.00" />
+                    <window.MoneyInput className="input mono" value={form.advanceDeduction}
+                      onChange={(v) => set({ advanceDeduction: v })} placeholder="0.00" />
                   </div>
                 </div>
                 <div className="field">
@@ -1812,8 +1812,8 @@ window.LumpLaborForm = function LumpLaborForm({ initial, onSubmit, onCancel }) {
                   </label>
                   <div className="input-affix">
                     <div className="input-affix-prefix">฿</div>
-                    <input className="input mono" type="number" min="0" step="any" value={form.retentionDeduction}
-                      onChange={(e) => set({ retentionDeduction: e.target.value })} placeholder="0.00" />
+                    <window.MoneyInput className="input mono" value={form.retentionDeduction}
+                      onChange={(v) => set({ retentionDeduction: v })} placeholder="0.00" />
                   </div>
                 </div>
                 <SocialSecuritySection form={form} set={set} team={selectedTeam} />

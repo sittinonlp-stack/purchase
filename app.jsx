@@ -92,7 +92,7 @@ function Shell() {
       <div className="main">
         <window.Topbar title={title} sub={sub} />
         <div className="content">
-          {view === 'dashboard' && <window.DashboardView />}
+          {view === 'dashboard' && app.isAdmin && <window.DashboardView />}
           {view === 'new-material' && (
             <window.PurchaseForm
               key={'mat-' + (app.editingId || 'new')}

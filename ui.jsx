@@ -184,6 +184,41 @@ function ScanItemsButton({ onScanned, unitFallback = 'ชิ้น' }) {
 }
 window.ScanItemsButton = ScanItemsButton;
 
+// ---- ช่องกรอกจำนวนเงิน แสดงคอมมาคั่นหลักพันขณะพิมพ์ ----
+// onChange(rawString) — ส่งค่าตัวเลขล้วน (ไม่มีคอมมา) กลับให้ผู้เรียก
+function MoneyInput({ value, onChange, ...rest }) {
+  const fmtDisplay = (raw) => {
+    let s = String(raw ?? '');
+    if (s === '') return '';
+    const neg = s.trim().startsWith('-');
+    s = s.replace(/[^0-9.]/g, '');
+    const dot = s.indexOf('.');
+    let intPart = dot >= 0 ? s.slice(0, dot) : s;
+    const decPart = dot >= 0 ? '.' + s.slice(dot + 1).replace(/\./g, '') : '';
+    intPart = intPart.replace(/^0+(?=\d)/, '');
+    if (intPart === '' && dot >= 0) intPart = '0';
+    const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (neg ? '-' : '') + withCommas + decPart;
+  };
+  const handle = (e) => {
+    const el = e.target;
+    const before = el.value;
+    const caret = el.selectionStart == null ? before.length : el.selectionStart;
+    const raw = before.replace(/,/g, '');
+    if (raw !== '' && raw !== '-' && !/^-?\d*\.?\d*$/.test(raw)) return; // ปฏิเสธอักขระที่ไม่ใช่ตัวเลข
+    const digitsLeft = before.slice(0, caret).replace(/[^0-9]/g, '').length;
+    onChange(raw);
+    requestAnimationFrame(() => {
+      const formatted = fmtDisplay(raw);
+      let pos = 0, cnt = 0;
+      while (pos < formatted.length && cnt < digitsLeft) { if (formatted[pos] >= '0' && formatted[pos] <= '9') cnt++; pos++; }
+      try { el.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
+    });
+  };
+  return <input type="text" inputMode="decimal" value={fmtDisplay(value)} onChange={handle} {...rest} />;
+}
+window.MoneyInput = MoneyInput;
+
 // ---- OptionPill (multi or single) ----
 function OptionPill({ selected, onClick, children, mode = 'check', icon }) {
   return (
@@ -433,7 +468,7 @@ function InstallmentSection({ form, set, contractTotal }) {
                   <span className="badge gray" style={{ minWidth: 54, justifyContent: 'center' }}>งวด {idx + 1}</span>
                   <div className="input-affix" style={{ flex: '1 1 130px', minWidth: 0 }}>
                     <div className="input-affix-prefix">฿</div>
-                    <input className="input mono" type="number" min="0" step="any" placeholder="ยอดงวด" value={it.amount} onChange={e => upd(it.id, { amount: e.target.value })} disabled={it.paid} />
+                    <window.MoneyInput className="input mono" placeholder="ยอดงวด" value={it.amount} onChange={(v) => upd(it.id, { amount: v })} disabled={it.paid} />
                   </div>
                   {it.paid && <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>จ่ายแล้ว</span>}
                   <button type="button" className="topbar-icon-btn" style={{ width: 30, height: 30, opacity: it.paid ? 0.4 : 1 }} onClick={() => !it.paid && del(it.id)} title={it.paid ? 'งวดที่จ่ายแล้วลบไม่ได้' : 'ลบงวด'}><Icon name="trash" size={13} /></button>
@@ -546,10 +581,14 @@ function Sidebar() {
         </div>
 
         <div className="sidebar-scroll">
-          <div className="nav-section-label">ภาพรวม</div>
-          <button className={"nav-item" + (view === 'dashboard' ? " active" : "")} onClick={() => go('dashboard')}>
-            <Icon name="home" /> แดชบอร์ด
-          </button>
+          {app.isAdmin && (
+            <>
+              <div className="nav-section-label">ภาพรวม</div>
+              <button className={"nav-item" + (view === 'dashboard' ? " active" : "")} onClick={() => go('dashboard')}>
+                <Icon name="home" /> แดชบอร์ด
+              </button>
+            </>
+          )}
 
           <div className="nav-section-label">รายการ</div>
           <button className={"nav-item" + (['history','new-material','new-machine','new-other'].includes(view) ? " active" : "")} onClick={() => go('history')}>

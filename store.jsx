@@ -360,6 +360,8 @@ window.AppProvider = function AppProvider({ children }) {
   // บัญชีบริษัท (เฉพาะ admin) — non-admin จะได้ [] จาก RLS
   const [companyExpenses, setCompanyExpenses] = useState([]);
   const [companyExpenseCats, setCompanyExpenseCats] = useState([]);
+  // ยอดต้นทุน/รับ ยกมาจากปีก่อน (ก้อนเดียว ทั้งบริษัท) — เก็บใน app_settings
+  const [carryoverIncome, setCarryoverIncomeState] = useState(0);
   const [records,     setRecords]     = useState(seedRecords());
   // record ของโครงการที่เก็บถาวร — โหลดเมื่อเปิดแท็บ "เก็บถาวร" เท่านั้น (ไม่ปนกับ records หลัก)
   const [archivedRecords, setArchivedRecords] = useState([]);
@@ -420,7 +422,8 @@ window.AppProvider = function AppProvider({ children }) {
       const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
               lumpLaborCats: llc, otherCats: oc, workerTeams: teams, records: recs,
               laborContracts: lcon, incomeContracts: icon,
-              companyExpenses: cexp, companyExpenseCats: ccats } = await window.db.loadAll();
+              companyExpenses: cexp, companyExpenseCats: ccats,
+              appSettings: aset } = await window.db.loadAll();
 
       setProjects(ps);
       setMatCats(mc.length   ? mc  : SEED_MAT_CATEGORIES);
@@ -443,6 +446,7 @@ window.AppProvider = function AppProvider({ children }) {
       setIncomeContracts(icon || []);
       setCompanyExpenses(cexp || []);
       setCompanyExpenseCats(ccats || []);
+      setCarryoverIncomeState(Number((aset || {}).carryover_income || 0));
       setRecords(recs);
       setDbOnline(true);
       loadedUserIdRef.current = userId; // ✓ data loaded — mark for skip on next SIGNED_IN
@@ -530,6 +534,7 @@ window.AppProvider = function AppProvider({ children }) {
             setWorkerTeams(SEED_WORKER_TEAMS);
             setCompanyExpenses([]);
             setCompanyExpenseCats([]);
+            setCarryoverIncomeState(0);
             setRecords(seedRecords());
           } else if (event === 'TOKEN_REFRESHED' && s) {
             // Token was refreshed silently — keep current data, just update session
@@ -695,6 +700,13 @@ window.AppProvider = function AppProvider({ children }) {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [dbOnline]);
+
+  // ── non-admin ไม่มีสิทธิ์เห็นแดชบอร์ดรวม (ภาพรวมบริษัท) → เด้งไปหน้าจัดซื้อ ──
+  useEffect(() => {
+    if (dbReady && dbOnline && userProfile && userProfile.role !== 'admin' && view === 'dashboard') {
+      setView('history');
+    }
+  }, [dbReady, dbOnline, userProfile, view]);
 
   // ── Sign out ────────────────────────────────────────
   const signOut = useCallback(async () => {
@@ -1004,6 +1016,13 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteCompanyCat(id), 'deleteCompanyCat');
   }, [dbOnline, dbSync]);
 
+  // ── ยอดยกมาจากปีก่อน (เฉพาะ admin แก้ไข) ──
+  const setCarryoverIncome = useCallback((v) => {
+    const num = Number(v || 0);
+    setCarryoverIncomeState(num);
+    if (dbOnline) dbSync(window.db.upsertAppSetting('carryover_income', num), 'upsertAppSetting');
+  }, [dbOnline, dbSync]);
+
   // ── Update own profile (name / avatar_url) ───────────
   const updateMyProfile = useCallback(async (patch) => {
     if (!userProfile?.id) return;
@@ -1028,12 +1047,13 @@ window.AppProvider = function AppProvider({ children }) {
     incomeContracts, addIncomeContract, updateIncomeContract, deleteIncomeContract,
     companyExpenses, addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
     companyExpenseCats, addCompanyCat, updateCompanyCat, deleteCompanyCat,
+    carryoverIncome, setCarryoverIncome,
     records, addRecord, updateRecord, deleteRecord, hydrateRecord,
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, carryoverIncome, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
@@ -1043,7 +1063,7 @@ window.AppProvider = function AppProvider({ children }) {
        addLaborContract, updateLaborContract, deleteLaborContract,
        addIncomeContract, updateIncomeContract, deleteIncomeContract,
        addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
-       addCompanyCat, updateCompanyCat, deleteCompanyCat, pushToast, updateMyProfile]);
+       addCompanyCat, updateCompanyCat, deleteCompanyCat, setCarryoverIncome, pushToast, updateMyProfile]);
 
   // ── Render guards ─────────────────────────────────────
   if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;

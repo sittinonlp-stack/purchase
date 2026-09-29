@@ -267,8 +267,8 @@ function ItemsTable({ items, setItems, cats, onAddCat, type }) {
                 <input className="cell-input" value={it.unit} onChange={(e) => updateItem(it.id, { unit: e.target.value })} />
               </td>
               <td data-label="ราคา/หน่วย">
-                <input className="cell-input num" type="number" min="0" step="any" value={it.price}
-                  onChange={(e) => updateItem(it.id, { price: e.target.value })} />
+                <window.MoneyInput className="cell-input num" value={it.price}
+                  onChange={(v) => updateItem(it.id, { price: v })} />
               </td>
               <td className="num mono" data-label="รวม" style={{ paddingRight: 10, color: 'var(--ink-2)' }}>
                 {fmt(Number(it.qty || 0) * Number(it.price || 0))}
@@ -525,9 +525,9 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                   <label className="field-label"><Icon name="money" size={13} /> ยอดเงินค่าประกัน</label>
                   <div className="input-affix">
                     <div className="input-affix-prefix">฿</div>
-                    <input className="input mono" type="number" min="0" step="any"
+                    <window.MoneyInput className="input mono"
                       value={form.depositAmount}
-                      onChange={(e) => set({ depositAmount: e.target.value, depositStatus: Number(e.target.value) > 0 ? 'pending' : 'none' })}
+                      onChange={(v) => set({ depositAmount: v, depositStatus: Number(v) > 0 ? 'pending' : 'none' })}
                       placeholder="0.00" />
                   </div>
                   <div className="field-hint">กรอก 0 ถ้าไม่มีเงินค่าประกัน — ระบบจะสร้างการแจ้งเตือนให้ติดตามเงินคืนโดยอัตโนมัติ</div>
@@ -628,7 +628,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                           <OptionPill mode="radio" selected={form.discountType === 'percent'} onClick={() => set({ discountType: 'percent' })}>% เปอร์เซ็นต์</OptionPill>
                         </div>
                         <div className="input-affix" style={{ width: 150 }}>
-                          <input className="input mono" type="number" min="0" step="any" placeholder="0" value={form.discountValue} onChange={(e) => set({ discountValue: e.target.value })} />
+                          <window.MoneyInput className="input mono" placeholder="0" value={form.discountValue} onChange={(v) => set({ discountValue: v })} />
                           <div className="input-affix-suffix">{form.discountType === 'percent' ? '%' : '฿'}</div>
                         </div>
                       </div>
@@ -904,7 +904,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
                           <OptionPill mode="radio" selected={form.discountType === 'percent'} onClick={() => set({ discountType: 'percent' })}>% เปอร์เซ็นต์</OptionPill>
                         </div>
                         <div className="input-affix" style={{ width: 150 }}>
-                          <input className="input mono" type="number" min="0" step="any" placeholder="0" value={form.discountValue} onChange={(e) => set({ discountValue: e.target.value })} />
+                          <window.MoneyInput className="input mono" placeholder="0" value={form.discountValue} onChange={(v) => set({ discountValue: v })} />
                           <div className="input-affix-suffix">{form.discountType === 'percent' ? '%' : '฿'}</div>
                         </div>
                       </div>
@@ -1115,7 +1115,7 @@ function IncomeContractSection({ form, set }) {
                 : <input className="input" style={{ flex: '1 1 120px', minWidth: 0 }} placeholder="รายละเอียดงวด (เช่น เสร็จฐานราก)" value={g.detail} onChange={e => updDraftGvd(g.id, { detail: e.target.value })} />}
               {existing
                 ? <span className="mono" style={{ fontWeight: 600 }}>฿{fmt(g.amount)}</span>
-                : <div className="input-affix" style={{ width: 120 }}><div className="input-affix-prefix">฿</div><input className="input mono" type="number" min="0" step="any" placeholder="ยอด" value={g.amount} onChange={e => updDraftGvd(g.id, { amount: e.target.value })} /></div>}
+                : <div className="input-affix" style={{ width: 120 }}><div className="input-affix-prefix">฿</div><window.MoneyInput className="input mono" placeholder="ยอด" value={g.amount} onChange={v => updDraftGvd(g.id, { amount: v })} /></div>}
               {byBill ? (
                 <button type="button" className="badge" style={{ background: 'var(--info-soft)', color: '#1a4fb0', cursor: 'pointer' }} onClick={() => app.setDetailId(g.receivedDocId)} title="เปิดดูบันทึกรายรับของงวดนี้">รับแล้ว · {g.receivedDocNo || 'ดูบิล'}</button>
               ) : hist ? (
@@ -1310,8 +1310,8 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
                           value={it.name} onChange={(e) => setItem(it.id, { name: e.target.value })} />
                       </td>
                       <td data-label="จำนวนเงิน (บาท)">
-                        <input className="cell-input mono" type="number" step="0.01" style={{ textAlign: 'right' }}
-                          value={it.price} onChange={(e) => setItem(it.id, { price: e.target.value, qty: 1 })} placeholder="0.00" />
+                        <window.MoneyInput className="cell-input mono" style={{ textAlign: 'right' }}
+                          value={it.price} onChange={(v) => setItem(it.id, { price: v, qty: 1 })} placeholder="0.00" />
                       </td>
                       <td className="item-del" style={{ textAlign: 'center' }}>
                         <button type="button" className="topbar-icon-btn" style={{ width: 28, height: 28 }} onClick={() => removeItem(it.id)} title="ลบ">
