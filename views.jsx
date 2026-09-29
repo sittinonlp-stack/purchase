@@ -1137,6 +1137,8 @@ window.HistoryView = function HistoryView() {
   const [approveFilter, setApproveFilter] = useState('all'); // all | pending | approved | unpaid
   const [docFilter, setDocFilter] = useState(false); // true = เฉพาะที่มีเอกสารต้องออก
   const [billFilter, setBillFilter] = useState(false); // true = เฉพาะที่ยังรอรับใบกำกับภาษีจากร้าน
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
 
   // ── lookup โครงการ (ใช้เช็ค trackBills สำหรับฟีเจอร์ตามบิล) ──
   const projById = useMemo(() => {
@@ -1175,6 +1177,7 @@ window.HistoryView = function HistoryView() {
     let arr = allExp.slice();  // สำเนา — กัน .sort() ไปแก้ allExp ที่ memo ไว้
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    if (dateFrom || dateTo) arr = arr.filter(r => window.inDateRange(r.date, dateFrom, dateTo));
     if (accFilter === 'unposted') arr = arr.filter(r => !r.accountingPosted);
     if (accFilter === 'posted')   arr = arr.filter(r =>  r.accountingPosted);
     if (approveFilter === 'pending')  arr = arr.filter(r => !r.approved);
@@ -1198,7 +1201,7 @@ window.HistoryView = function HistoryView() {
       return 0;
     });
     return arr;
-  }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter, docFilter, billFilter, projById]);
+  }, [allExp, q, typeFilter, projFilter, sortKey, accFilter, approveFilter, docFilter, billFilter, dateFrom, dateTo, projById]);
 
   const sum = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
   const pendingDocsCount = useMemo(() => allExp.filter(r => pendingDocs(r).length > 0).length, [allExp]);
@@ -1289,12 +1292,7 @@ window.HistoryView = function HistoryView() {
             <option value="all">ทุกโครงการ</option>
             {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
-            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
-            <option value="date-asc">วันที่ เก่า → ใหม่</option>
-            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
-            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
-          </select>
+          <window.DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} />
           <select className="select" value={approveFilter} onChange={(e) => setApproveFilter(e.target.value)}
             style={{ borderColor: approveFilter !== 'all' ? '#2563eb' : undefined, color: approveFilter !== 'all' ? '#2563eb' : undefined }}>
             <option value="all">การอนุมัติ: ทั้งหมด</option>
@@ -1982,12 +1980,6 @@ function TeamHistoryView({ team, onBack }) {
           </select>
 
           {/* เรียง */}
-          <select className="select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
-            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
-            <option value="date-asc">วันที่ เก่า → ใหม่</option>
-            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
-            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
-          </select>
 
           <div className="spacer" />
           <div className="text-small text-muted">
@@ -2317,20 +2309,6 @@ window.DetailDrawer = function DetailDrawer() {
                 app.deleteRecord(rec.id); app.pushToast('ลบรายการแล้ว'); close();
               }}><Icon name="trash" size={13} /> ลบ</button>
             )}
-            {(rec.type === 'receipt' || rec.type === 'tax-invoice' || rec.type === 'invoice') && (
-              <button className="btn btn-ghost btn-sm" onClick={() => {
-                const c = window.getCompanySettings();
-                const titleLabel = rec.type === 'tax-invoice' ? 'ใบกำกับภาษี'
-                  : rec.type === 'invoice' ? 'ใบแจ้งหนี้'
-                  : 'ใบเสร็จ';
-                const Component = rec.type === 'tax-invoice' ? window.PrintableTaxInvoice
-                  : rec.type === 'invoice' ? window.PrintableInvoice
-                  : window.PrintableReceipt;
-                window.openPrintPopup(Component, titleLabel + ' ' + rec.docNo, rec, c, app);
-              }} title="พิมพ์">
-                <Icon name="download" size={13} /> พิมพ์
-              </button>
-            )}
             {rec.approved && ['material', 'machine', 'other', 'labor', 'lump-labor'].includes(rec.type) && (
               <button className="btn btn-ghost btn-sm" onClick={() => {
                 const c = window.getCompanySettings();
@@ -2347,9 +2325,6 @@ window.DetailDrawer = function DetailDrawer() {
                 : rec.type === 'lump-labor' ? 'new-lump-labor'
                 : rec.type === 'other' ? 'new-other'
                 : rec.type === 'quick-receipt' ? 'quick-receipt'
-                : rec.type === 'receipt' ? 'new-receipt'
-                : rec.type === 'tax-invoice' ? 'new-tax-invoice'
-                : rec.type === 'invoice' ? 'new-invoice'
                 : 'new-material';
               app.setView(v);
               close();
@@ -3752,689 +3727,6 @@ function ExportReportModal({ open, onClose }) {
   );
 }
 
-// ============================================================
-// ReceiptsListView — ประวัติใบเสร็จรับเงิน (แยกจาก HistoryView)
-// แสดงเฉพาะ type === 'receipt'
-// ============================================================
-window.ReceiptsListView = function ReceiptsListView() {
-  const app = window.useApp();
-  const [q, setQ] = useState('');
-  const [projFilter, setProjFilter] = useState('all');
-  const [paymentFilter, setPaymentFilter] = useState('all');
-  const [sortKey, setSortKey] = useState('date-desc');
-
-  // เฉพาะใบเสร็จ
-  const allReceipts = useMemo(() =>
-    app.records.filter(r => r.type === 'receipt'), [app.records]);
-
-  // โครงการที่เคยมีใบเสร็จ — สำหรับ dropdown
-  const usedProjects = useMemo(() => {
-    const ids = new Set(allReceipts.map(r => r.projectId).filter(Boolean));
-    return app.projects.filter(p => ids.has(p.id));
-  }, [allReceipts, app.projects]);
-
-  // filtered + sorted
-  const filtered = useMemo(() => {
-    let arr = allReceipts;
-    if (projFilter !== 'all')     arr = arr.filter(r => r.projectId === projFilter);
-    if (paymentFilter !== 'all')  arr = arr.filter(r => (r.meta?.paymentMethod || 'cash') === paymentFilter);
-    if (q.trim()) {
-      const s = q.toLowerCase();
-      arr = arr.filter(r =>
-        (r.docNo || '').toLowerCase().includes(s) ||
-        (r.vendor || '').toLowerCase().includes(s) ||
-        (r.meta?.customerTaxId || '').toLowerCase().includes(s) ||
-        (r.items || []).some(i => (i.name || '').toLowerCase().includes(s))
-      );
-    }
-    return [...arr].sort((a, b) => {
-      if (sortKey === 'date-desc') return (b.date || '').localeCompare(a.date || '');
-      if (sortKey === 'date-asc')  return (a.date || '').localeCompare(b.date || '');
-      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
-      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
-      return 0;
-    });
-  }, [allReceipts, q, projFilter, paymentFilter, sortKey]);
-
-  const totalAmount = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
-  const grandTotal  = allReceipts.reduce((s, r) => s + computeTotals(r).total, 0);
-
-  // นับวิธีชำระเงิน
-  const paymentStats = useMemo(() => {
-    const m = { cash: 0, transfer: 0, cheque: 0, credit: 0 };
-    allReceipts.forEach(r => {
-      const k = r.meta?.paymentMethod || 'cash';
-      if (m[k] !== undefined) m[k]++;
-    });
-    return m;
-  }, [allReceipts]);
-
-  const PAY_LABEL = { cash: 'เงินสด', transfer: 'โอนเงิน', cheque: 'เช็ค', credit: 'เครดิต' };
-
-  // นับเดือนนี้
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const monthReceipts = allReceipts.filter(r => (r.date || '').slice(0, 7) === thisMonth);
-  const monthTotal = monthReceipts.reduce((s, r) => s + computeTotals(r).total, 0);
-
-  return (
-    <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">ประวัติใบเสร็จรับเงิน</h1>
-          <div className="page-sub">ใบเสร็จที่ออกให้ลูกค้าทั้งหมด · ค้นหา ดู แก้ไข และพิมพ์</div>
-        </div>
-        <div className="row gap-8">
-          <button className="btn btn-accent" onClick={() => app.setView('new-receipt')}>
-            <Icon name="plus" size={14} stroke={2.5} /> ออกใบเสร็จใหม่
-          </button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(5,150,105,0.12)', color: '#059669' }}>
-            <Icon name="receipt" size={16} />
-          </div>
-          <div className="stat-label">ใบเสร็จทั้งหมด</div>
-          <div className="stat-value mono">{allReceipts.length}</div>
-          <div className="stat-change positive">ยอดรวม ฿{fmt(grandTotal)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(217,119,6,0.12)', color: 'var(--accent)' }}>
-            <Icon name="calendar" size={16} />
-          </div>
-          <div className="stat-label">เดือนนี้</div>
-          <div className="stat-value mono">{monthReceipts.length}</div>
-          <div className="stat-change neutral">฿{fmt(monthTotal)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
-            <Icon name="money" size={16} />
-          </div>
-          <div className="stat-label">เงินสด / โอน</div>
-          <div className="stat-value mono">{paymentStats.cash} / {paymentStats.transfer}</div>
-          <div className="stat-change neutral">รายการ</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>
-            <Icon name="clipboard" size={16} />
-          </div>
-          <div className="stat-label">เช็ค / เครดิต</div>
-          <div className="stat-value mono">{paymentStats.cheque} / {paymentStats.credit}</div>
-          <div className="stat-change neutral">รายการ</div>
-        </div>
-      </div>
-
-      {/* Filter + table */}
-      <div className="card">
-        <div className="filter-bar">
-          {/* วิธีชำระ tabs */}
-          <div className="tabs">
-            <button className={'tab' + (paymentFilter === 'all'      ? ' active' : '')} onClick={() => setPaymentFilter('all')}>
-              ทั้งหมด <span className="badge gray mono">{allReceipts.length}</span>
-            </button>
-            <button className={'tab' + (paymentFilter === 'cash'     ? ' active' : '')} onClick={() => setPaymentFilter('cash')}>
-              เงินสด
-            </button>
-            <button className={'tab' + (paymentFilter === 'transfer' ? ' active' : '')} onClick={() => setPaymentFilter('transfer')}>
-              โอนเงิน
-            </button>
-            <button className={'tab' + (paymentFilter === 'cheque'   ? ' active' : '')} onClick={() => setPaymentFilter('cheque')}>
-              เช็ค
-            </button>
-            <button className={'tab' + (paymentFilter === 'credit'   ? ' active' : '')} onClick={() => setPaymentFilter('credit')}>
-              เครดิต
-            </button>
-          </div>
-
-          <div className="topbar-search" style={{ width: 280, margin: 0 }}>
-            <Icon name="search" size={14} />
-            <input placeholder="ค้นหา: เลขที่, ลูกค้า, Tax ID, รายการ"
-              value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-
-          <select className="select" value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
-            <option value="all">ทุกโครงการ ({usedProjects.length})</option>
-            {usedProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-
-          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
-            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
-            <option value="date-asc">วันที่ เก่า → ใหม่</option>
-            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
-            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
-          </select>
-
-          <div className="spacer" />
-          <div className="text-small text-muted">
-            พบ <strong className="mono" style={{ color: 'var(--ink-1)' }}>{filtered.length}</strong> ใบ ·
-            ยอดรวม <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(totalAmount)}</strong>
-          </div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="empty">
-            <div className="empty-illust"><Icon name="receipt" size={28} /></div>
-            <div className="empty-title">
-              {allReceipts.length === 0 ? 'ยังไม่มีใบเสร็จ' : 'ไม่พบใบเสร็จที่ตรงกับตัวกรอง'}
-            </div>
-            <div className="empty-sub">
-              {allReceipts.length === 0
-                ? 'กดปุ่ม "ออกใบเสร็จใหม่" เพื่อเริ่มต้น'
-                : 'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา'}
-            </div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="history-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 130 }}>เลขที่</th>
-                  <th style={{ width: 100 }}>วันที่</th>
-                  <th>ลูกค้า</th>
-                  <th>โครงการ</th>
-                  <th style={{ width: 110 }}>วิธีชำระ</th>
-                  <th style={{ width: 130 }} className="num">ยอดรับ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  const proj = app.projects.find(p => p.id === r.projectId);
-                  const total = computeTotals(r).total;
-                  const pm = r.meta?.paymentMethod || 'cash';
-                  return (
-                    <tr key={r.id} onClick={() => app.setDetailId(r.id)}>
-                      <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
-                      <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{r.vendor || '—'}</div>
-                        {r.meta?.customerTaxId && (
-                          <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
-                            {r.meta.customerTaxId}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        {proj ? (
-                          <div className="row gap-8">
-                            <span className="proj-chip-dot" style={{ background: proj.color }}></span>
-                            <span style={{ fontSize: 13 }}>{proj.name}</span>
-                          </div>
-                        ) : <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                      </td>
-                      <td>
-                        <span className="badge gray">{PAY_LABEL[pm] || pm}</span>
-                      </td>
-                      <td className="num mono" style={{ fontWeight: 600, color: '#059669' }}>
-                        {fmt(total)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </>
-  );
-};
-
-// ============================================================
-// TaxInvoicesListView — ประวัติใบเสร็จ/ใบกำกับภาษี (มี VAT)
-// ============================================================
-window.TaxInvoicesListView = function TaxInvoicesListView() {
-  const app = window.useApp();
-  const [q, setQ] = useState('');
-  const [projFilter, setProjFilter] = useState('all');
-  const [paymentFilter, setPaymentFilter] = useState('all');
-  const [sortKey, setSortKey] = useState('date-desc');
-
-  const allInvoices = useMemo(() =>
-    app.records.filter(r => r.type === 'tax-invoice'), [app.records]);
-
-  const usedProjects = useMemo(() => {
-    const ids = new Set(allInvoices.map(r => r.projectId).filter(Boolean));
-    return app.projects.filter(p => ids.has(p.id));
-  }, [allInvoices, app.projects]);
-
-  const filtered = useMemo(() => {
-    let arr = allInvoices;
-    if (projFilter !== 'all')    arr = arr.filter(r => r.projectId === projFilter);
-    if (paymentFilter !== 'all') arr = arr.filter(r => (r.meta?.paymentMethod || 'cash') === paymentFilter);
-    if (q.trim()) {
-      const s = q.toLowerCase();
-      arr = arr.filter(r =>
-        (r.docNo || '').toLowerCase().includes(s) ||
-        (r.vendor || '').toLowerCase().includes(s) ||
-        (r.meta?.customerTaxId || '').toLowerCase().includes(s) ||
-        (r.items || []).some(i => (i.name || '').toLowerCase().includes(s))
-      );
-    }
-    return [...arr].sort((a, b) => {
-      if (sortKey === 'date-desc')   return (b.date || '').localeCompare(a.date || '');
-      if (sortKey === 'date-asc')    return (a.date || '').localeCompare(b.date || '');
-      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
-      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
-      return 0;
-    });
-  }, [allInvoices, q, projFilter, paymentFilter, sortKey]);
-
-  // VAT รวม — สำหรับยื่นภาษี
-  const vatStats = useMemo(() => {
-    const arr = filtered.map(r => computeTotals(r));
-    return {
-      subTotal: arr.reduce((s, t) => s + t.subTotal, 0),
-      vatSum:   arr.reduce((s, t) => s + t.vat, 0),
-      total:    arr.reduce((s, t) => s + t.total, 0),
-    };
-  }, [filtered]);
-
-  const grandVatSum = useMemo(() =>
-    allInvoices.reduce((s, r) => s + computeTotals(r).vat, 0), [allInvoices]);
-  const grandTotal  = useMemo(() =>
-    allInvoices.reduce((s, r) => s + computeTotals(r).total, 0), [allInvoices]);
-
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const monthInvoices = allInvoices.filter(r => (r.date || '').slice(0, 7) === thisMonth);
-  const monthVat = monthInvoices.reduce((s, r) => s + computeTotals(r).vat, 0);
-
-  return (
-    <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">ประวัติใบเสร็จ/ใบกำกับภาษี</h1>
-          <div className="page-sub">ใบกำกับภาษีที่ออกให้ลูกค้า · พร้อมยอด VAT รวมสำหรับยื่นภาษี</div>
-        </div>
-        <div className="row gap-8">
-          <button className="btn btn-accent" onClick={() => app.setView('new-tax-invoice')}>
-            <Icon name="plus" size={14} stroke={2.5} /> ออกใบกำกับภาษีใหม่
-          </button>
-        </div>
-      </div>
-
-      <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(146,64,14,0.12)', color: '#92400e' }}>
-            <Icon name="receipt" size={16} />
-          </div>
-          <div className="stat-label">ใบกำกับภาษีทั้งหมด</div>
-          <div className="stat-value mono">{allInvoices.length}</div>
-          <div className="stat-change positive">฿{fmt(grandTotal)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
-            <Icon name="percent" size={16} />
-          </div>
-          <div className="stat-label">VAT รวม (ทั้งหมด)</div>
-          <div className="stat-value mono">฿{fmt(grandVatSum)}</div>
-          <div className="stat-change neutral">ยื่นภาษีขาย</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(217,119,6,0.12)', color: 'var(--accent)' }}>
-            <Icon name="calendar" size={16} />
-          </div>
-          <div className="stat-label">VAT เดือนนี้</div>
-          <div className="stat-value mono">฿{fmt(monthVat)}</div>
-          <div className="stat-change neutral">{monthInvoices.length} ใบ</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
-            <Icon name="money" size={16} />
-          </div>
-          <div className="stat-label">ยอดที่กรองอยู่</div>
-          <div className="stat-value mono">฿{fmt(vatStats.total)}</div>
-          <div className="stat-change neutral">VAT ฿{fmt(vatStats.vatSum)}</div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="filter-bar">
-          <div className="tabs">
-            <button className={'tab' + (paymentFilter === 'all'      ? ' active' : '')} onClick={() => setPaymentFilter('all')}>
-              ทั้งหมด <span className="badge gray mono">{allInvoices.length}</span>
-            </button>
-            <button className={'tab' + (paymentFilter === 'cash'     ? ' active' : '')} onClick={() => setPaymentFilter('cash')}>เงินสด</button>
-            <button className={'tab' + (paymentFilter === 'transfer' ? ' active' : '')} onClick={() => setPaymentFilter('transfer')}>โอนเงิน</button>
-            <button className={'tab' + (paymentFilter === 'cheque'   ? ' active' : '')} onClick={() => setPaymentFilter('cheque')}>เช็ค</button>
-            <button className={'tab' + (paymentFilter === 'credit'   ? ' active' : '')} onClick={() => setPaymentFilter('credit')}>เครดิต</button>
-          </div>
-
-          <div className="topbar-search" style={{ width: 280, margin: 0 }}>
-            <Icon name="search" size={14} />
-            <input placeholder="ค้นหา: เลขที่, ลูกค้า, Tax ID, รายการ"
-              value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-
-          <select className="select" value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
-            <option value="all">ทุกโครงการ ({usedProjects.length})</option>
-            {usedProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-
-          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
-            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
-            <option value="date-asc">วันที่ เก่า → ใหม่</option>
-            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
-            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
-          </select>
-
-          <div className="spacer" />
-          <div className="text-small text-muted">
-            <strong className="mono" style={{ color: 'var(--ink-1)' }}>{filtered.length}</strong> ใบ ·
-            ก่อนภาษี <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(vatStats.subTotal)}</strong> ·
-            VAT <strong className="mono" style={{ color: '#dc2626' }}>฿{fmt(vatStats.vatSum)}</strong>
-          </div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="empty">
-            <div className="empty-illust"><Icon name="receipt" size={28} /></div>
-            <div className="empty-title">
-              {allInvoices.length === 0 ? 'ยังไม่มีใบกำกับภาษี' : 'ไม่พบใบที่ตรงกับตัวกรอง'}
-            </div>
-            <div className="empty-sub">
-              {allInvoices.length === 0
-                ? 'กดปุ่ม "ออกใบกำกับภาษีใหม่" เพื่อเริ่มต้น'
-                : 'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา'}
-            </div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="history-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 130 }}>เลขที่</th>
-                  <th style={{ width: 100 }}>วันที่</th>
-                  <th>ลูกค้า</th>
-                  <th style={{ width: 120 }}>Tax ID</th>
-                  <th style={{ width: 100 }} className="num">ก่อน VAT</th>
-                  <th style={{ width: 90 }} className="num">VAT</th>
-                  <th style={{ width: 110 }} className="num">รวมสุทธิ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  const t = computeTotals(r);
-                  return (
-                    <tr key={r.id} onClick={() => app.setDetailId(r.id)}>
-                      <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
-                      <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{r.vendor || '—'}</div>
-                        {r.meta?.customerBranch && (
-                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
-                            {r.meta.customerBranch}
-                          </div>
-                        )}
-                      </td>
-                      <td className="mono" style={{ fontSize: 12 }}>
-                        {r.meta?.customerTaxId || <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                      </td>
-                      <td className="num mono" style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{fmt(t.subTotal)}</td>
-                      <td className="num mono" style={{ fontSize: 12.5, color: '#dc2626' }}>{fmt(t.vat)}</td>
-                      <td className="num mono" style={{ fontWeight: 600, color: '#92400e' }}>{fmt(t.total)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr style={{ background: 'var(--bg)', fontWeight: 600 }}>
-                  <td colSpan={4} style={{ textAlign: 'right', padding: '10px 12px' }}>รวม {filtered.length} ใบ:</td>
-                  <td className="num mono" style={{ padding: '10px 12px' }}>{fmt(vatStats.subTotal)}</td>
-                  <td className="num mono" style={{ padding: '10px 12px', color: '#dc2626' }}>{fmt(vatStats.vatSum)}</td>
-                  <td className="num mono" style={{ padding: '10px 12px', color: '#92400e' }}>{fmt(vatStats.total)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </div>
-    </>
-  );
-};
-
-// ============================================================
-// InvoicesListView — ประวัติใบแจ้งหนี้ (Invoice billing)
-// ============================================================
-window.InvoicesListView = function InvoicesListView() {
-  const app = window.useApp();
-  const [q, setQ] = useState('');
-  const [projFilter, setProjFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortKey, setSortKey] = useState('date-desc');
-
-  const allInvoices = useMemo(() =>
-    app.records.filter(r => r.type === 'invoice'), [app.records]);
-
-  const usedProjects = useMemo(() => {
-    const ids = new Set(allInvoices.map(r => r.projectId).filter(Boolean));
-    return app.projects.filter(p => ids.has(p.id));
-  }, [allInvoices, app.projects]);
-
-  const todayKey = todayStr();
-  const in7Days = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })();
-
-  const statusOf = (rec) => {
-    const due = rec.meta?.dueDate;
-    if (!due) return 'no-due';
-    if (due < todayKey) return 'overdue';
-    if (due <= in7Days) return 'upcoming';
-    return 'pending';
-  };
-
-  const filtered = useMemo(() => {
-    let arr = allInvoices;
-    if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'this-month') {
-        const thisMonth = new Date().toISOString().slice(0, 7);
-        arr = arr.filter(r => (r.date || '').slice(0, 7) === thisMonth);
-      } else {
-        arr = arr.filter(r => statusOf(r) === statusFilter);
-      }
-    }
-    if (q.trim()) {
-      const s = q.toLowerCase();
-      arr = arr.filter(r =>
-        (r.docNo || '').toLowerCase().includes(s) ||
-        (r.vendor || '').toLowerCase().includes(s) ||
-        (r.meta?.contractNo || '').toLowerCase().includes(s) ||
-        (r.items || []).some(i => (i.name || '').toLowerCase().includes(s))
-      );
-    }
-    return [...arr].sort((a, b) => {
-      if (sortKey === 'date-desc')   return (b.date || '').localeCompare(a.date || '');
-      if (sortKey === 'date-asc')    return (a.date || '').localeCompare(b.date || '');
-      if (sortKey === 'due-asc')     return (a.meta?.dueDate || '').localeCompare(b.meta?.dueDate || '');
-      if (sortKey === 'amount-desc') return computeTotals(b).total - computeTotals(a).total;
-      if (sortKey === 'amount-asc')  return computeTotals(a).total - computeTotals(b).total;
-      return 0;
-    });
-  }, [allInvoices, q, projFilter, statusFilter, sortKey]);
-
-  const grandTotal = useMemo(() => allInvoices.reduce((s, r) => s + computeTotals(r).total, 0), [allInvoices]);
-  const filteredTotal = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
-
-  const overdueList   = allInvoices.filter(r => statusOf(r) === 'overdue');
-  const upcomingList  = allInvoices.filter(r => statusOf(r) === 'upcoming');
-  const overdueTotal  = overdueList.reduce((s, r) => s + computeTotals(r).total, 0);
-  const upcomingTotal = upcomingList.reduce((s, r) => s + computeTotals(r).total, 0);
-
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const monthList = allInvoices.filter(r => (r.date || '').slice(0, 7) === thisMonth);
-  const monthTotal = monthList.reduce((s, r) => s + computeTotals(r).total, 0);
-
-  return (
-    <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">ประวัติใบแจ้งหนี้</h1>
-          <div className="page-sub">ใบแจ้งหนี้ที่ตั้งเบิกกับลูกค้า · ติดตามวันครบกำหนดและสถานะ</div>
-        </div>
-        <div className="row gap-8">
-          <button className="btn btn-accent" onClick={() => app.setView('new-invoice')}>
-            <Icon name="plus" size={14} stroke={2.5} /> ออกใบแจ้งหนี้ใหม่
-          </button>
-        </div>
-      </div>
-
-      <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }}>
-            <Icon name="clipboard" size={16} />
-          </div>
-          <div className="stat-label">ใบแจ้งหนี้ทั้งหมด</div>
-          <div className="stat-value mono">{allInvoices.length}</div>
-          <div className="stat-change positive">฿{fmt(grandTotal)}</div>
-        </div>
-        <div className="stat" style={{ borderLeft: overdueList.length > 0 ? '3px solid #dc2626' : '' }}>
-          <div className="stat-icon" style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
-            <Icon name="bell" size={16} />
-          </div>
-          <div className="stat-label">เกินกำหนดชำระ</div>
-          <div className="stat-value mono" style={{ color: overdueList.length > 0 ? '#dc2626' : undefined }}>
-            {overdueList.length}
-          </div>
-          <div className="stat-change neutral">฿{fmt(overdueTotal)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(217,119,6,0.12)', color: 'var(--accent)' }}>
-            <Icon name="calendar" size={16} />
-          </div>
-          <div className="stat-label">ครบกำหนดใน 7 วัน</div>
-          <div className="stat-value mono">{upcomingList.length}</div>
-          <div className="stat-change neutral">฿{fmt(upcomingTotal)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-icon" style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
-            <Icon name="money" size={16} />
-          </div>
-          <div className="stat-label">ออกบิลเดือนนี้</div>
-          <div className="stat-value mono">{monthList.length}</div>
-          <div className="stat-change neutral">฿{fmt(monthTotal)}</div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="filter-bar">
-          <div className="tabs">
-            <button className={'tab' + (statusFilter === 'all'        ? ' active' : '')} onClick={() => setStatusFilter('all')}>
-              ทั้งหมด <span className="badge gray mono">{allInvoices.length}</span>
-            </button>
-            <button className={'tab' + (statusFilter === 'overdue'    ? ' active' : '')} onClick={() => setStatusFilter('overdue')}>
-              เกินกำหนด {overdueList.length > 0 && <span className="badge" style={{ background:'#dc2626', color:'#fff' }}>{overdueList.length}</span>}
-            </button>
-            <button className={'tab' + (statusFilter === 'upcoming'   ? ' active' : '')} onClick={() => setStatusFilter('upcoming')}>
-              ใน 7 วัน
-            </button>
-            <button className={'tab' + (statusFilter === 'this-month' ? ' active' : '')} onClick={() => setStatusFilter('this-month')}>
-              เดือนนี้
-            </button>
-          </div>
-
-          <div className="topbar-search" style={{ width: 280, margin: 0 }}>
-            <Icon name="search" size={14} />
-            <input placeholder="ค้นหา: เลขที่, ลูกค้า, สัญญา, รายการ"
-              value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-
-          <select className="select" value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
-            <option value="all">ทุกโครงการ ({usedProjects.length})</option>
-            {usedProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-
-          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
-            <option value="date-desc">วันออก ใหม่ → เก่า</option>
-            <option value="date-asc">วันออก เก่า → ใหม่</option>
-            <option value="due-asc">ครบกำหนด เร็วสุด</option>
-            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
-            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
-          </select>
-
-          <div className="spacer" />
-          <div className="text-small text-muted">
-            <strong className="mono" style={{ color: 'var(--ink-1)' }}>{filtered.length}</strong> ใบ ·
-            ยอดรวม <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(filteredTotal)}</strong>
-          </div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="empty">
-            <div className="empty-illust"><Icon name="clipboard" size={28} /></div>
-            <div className="empty-title">
-              {allInvoices.length === 0 ? 'ยังไม่มีใบแจ้งหนี้' : 'ไม่พบใบที่ตรงกับตัวกรอง'}
-            </div>
-            <div className="empty-sub">
-              {allInvoices.length === 0
-                ? 'กดปุ่ม "ออกใบแจ้งหนี้ใหม่" เพื่อเริ่มต้น'
-                : 'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา'}
-            </div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="history-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 110 }}>เลขที่</th>
-                  <th style={{ width: 90 }}>วันออก</th>
-                  <th style={{ width: 110 }}>ครบกำหนด</th>
-                  <th>ลูกค้า</th>
-                  <th style={{ width: 80 }}>งวด</th>
-                  <th style={{ width: 120 }}>สถานะ</th>
-                  <th style={{ width: 120 }} className="num">ยอดเรียกเก็บ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  const t = computeTotals(r);
-                  const st = statusOf(r);
-                  const proj = app.projects.find(p => p.id === r.projectId);
-                  const inst = r.meta?.installmentNo
-                    ? `${r.meta.installmentNo}${r.meta.installmentTotal ? '/' + r.meta.installmentTotal : ''}`
-                    : '—';
-
-                  const statusBadge = st === 'overdue'
-                    ? <span className="badge" style={{ background:'rgba(220,38,38,0.15)', color:'#dc2626', border:'1px solid rgba(220,38,38,0.3)' }}>⚠ เกินกำหนด</span>
-                    : st === 'upcoming'
-                    ? <span className="badge" style={{ background:'rgba(217,119,6,0.15)', color:'#d97706', border:'1px solid rgba(217,119,6,0.3)' }}>ใกล้ครบกำหนด</span>
-                    : st === 'pending'
-                    ? <span className="badge gray">ตั้งเบิก</span>
-                    : <span className="badge gray">ไม่ระบุ</span>;
-
-                  return (
-                    <tr key={r.id} onClick={() => app.setDetailId(r.id)}>
-                      <td className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{r.docNo}</td>
-                      <td style={{ color: 'var(--ink-2)' }}>{fmtDate(r.date)}</td>
-                      <td style={{
-                        color: st === 'overdue' ? '#dc2626'
-                          : st === 'upcoming' ? '#d97706'
-                          : 'var(--ink-2)',
-                        fontWeight: st === 'overdue' || st === 'upcoming' ? 600 : 400,
-                      }}>{r.meta?.dueDate ? fmtDate(r.meta.dueDate) : '—'}</td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{r.vendor || '—'}</div>
-                        {proj && (
-                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
-                            {proj.name}
-                          </div>
-                        )}
-                      </td>
-                      <td className="mono" style={{ fontSize: 12.5, color: '#1d4ed8', fontWeight: 600 }}>{inst}</td>
-                      <td>{statusBadge}</td>
-                      <td className="num mono" style={{ fontWeight: 600, color: '#1d4ed8' }}>{fmt(t.total)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </>
-  );
-};
-
 
 // ============================================================
 // LaborHistoryView — ประวัติการเบิกค่าแรง (labor + lump-labor)
@@ -4448,6 +3740,8 @@ window.LaborHistoryView = function LaborHistoryView() {
   const [sortKey,       setSortKey]       = useState('date-desc');
   const [accFilter,     setAccFilter]     = useState('all');
   const [approveFilter, setApproveFilter] = useState('all'); // all | pending | approved
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
 
   const allLabor = useMemo(() =>
     app.records.filter(r => r.type === 'labor' || r.type === 'lump-labor'),
@@ -4458,6 +3752,7 @@ window.LaborHistoryView = function LaborHistoryView() {
     if (typeFilter !== 'all') arr = arr.filter(r => r.type === typeFilter);
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
     if (teamFilter !== 'all') arr = arr.filter(r => r.workerTeamId === teamFilter);
+    if (dateFrom || dateTo)   arr = arr.filter(r => window.inDateRange(r.date, dateFrom, dateTo));
     if (accFilter === 'unposted')       arr = arr.filter(r => !r.accountingPosted);
     if (accFilter === 'posted')         arr = arr.filter(r =>  r.accountingPosted);
     if (approveFilter === 'pending')    arr = arr.filter(r => !r.approved);
@@ -4479,7 +3774,7 @@ window.LaborHistoryView = function LaborHistoryView() {
       return 0;
     });
     return arr;
-  }, [allLabor, typeFilter, projFilter, teamFilter, accFilter, approveFilter, sortKey, q]);
+  }, [allLabor, typeFilter, projFilter, teamFilter, accFilter, approveFilter, sortKey, q, dateFrom, dateTo]);
 
   const sum      = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
   const laborSum = filtered.filter(r => r.type === 'labor')     .reduce((s, r) => s + computeTotals(r).total, 0);
@@ -4801,6 +4096,7 @@ window.LaborHistoryView = function LaborHistoryView() {
             <Icon name="search" size={14}/>
             <input placeholder="ค้นหา: เลขที่, ทีมช่าง, รายการ" value={q} onChange={e => setQ(e.target.value)}/>
           </div>
+          <window.DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} />
           <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
             {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -4811,12 +4107,6 @@ window.LaborHistoryView = function LaborHistoryView() {
               {usedTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
-          <select className="select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
-            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
-            <option value="date-asc">วันที่ เก่า → ใหม่</option>
-            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
-            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
-          </select>
           <select className="select" value={accFilter} onChange={e => setAccFilter(e.target.value)}
             style={{ borderColor:accFilter!=='all'?'#059669':undefined, color:accFilter!=='all'?'#059669':undefined }}>
             <option value="all">สถานะบัญชี: ทั้งหมด</option>
@@ -4891,12 +4181,15 @@ window.IncomeHistoryView = function IncomeHistoryView() {
   const [projFilter, setProjFilter] = useState('all');
   const [accFilter,  setAccFilter]  = useState('all');
   const [sortKey,    setSortKey]    = useState('date-desc');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
 
   const allIncome = useMemo(() => app.records.filter(r => window.isIncome(r)), [app.records]);
 
   const filtered = useMemo(() => {
     let arr = allIncome.slice();
     if (projFilter !== 'all') arr = arr.filter(r => r.projectId === projFilter);
+    if (dateFrom || dateTo)   arr = arr.filter(r => window.inDateRange(r.date, dateFrom, dateTo));
     if (accFilter === 'unposted') arr = arr.filter(r => !r.accountingPosted);
     if (accFilter === 'posted')   arr = arr.filter(r =>  r.accountingPosted);
     if (q.trim()) {
@@ -4915,7 +4208,7 @@ window.IncomeHistoryView = function IncomeHistoryView() {
       return 0;
     });
     return arr;
-  }, [allIncome, projFilter, accFilter, sortKey, q]);
+  }, [allIncome, projFilter, accFilter, sortKey, q, dateFrom, dateTo]);
 
   const sum         = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
   const postedSum   = filtered.filter(r => r.accountingPosted).reduce((s, r) => s + computeTotals(r).total, 0);
@@ -4964,15 +4257,10 @@ window.IncomeHistoryView = function IncomeHistoryView() {
             <Icon name="search" size={14}/>
             <input placeholder="ค้นหา: เลขที่, แหล่งที่มา, รายการ" value={q} onChange={e => setQ(e.target.value)}/>
           </div>
+          <window.DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} />
           <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
             {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select className="select" value={sortKey} onChange={e => setSortKey(e.target.value)}>
-            <option value="date-desc">วันที่ ใหม่ → เก่า</option>
-            <option value="date-asc">วันที่ เก่า → ใหม่</option>
-            <option value="amount-desc">ยอดเงิน มาก → น้อย</option>
-            <option value="amount-asc">ยอดเงิน น้อย → มาก</option>
           </select>
           <select className="select" value={accFilter} onChange={e => setAccFilter(e.target.value)}
             style={{ borderColor:accFilter!=='all'?'#059669':undefined, color:accFilter!=='all'?'#059669':undefined }}>

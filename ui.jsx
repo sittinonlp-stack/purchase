@@ -73,6 +73,39 @@ function Switch({ on, onChange, label, sub }) {
 }
 window.Switch = Switch;
 
+// ---- ตัวกรองช่วงวันที่ (ใช้ซ้ำในทุกหน้าประวัติ/เอกสาร) ----
+// คืน true ถ้า dateStr อยู่ในช่วง from–to (ว่างทั้งคู่ = ไม่กรอง)
+window.inDateRange = (dateStr, from, to) => {
+  if (!from && !to) return true;
+  if (!dateStr) return false;
+  const d = String(dateStr).slice(0, 10);
+  if (from && d < from) return false;
+  if (to && d > to) return false;
+  return true;
+};
+
+function DateRangeFilter({ from, to, setFrom, setTo, compact }) {
+  const active = !!(from || to);
+  return (
+    <div className="row" style={{ alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+      <input type="date" className="select" value={from || ''} max={to || undefined}
+        onChange={(e) => setFrom(e.target.value)} title="ตั้งแต่วันที่"
+        style={{ width: compact ? 140 : 152, borderColor: active ? '#0ea5e9' : undefined, color: active ? '#0369a1' : undefined }} />
+      <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>ถึง</span>
+      <input type="date" className="select" value={to || ''} min={from || undefined}
+        onChange={(e) => setTo(e.target.value)} title="ถึงวันที่"
+        style={{ width: compact ? 140 : 152, borderColor: active ? '#0ea5e9' : undefined, color: active ? '#0369a1' : undefined }} />
+      {active && (
+        <button className="btn btn-ghost btn-sm" title="ล้างช่วงวันที่"
+          onClick={() => { setFrom(''); setTo(''); }} style={{ flexShrink: 0 }}>
+          <Icon name="x" size={12} /> ล้าง
+        </button>
+      )}
+    </div>
+  );
+}
+window.DateRangeFilter = DateRangeFilter;
+
 // ---- OptionPill (multi or single) ----
 function OptionPill({ selected, onClick, children, mode = 'check', icon }) {
   return (
@@ -462,9 +495,6 @@ function Sidebar() {
                 {records.filter(r => window.isIncome(r) && !r.accountingPosted).length}
               </span>
             )}
-          </button>
-          <button className={"nav-item" + (['receipts-list','tax-invoices-list','invoices-list','new-receipt','new-tax-invoice','new-invoice'].includes(view) ? " active" : "")} onClick={() => go('receipts-list')}>
-            <Icon name="receipt" /> เอกสาร (ใบเสร็จ/กำกับภาษี/แจ้งหนี้)
           </button>
           <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => go('deposits')}
             style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>
@@ -1133,29 +1163,3 @@ function ImageLightbox({ images, index, onClose, onChange }) {
 }
 window.ImageLightbox = ImageLightbox;
 
-// ---- Doc tab strip — สลับระหว่างเอกสาร (ออก / ประวัติ) ในหน้าเดียว ----
-function DocTabStrip({ mode }) {
-  const app = window.useApp();
-  const tabs = mode === 'issue'
-    ? [
-        { v: 'new-receipt',     label: 'ใบเสร็จรับเงิน', icon: 'receipt' },
-        { v: 'new-tax-invoice', label: 'ใบกำกับภาษี',    icon: 'receipt' },
-        { v: 'new-invoice',     label: 'ใบแจ้งหนี้',      icon: 'clipboard' },
-      ]
-    : [
-        { v: 'receipts-list',     label: 'ใบเสร็จรับเงิน', icon: 'receipt' },
-        { v: 'tax-invoices-list', label: 'ใบกำกับภาษี',    icon: 'receipt' },
-        { v: 'invoices-list',     label: 'ใบแจ้งหนี้',      icon: 'clipboard' },
-      ];
-  return (
-    <div className="tabs" style={{ marginBottom: 16 }}>
-      {tabs.map(t => (
-        <button key={t.v} className={"tab" + (app.view === t.v ? ' active' : '')}
-          onClick={() => { app.setEditingId(null); app.setView(t.v); }}>
-          <Icon name={t.icon} size={13} /> {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-window.DocTabStrip = DocTabStrip;
