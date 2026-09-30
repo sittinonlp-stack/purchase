@@ -4951,8 +4951,9 @@ function doExportProfitReport(opts) {
   const catOk = e => !opexCategories || opexCategories.includes(e.category);
   const months = {};
   const ens = k => (months[k] || (months[k] = { income:0, cost:0, opex:0 }));
-  const projCost = {};   // ต้นทุนแยกตามโครงการ
+  const projCost = {};   // ต้นทุนแยกตามโครงการ (แยกวัสดุ/เครื่องจักร/อื่นๆ/ค่าแรง)
   const catOpex = {};    // ค่าดำเนินการแยกตามประเภท
+  let tMat=0, tMach=0, tOther=0, tLabor=0;   // รวมต้นทุนแยกประเภท
   records.forEach(r => {
     if (!inR(r.date)) return;
     const k = r.date.slice(0,7);
@@ -4960,7 +4961,12 @@ function doExportProfitReport(opts) {
     else if (isExpense(r) && countsInDashboard(r)) {
       const t = computeTotals(r).total;
       ens(k).cost += t;
-      projCost[r.projectId] = (projCost[r.projectId] || 0) + t;
+      const pcx = projCost[r.projectId] || (projCost[r.projectId] = { material:0, machine:0, other:0, labor:0, total:0 });
+      if (r.type === 'material')      { pcx.material += t; tMat += t; }
+      else if (r.type === 'machine')  { pcx.machine += t;  tMach += t; }
+      else if (r.type === 'labor' || r.type === 'lump-labor') { pcx.labor += t; tLabor += t; }
+      else                            { pcx.other += t;    tOther += t; }
+      pcx.total += t;
     }
   });
   companyExpenses.forEach(e => {
@@ -4977,6 +4983,11 @@ function doExportProfitReport(opts) {
   const tIncomeAll = tIncome + carry;
   const tExpense = tCost + tOpex;
   const netProfit = tIncomeAll - tExpense;
+  // แยกรายรับตามสัดส่วน: รายรับค่าดำเนินการ = 15% ของรายรับจริง · รายรับต้นทุน = 85% ที่เหลือ
+  const opexIncome = tIncome * COMPANY_FEE_RATE;
+  const costIncome = tIncome - opexIncome;
+  const costProfit = costIncome - tCost;   // กำไร/ขาดทุน ส่วนต้นทุน
+  const opexProfit = opexIncome - tOpex;   // กำไร/ขาดทุน ส่วนค่าดำเนินการ
 
   const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
@@ -5000,9 +5011,9 @@ function doExportProfitReport(opts) {
   const projById = {}; projects.forEach(p => { projById[p.id] = p; });
   const catColor = {}; companyExpenseCats.forEach(c => { catColor[c.name] = c.color; });
   const bar = (v, max, color) => `<div style="background:#f0ede8;border-radius:99px;height:7px"><div style="height:7px;border-radius:99px;background:${color};width:${max>0?Math.round(v/max*100):0}%"></div></div>`;
-  const projEntries = Object.entries(projCost).sort((a,b)=>b[1]-a[1]);
-  const maxProj = projEntries.length ? projEntries[0][1] : 0;
-  const projRows = projEntries.map(([pid,v],i)=>{ const p=projById[pid]; const col=p?.color||'#d97706'; return `<tr class="${i%2===0?'alt':''}"><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:7px"></span>${p?.name||'ไม่ระบุโครงการ'}</td><td style="font-size:10.5px;color:#78716c">${p?.code||'—'}</td><td class="r bold">฿${fmtN(v)}</td><td class="r" style="width:60px">${tCost>0?Math.round(v/tCost*100):0}%</td><td style="width:210px">${bar(v,maxProj,col)}</td></tr>`; }).join('');
+  const projEntries = Object.entries(projCost).sort((a,b)=>b[1].total-a[1].total);
+  const maxProj = projEntries.length ? projEntries[0][1].total : 0;
+  const projRows = projEntries.map(([pid,v],i)=>{ const p=projById[pid]; const col=p?.color||'#d97706'; return `<tr class="${i%2===0?'alt':''}"><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:7px"></span>${p?.name||'ไม่ระบุโครงการ'}</td><td class="r">฿${fmtN(v.material)}</td><td class="r">฿${fmtN(v.machine)}</td><td class="r">฿${fmtN(v.other)}</td><td class="r">฿${fmtN(v.labor)}</td><td class="r bold">฿${fmtN(v.total)}</td><td style="width:150px">${bar(v.total,maxProj,col)}</td></tr>`; }).join('');
   const catEntries = Object.entries(catOpex).sort((a,b)=>b[1]-a[1]);
   const maxCat = catEntries.length ? catEntries[0][1] : 0;
   const catRows = catEntries.map(([name,v],i)=>{ const col=catColor[name]||'#c2410c'; return `<tr class="${i%2===0?'alt':''}"><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:7px"></span>${name}</td><td class="r bold">฿${fmtN(v)}</td><td class="r" style="width:60px">${tOpex>0?Math.round(v/tOpex*100):0}%</td><td style="width:210px">${bar(v,maxCat,col)}</td></tr>`; }).join('');
@@ -5066,6 +5077,18 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
   <div class="kpi" style="background:${netProfit>=0?'#ecfdf5':'#fef2f2'};border-color:${netProfit>=0?'#a7f3d0':'#fecaca'}"><div class="kpi-label" style="color:${pc(netProfit)}">${netProfit>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}</div><div class="kpi-value" style="color:${pc(netProfit)}">${netProfit<0?'−':''}฿${fmtN(Math.abs(netProfit))}</div><div class="kpi-sub">${netProfit>=0?'บริษัทมีกำไร':'บริษัทขาดทุน'}</div></div>
 </div>
 <div class="section">
+  <div class="section-header"><div class="section-title">สรุปกำไร/ขาดทุน แยกส่วน (รายรับต้นทุน 85% / รายรับค่าดำเนินการ 15%)</div></div>
+  <table>
+    <thead><tr><th>ส่วน</th><th class="r" style="width:180px">รายรับ</th><th class="r" style="width:180px">รายจ่าย</th><th class="r" style="width:180px">กำไร/ขาดทุน</th></tr></thead>
+    <tbody>
+      <tr><td>ต้นทุนโครงการ <span style="color:#78716c;font-size:10.5px">(รายรับ 85%)</span></td><td class="r">฿${fmtN(costIncome)}</td><td class="r">฿${fmtN(tCost)}</td><td class="r bold">${money(costProfit, pc(costProfit))}</td></tr>
+      <tr class="alt"><td>ค่าดำเนินการบริษัท <span style="color:#78716c;font-size:10.5px">(รายรับ 15%)</span></td><td class="r">฿${fmtN(opexIncome)}</td><td class="r">฿${fmtN(tOpex)}</td><td class="r bold">${money(opexProfit, pc(opexProfit))}</td></tr>
+      ${carry>0?`<tr><td>ยอดยกมาจากปีก่อน <span style="color:#78716c;font-size:10.5px">(นับเป็นรับ)</span></td><td class="r">฿${fmtN(carry)}</td><td class="r">—</td><td class="r bold">${money(carry, pc(carry))}</td></tr>`:''}
+    </tbody>
+    <tfoot><tr><td>รวมทั้งหมด</td><td class="r">฿${fmtN(tIncomeAll)}</td><td class="r">฿${fmtN(tExpense)}</td><td class="r" style="background:${netProfit>=0?'#047857':'#b91c1c'}">${netProfit<0?'−':''}฿${fmtN(Math.abs(netProfit))}</td></tr></tfoot>
+  </table>
+</div>
+<div class="section">
   <div class="section-header"><div class="section-title">สรุปกำไร/ขาดทุน แยกรายเดือน</div></div>
   <table>
     <thead><tr><th>เดือน</th><th class="r">รายรับจริง</th><th class="r">ต้นทุนโครงการ</th><th class="r">ค่าดำเนินการ</th><th class="r">รวมรายจ่าย</th><th class="r">กำไร/ขาดทุน</th></tr></thead>
@@ -5077,11 +5100,11 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
   </table>
 </div>
 <div class="section">
-  <div class="section-header" style="border-left-color:#d97706"><div class="section-title">ต้นทุนโครงการ แยกรายโครงการ (มาก → น้อย)</div></div>
+  <div class="section-header" style="border-left-color:#d97706"><div class="section-title">ต้นทุนโครงการ แยกรายโครงการ + แยกประเภท (มาก → น้อย)</div></div>
   <table>
-    <thead><tr><th>โครงการ</th><th style="width:100px">รหัส</th><th class="r" style="width:150px">ยอดต้นทุน</th><th class="r" style="width:70px">สัดส่วน</th><th style="width:220px">กราฟ</th></tr></thead>
-    <tbody>${projRows||'<tr><td colspan="5" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีต้นทุนในช่วงนี้</td></tr>'}</tbody>
-    <tfoot><tr><td colspan="2">รวมต้นทุนโครงการ</td><td class="r">฿${fmtN(tCost)}</td><td class="r">100%</td><td></td></tr></tfoot>
+    <thead><tr><th>โครงการ</th><th class="r">วัสดุ</th><th class="r">เครื่องจักร</th><th class="r">อื่นๆ</th><th class="r">ค่าแรง</th><th class="r" style="width:130px">รวมต้นทุน</th><th style="width:150px">กราฟ</th></tr></thead>
+    <tbody>${projRows||'<tr><td colspan="7" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีต้นทุนในช่วงนี้</td></tr>'}</tbody>
+    <tfoot><tr><td>รวมต้นทุนโครงการ</td><td class="r">฿${fmtN(tMat)}</td><td class="r">฿${fmtN(tMach)}</td><td class="r">฿${fmtN(tOther)}</td><td class="r">฿${fmtN(tLabor)}</td><td class="r">฿${fmtN(tCost)}</td><td></td></tr></tfoot>
   </table>
 </div>
 <div class="section">
