@@ -371,8 +371,10 @@ window.AppProvider = function AppProvider({ children }) {
   const [editingId,   setEditingId]   = useState(null);
 
   // ── Computed ────────────────────────────────────────
-  // Offline or no profile yet → treat as admin (seed-data mode)
-  const isAdmin = !dbOnline || !userProfile || userProfile.role === 'admin';
+  // Offline or no profile yet → treat as admin/owner (seed-data mode)
+  // owner = สูงกว่า admin (เห็นบัญชีบริษัท/รายงานรวม) · owner เป็น admin ด้วยเสมอ
+  const isOwner = !dbOnline || !userProfile || userProfile.role === 'owner';
+  const isAdmin = !dbOnline || !userProfile || userProfile.role === 'admin' || userProfile.role === 'owner';
 
   // ── Helpers ─────────────────────────────────────────
   const pushToast = useCallback((msg, kind = 'success') => {
@@ -701,11 +703,15 @@ window.AppProvider = function AppProvider({ children }) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [dbOnline]);
 
-  // ── non-admin ไม่มีสิทธิ์เห็นแดชบอร์ดรวม (ภาพรวมบริษัท) → เด้งไปหน้าจัดซื้อ ──
+  // ── กันสิทธิ์การเข้าถึงหน้าต้องห้าม → เด้งไปหน้าที่เหมาะสม ──
+  //   - แดชบอร์ดรวม: เฉพาะ admin/owner (non-admin → จัดซื้อ)
+  //   - บัญชีบริษัท: เฉพาะ owner (คนอื่น → แดชบอร์ดถ้าเป็น admin, ไม่งั้นจัดซื้อ)
   useEffect(() => {
-    if (dbReady && dbOnline && userProfile && userProfile.role !== 'admin' && view === 'dashboard') {
-      setView('history');
-    }
+    if (!dbReady || !dbOnline || !userProfile) return;
+    const role = userProfile.role;
+    const admin = role === 'admin' || role === 'owner';
+    if (!admin && view === 'dashboard') setView('history');
+    if (role !== 'owner' && view === 'company-finance') setView(admin ? 'dashboard' : 'history');
   }, [dbReady, dbOnline, userProfile, view]);
 
   // ── Sign out ────────────────────────────────────────
@@ -1034,7 +1040,7 @@ window.AppProvider = function AppProvider({ children }) {
   const value = useMemo(() => ({
     view, setView,
     sidebarOpen, setSidebarOpen,
-    session, userProfile, isAdmin, signOut, dbOnline, updateMyProfile,
+    session, userProfile, isAdmin, isOwner, signOut, dbOnline, updateMyProfile,
     projects, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
     archivedRecords, archivedLoaded, loadArchivedRecords,
     matCats, addMatCat, updateMatCat, deleteMatCat,
@@ -1052,7 +1058,7 @@ window.AppProvider = function AppProvider({ children }) {
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
-  }), [view, sidebarOpen, session, userProfile, isAdmin, signOut, dbOnline,
+  }), [view, sidebarOpen, session, userProfile, isAdmin, isOwner, signOut, dbOnline,
        projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, carryoverIncome, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,

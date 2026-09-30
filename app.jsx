@@ -137,7 +137,7 @@ function Shell() {
           {view === 'categories' && <window.CategoriesView />}
           {view === 'teams'      && <window.TeamsView />}
           {view === 'users'      && app.isAdmin && <window.UsersView />}
-          {view === 'company-finance' && app.isAdmin && <window.CompanyFinanceView />}
+          {view === 'company-finance' && app.isOwner && <window.CompanyFinanceView />}
           {view === 'deposits'   && <window.DepositsView />}
           {view === 'new-labor' && (
             <window.LaborForm

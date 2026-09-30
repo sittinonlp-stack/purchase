@@ -622,7 +622,7 @@ function Sidebar() {
             )}
           </button>
 
-          {app.isAdmin && (
+          {app.isOwner && (
             <>
               <div className="nav-section-label">ผู้บริหาร</div>
               <button className={"nav-item" + (view === 'company-finance' ? " active" : "")} onClick={() => go('company-finance')}

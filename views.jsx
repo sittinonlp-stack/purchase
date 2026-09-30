@@ -2927,7 +2927,7 @@ window.UsersView = function UsersView() {
                 {/* Avatar */}
                 <div style={{
                   width:38, height:38, borderRadius:'50%', flexShrink:0,
-                  background: p.role === 'admin' ? '#d97706' : '#64748b',
+                  background: p.role === 'owner' ? '#7c3aed' : p.role === 'admin' ? '#d97706' : '#64748b',
                   display:'flex', alignItems:'center', justifyContent:'center',
                   color:'#fff', fontWeight:700, fontSize:15,
                 }}>
@@ -2954,14 +2954,14 @@ window.UsersView = function UsersView() {
                 {/* Role badge */}
                 <span style={{
                   padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600,
-                  background: p.role === 'admin' ? 'rgba(217,119,6,0.15)' : 'rgba(100,116,139,0.12)',
-                  color: p.role === 'admin' ? '#d97706' : '#64748b',
+                  background: p.role === 'owner' ? 'rgba(124,58,237,0.15)' : p.role === 'admin' ? 'rgba(217,119,6,0.15)' : 'rgba(100,116,139,0.12)',
+                  color: p.role === 'owner' ? '#7c3aed' : p.role === 'admin' ? '#d97706' : '#64748b',
                 }}>
-                  {p.role === 'admin' ? 'Admin' : 'User'}
+                  {p.role === 'owner' ? 'เจ้าของ' : p.role === 'admin' ? 'Admin' : 'User'}
                 </span>
 
-                {/* Actions (can't touch own account) */}
-                {!isSelf(p) && (
+                {/* Actions — ห้ามแตะบัญชีตัวเอง และห้ามแตะ owner (สิทธิ์สูงสุด) */}
+                {!isSelf(p) && p.role !== 'owner' && (
                   <div style={{ display:'flex', gap:6, flexShrink:0 }}>
                     <button
                       className="btn btn-ghost btn-sm"
@@ -4925,6 +4925,229 @@ function CompanyReportModal({ open, onClose }) {
   );
 }
 
+// ---- รายงานรวม กำไร/ขาดทุนรายเดือน (รายรับจริง − ต้นทุน − ค่าดำเนินการ) ----
+function doExportProfitReport(opts) {
+  const { records = [], companyExpenses = [], carryover = 0, fromDate, toDate, opexCategories = null } = opts;
+  const inR = d => d && d >= fromDate && d <= toDate;
+  const catOk = e => !opexCategories || opexCategories.includes(e.category);
+  const months = {};
+  const ens = k => (months[k] || (months[k] = { income:0, cost:0, opex:0 }));
+  records.forEach(r => {
+    if (!inR(r.date)) return;
+    const k = r.date.slice(0,7);
+    if (window.isIncome(r)) ens(k).income += computeTotals(r).total;
+    else if (isExpense(r) && countsInDashboard(r)) ens(k).cost += computeTotals(r).total;
+  });
+  companyExpenses.forEach(e => { if (!inR(e.date) || !catOk(e)) return; ens(e.date.slice(0,7)).opex += Number(e.amount||0); });
+
+  const keys = Object.keys(months).sort();
+  let tIncome=0, tCost=0, tOpex=0;
+  keys.forEach(k => { tIncome+=months[k].income; tCost+=months[k].cost; tOpex+=months[k].opex; });
+  const carry = Number(carryover||0);
+  const tIncomeAll = tIncome + carry;
+  const tExpense = tCost + tOpex;
+  const netProfit = tIncomeAll - tExpense;
+
+  const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  const now = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
+  const pc = v => v>=0 ? '#059669' : '#dc2626';
+  const money = (v, color) => `<span style="color:${color||'#1c1917'}">${v<0?'−':''}฿${fmtN(Math.abs(v))}</span>`;
+
+  const rows = keys.map((k,i) => {
+    const m = months[k]; const exp = m.cost + m.opex; const p = m.income - exp;
+    return `<tr class="${i%2===0?'alt':''}">
+      <td>${monthLabelTH(k)}</td>
+      <td class="r">฿${fmtN(m.income)}</td>
+      <td class="r">฿${fmtN(m.cost)}</td>
+      <td class="r">฿${fmtN(m.opex)}</td>
+      <td class="r bold">฿${fmtN(exp)}</td>
+      <td class="r bold">${money(p, pc(p))}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="th"><head>
+<meta charset="UTF-8"><title>รายงานกำไร/ขาดทุนรายเดือน ${fromDate} – ${toDate}</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',sans-serif;font-size:12px;color:#1c1917;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4 landscape;margin:14mm}
+@media print{.no-print{display:none!important}}
+.report-header{background:#1c1917;color:#fff;padding:22px 28px;display:flex;justify-content:space-between;align-items:flex-start}
+.logo{width:46px;height:46px;background:#059669;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0}
+.header-left{display:flex;gap:16px;align-items:center}
+.header-title{font-size:18px;font-weight:700;letter-spacing:-0.3px;line-height:1.3}
+.header-sub{font-size:11px;color:#a8a29e;margin-top:3px}
+.header-right{text-align:right;font-size:11px;color:#a8a29e;line-height:2}
+.header-right strong{color:#fff;font-weight:600}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+.kpi{border-radius:10px;padding:16px 18px;border:1px solid #e7e5e4;background:#fafaf9}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.7;margin-bottom:6px}
+.kpi-value{font-size:20px;font-weight:700;letter-spacing:-0.5px;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:10px;margin-top:4px;opacity:.75}
+.section{margin:16px 0}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;border-left:4px solid #059669;padding-left:10px}
+.section-title{font-size:13px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+thead tr{background:#292524;color:#fff}
+thead th{padding:9px 14px;text-align:left;font-weight:600;font-size:10.5px;white-space:nowrap}
+tbody td{padding:8.5px 14px;border-bottom:1px solid #f5f5f4;vertical-align:middle}
+tbody tr.alt td{background:#fafaf9}
+tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-size:12px}
+.r{text-align:right;font-variant-numeric:tabular-nums}.bold{font-weight:700}
+.report-footer{margin-top:22px;padding-top:12px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;font-size:10px;color:#78716c}
+.print-btn{background:#059669;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-family:'Prompt',sans-serif;font-weight:600;cursor:pointer}
+.print-wrap{text-align:center;padding:24px;border-bottom:2px dashed #e7e5e4;margin-bottom:20px}
+@media screen{body[contenteditable="true"] td:focus{outline:2px solid #0ea5e9;background:#e0f2fe}}
+</style></head><body>
+<div class="no-print print-wrap">
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
+  </div>
+  <p style="margin-top:10px;font-size:11px;color:#78716c">รายรับใช้ยอดจริง (ไม่หัก 15%) · รายจ่าย = ต้นทุนโครงการ + ค่าดำเนินการบริษัท · เอกสารภายในสำหรับผู้บริหาร</p>
+</div>
+<div class="report-header">
+  <div class="header-left"><div class="logo">฿</div><div>
+    <div class="header-title">รายงานรวม — กำไร/ขาดทุนรายเดือน</div>
+    <div class="header-sub">รายรับจริง − (ต้นทุนโครงการ + ค่าดำเนินการบริษัท)</div>
+  </div></div>
+  <div class="header-right">
+    <div>📅 ช่วงเวลา: <strong>${fmtD(fromDate)} – ${fmtD(toDate)}</strong></div>
+    <div>จำนวนเดือน: <strong>${keys.length}</strong></div>
+    <div>สร้างเมื่อ: <strong>${now}</strong></div>
+  </div>
+</div>
+<div class="kpi-grid">
+  <div class="kpi" style="background:#ecfdf5;border-color:#a7f3d0"><div class="kpi-label" style="color:#059669">รายรับจริงรวม</div><div class="kpi-value" style="color:#059669">฿${fmtN(tIncomeAll)}</div><div class="kpi-sub">${carry>0?`รับจริง ฿${fmtN(tIncome)} + ยกมา ฿${fmtN(carry)}`:'ไม่หักค่าดำเนินการ 15%'}</div></div>
+  <div class="kpi" style="background:#fff7ed;border-color:#fed7aa"><div class="kpi-label" style="color:#c2410c">รายจ่ายรวม</div><div class="kpi-value" style="color:#c2410c">฿${fmtN(tExpense)}</div><div class="kpi-sub">ต้นทุน ฿${fmtN(tCost)} + ค่าดำเนินการ ฿${fmtN(tOpex)}</div></div>
+  <div class="kpi" style="background:${netProfit>=0?'#ecfdf5':'#fef2f2'};border-color:${netProfit>=0?'#a7f3d0':'#fecaca'}"><div class="kpi-label" style="color:${pc(netProfit)}">${netProfit>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}</div><div class="kpi-value" style="color:${pc(netProfit)}">${netProfit<0?'−':''}฿${fmtN(Math.abs(netProfit))}</div><div class="kpi-sub">${netProfit>=0?'บริษัทมีกำไร':'บริษัทขาดทุน'}</div></div>
+</div>
+<div class="section">
+  <div class="section-header"><div class="section-title">สรุปกำไร/ขาดทุน แยกรายเดือน</div></div>
+  <table>
+    <thead><tr><th>เดือน</th><th class="r">รายรับจริง</th><th class="r">ต้นทุนโครงการ</th><th class="r">ค่าดำเนินการ</th><th class="r">รวมรายจ่าย</th><th class="r">กำไร/ขาดทุน</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีข้อมูลในช่วงเวลานี้</td></tr>'}</tbody>
+    <tfoot>
+      ${carry>0?`<tr><td>ยอดยกมาจากปีก่อน (นับเป็นรับ)</td><td class="r">฿${fmtN(carry)}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">฿${fmtN(carry)}</td></tr>`:''}
+      <tr><td>รวมทั้งหมด</td><td class="r">฿${fmtN(tIncomeAll)}</td><td class="r">฿${fmtN(tCost)}</td><td class="r">฿${fmtN(tOpex)}</td><td class="r">฿${fmtN(tExpense)}</td><td class="r" style="background:${netProfit>=0?'#047857':'#b91c1c'}">${netProfit<0?'−':''}฿${fmtN(Math.abs(netProfit))}</td></tr>
+    </tfoot>
+  </table>
+</div>
+<div class="report-footer"><span>ForHouse Cost — รายงานกำไร/ขาดทุน (เอกสารภายใน) &nbsp;❖&nbsp; ${now}</span><span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span></div>
+<script>function toggleEdit(btn){var on=document.body.getAttribute('contenteditable')!=='true';document.body.setAttribute('contenteditable',on?'true':'false');btn.textContent=on?'✓ กำลังแก้ไข — กดเพื่อจบ':'✏️ แก้ไขรายงานก่อนบันทึก';btn.style.background=on?'#059669':'#0ea5e9';}</script>
+</body></html>`;
+  const win = window.open('', '_blank', 'width=1000,height=750');
+  if (!win) { alert('กรุณาอนุญาต Popup ในเบราว์เซอร์เพื่อดูรายงาน PDF'); return; }
+  win.document.write(html); win.document.close();
+}
+
+// ---- Modal: รายงานรวม กำไร/ขาดทุนรายเดือน ----
+function ProfitReportModal({ open, onClose }) {
+  const app = window.useApp();
+  const firstOfYear = () => { const d=new Date(); d.setMonth(0); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfLastYear = () => { const d=new Date(); return new Date(d.getFullYear()-1,0,1).toISOString().slice(0,10); };
+  const endOfLastYear = () => { const d=new Date(); return new Date(d.getFullYear()-1,11,31).toISOString().slice(0,10); };
+  const [fromDate, setFromDate] = useState(firstOfYear);
+  const [toDate, setToDate]     = useState(todayStr);
+  const [includeCarry, setIncludeCarry] = useState(true);
+  const [selectedCats, setSelectedCats] = useState(null); // null = ทั้งหมด
+  const [busy, setBusy] = useState(false);
+
+  const allCatNames = useMemo(() => {
+    const s = new Set((app.companyExpenseCats||[]).map(c=>c.name));
+    (app.companyExpenses||[]).forEach(e=>{ if(e.category) s.add(e.category); });
+    return Array.from(s);
+  }, [app.companyExpenseCats, app.companyExpenses]);
+  const selCats = selectedCats === null ? allCatNames : selectedCats;
+  const toggleCat = (n) => setSelectedCats(cur => { const base = cur===null?allCatNames:cur; return base.includes(n)?base.filter(x=>x!==n):[...base,n]; });
+  const allCatsOn = selCats.length === allCatNames.length;
+  const colorOfCat = (n) => (app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af';
+
+  const PRESETS = [
+    { label:'ปีนี้', from:firstOfYear, to:()=>todayStr() },
+    { label:'ปีที่แล้ว', from:firstOfLastYear, to:endOfLastYear },
+    { label:'12 เดือนล่าสุด', from:()=>{const d=new Date();d.setMonth(d.getMonth()-11);d.setDate(1);return d.toISOString().slice(0,10);}, to:()=>todayStr() },
+  ];
+
+  const preview = useMemo(() => {
+    const inR = d => d && d>=fromDate && d<=toDate;
+    let income=0, cost=0, opex=0;
+    (app.records||[]).forEach(r=>{ if(!inR(r.date))return; if(window.isIncome(r))income+=computeTotals(r).total; else if(isExpense(r)&&countsInDashboard(r))cost+=computeTotals(r).total; });
+    (app.companyExpenses||[]).forEach(e=>{ if(inR(e.date) && selCats.includes(e.category))opex+=Number(e.amount||0); });
+    const carry = includeCarry ? Number(app.carryoverIncome||0) : 0;
+    return { income: income+carry, expense: cost+opex, net: (income+carry)-(cost+opex) };
+  }, [app.records, app.companyExpenses, app.carryoverIncome, fromDate, toDate, includeCarry, selCats]);
+
+  const run = () => {
+    setBusy(true);
+    setTimeout(() => {
+      try {
+        doExportProfitReport({ records: app.records, projects: app.projects, companyExpenses: app.companyExpenses,
+          carryover: includeCarry ? app.carryoverIncome : 0, fromDate, toDate, opexCategories: selCats });
+        app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
+        onClose();
+      } catch(e){ console.error('[ProfitReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
+      finally { setBusy(false); }
+    }, 60);
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title="รายงานรวม กำไร/ขาดทุนรายเดือน" width={540}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose} disabled={busy}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={run} disabled={busy}><Icon name="receipt" size={13}/> {busy?'กำลังสร้าง…':'สร้าง PDF'}</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+        <div>
+          <div style={LS}>ช่วงเวลาสำเร็จรูป</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {PRESETS.map(p=>(<button key={p.label} className="btn btn-ghost btn-sm" style={{ fontSize:12 }} onClick={()=>{ setFromDate(p.from()); setToDate(p.to()); }}>{p.label}</button>))}
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>ตั้งแต่วันที่</label><input type="date" style={IS} value={fromDate} onChange={e=>setFromDate(e.target.value)} /></div>
+          <div><label style={LS}>ถึงวันที่</label><input type="date" style={IS} value={toDate} onChange={e=>setToDate(e.target.value)} /></div>
+        </div>
+        <div>
+          <div className="row between" style={{ marginBottom:8 }}>
+            <span style={LS}>ประเภทค่าดำเนินการที่จะรวมเป็นรายจ่าย</span>
+            {allCatNames.length>0 && <button className="btn btn-ghost btn-sm" style={{ fontSize:11.5 }} onClick={()=>setSelectedCats(allCatsOn?[]:allCatNames)}>{allCatsOn?'ไม่เลือกทั้งหมด':'เลือกทั้งหมด'}</button>}
+          </div>
+          {allCatNames.length===0 ? <div className="text-small text-muted">ยังไม่มีประเภทค่าดำเนินการ</div> : (
+            <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:200, overflowY:'auto' }}>
+              {allCatNames.map(n=>{ const on=selCats.includes(n); return (
+                <div key={n} className="row gap-8" style={{ alignItems:'center', padding:'7px 10px', border:'1px solid var(--line)', borderRadius:8, cursor:'pointer', background: on?'rgba(217,119,6,0.06)':'transparent' }} onClick={()=>toggleCat(n)}>
+                  <div style={{ width:18, height:18, borderRadius:5, border:'2px solid', borderColor: on?'#d97706':'var(--ink-4)', background: on?'#d97706':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    {on && <Icon name="check" size={11} stroke={3} style={{ color:'#fff' }} />}
+                  </div>
+                  <span style={{ width:11, height:11, borderRadius:'50%', background:colorOfCat(n), display:'inline-block' }} />
+                  <span style={{ fontSize:13 }}>{n}</span>
+                </div>
+              ); })}
+            </div>
+          )}
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'var(--bg-2)', borderRadius:9, border:'1px solid var(--line)', cursor:'pointer' }} onClick={()=>setIncludeCarry(v=>!v)}>
+          <div style={{ width:18, height:18, borderRadius:5, border:'2px solid', borderColor: includeCarry ? '#059669' : 'var(--ink-4)', background: includeCarry ? '#059669' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            {includeCarry && <Icon name="check" size={11} stroke={3} style={{ color:'#fff' }} />}
+          </div>
+          <div><div style={{ fontSize:13, fontWeight:500 }}>รวมยอดยกมาจากปีก่อน (฿{fmt(Number(app.carryoverIncome||0))})</div><div style={{ fontSize:11, color:'var(--ink-3)', marginTop:1 }}>นับเป็นรับเพิ่มในยอดรวม (ไม่กระจายรายเดือน)</div></div>
+        </div>
+        <div style={{ padding:'14px 16px', borderRadius:10, background:'rgba(5,150,105,0.06)', border:'1px solid rgba(5,150,105,0.2)' }}>
+          <div className="row between"><span className="text-small text-muted">รายรับจริง (ไม่หัก 15%)</span><span className="mono" style={{ color:'#059669', fontWeight:600 }}>฿{fmt(preview.income)}</span></div>
+          <div className="row between" style={{ marginTop:4 }}><span className="text-small text-muted">หัก ต้นทุน + ค่าดำเนินการ</span><span className="mono" style={{ color:'#c2410c', fontWeight:600 }}>−฿{fmt(preview.expense)}</span></div>
+          <div className="row between" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}><strong>{preview.net>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}</strong><strong className="mono" style={{ color: preview.net>=0?'#059669':'#dc2626' }}>{preview.net<0?'−':''}฿{fmt(Math.abs(preview.net))}</strong></div>
+        </div>
+      </div>
+    </window.Modal>
+  );
+}
+
 // ---- หน้าบัญชีบริษัท ----
 window.CompanyFinanceView = function CompanyFinanceView() {
   const app = window.useApp();
@@ -4932,6 +5155,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const [expModal, setExpModal] = useState({ open:false, initial:null });
   const [catOpen, setCatOpen]   = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [profitOpen, setProfitOpen] = useState(false);
 
   const bounds = useMemo(() => {
     const d = new Date();
@@ -4974,6 +5198,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
         </div>
         <div className="row gap-8" style={{ flexWrap:'wrap' }}>
           <button className="btn btn-ghost" onClick={()=>setCatOpen(true)}><Icon name="tag" size={14}/> จัดการประเภท</button>
+          <button className="btn btn-ghost" onClick={()=>setProfitOpen(true)} title="รายงานรวม รายรับจริง − ต้นทุน − ค่าดำเนินการ = กำไร/ขาดทุนรายเดือน"><Icon name="chart" size={14}/> รายงานกำไร/ขาดทุน</button>
           <button className="btn btn-ghost" onClick={()=>setReportOpen(true)}><Icon name="download" size={14}/> ส่งออกรายงาน</button>
           <button className="btn btn-accent" onClick={()=>setExpModal({ open:true, initial:null })}><Icon name="plus" size={14}/> เพิ่มรายจ่าย</button>
         </div>
@@ -5066,6 +5291,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
       <CompanyExpenseModal open={expModal.open} initial={expModal.initial} onClose={()=>setExpModal({ open:false, initial:null })} />
       <CompanyCatManagerModal open={catOpen} onClose={()=>setCatOpen(false)} />
       <CompanyReportModal open={reportOpen} onClose={()=>setReportOpen(false)} />
+      <ProfitReportModal open={profitOpen} onClose={()=>setProfitOpen(false)} />
     </>
   );
 };
