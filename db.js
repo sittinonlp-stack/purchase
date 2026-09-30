@@ -102,6 +102,24 @@
     };
   }
 
+  // ── เจ้าหนี้ / เงินกู้ (company_creditors) — owner only ──
+  function dbCreditor(row) {
+    return {
+      id: row.id, creditor: row.creditor || '',
+      principal: Number(row.principal || 0), monthlyPayment: Number(row.monthly_payment || 0),
+      totalInstallments: Number(row.total_installments || 0), paidInstallments: Number(row.paid_installments || 0),
+      startDate: row.start_date || '', note: row.note || '', meta: row.meta || {},
+    };
+  }
+  function jsCreditor(c) {
+    return {
+      id: c.id, creditor: c.creditor || '',
+      principal: Number(c.principal || 0), monthly_payment: Number(c.monthlyPayment || 0),
+      total_installments: Number(c.totalInstallments || 0), paid_installments: Number(c.paidInstallments || 0),
+      start_date: c.startDate || null, note: c.note || '', meta: c.meta || {},
+    };
+  }
+
   function dbRecord(row) {
     // record_items and work_logs are joined via Supabase select
     const items = (row.record_items || [])
@@ -431,6 +449,13 @@
           if (!cecErr) companyExpenseCats = (cecRows || []).map(dbCat);
         } catch (e) { /* ตารางบัญชีบริษัทยังไม่มี หรือไม่มีสิทธิ์ */ }
 
+        // เจ้าหนี้ / เงินกู้ (owner-only)
+        let companyCreditors = [];
+        try {
+          const { data: crRows, error: crErr } = await client.from('company_creditors').select('*').order('created_at');
+          if (!crErr) companyCreditors = (crRows || []).map(dbCreditor);
+        } catch (e) { /* ตาราง company_creditors ยังไม่มี หรือไม่มีสิทธิ์ */ }
+
         // ตั้งค่าส่วนกลาง (key-value) เช่น ยอดยกมาจากปีก่อน
         let appSettings = {};
         try {
@@ -439,7 +464,7 @@
         } catch (e) { /* ตาราง app_settings ยังไม่มี */ }
 
         return {
-          laborContracts, incomeContracts, companyExpenses, companyExpenseCats, appSettings,
+          laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, appSettings,
           projects:        (projects    || []).map(dbProject),
           matCats:         (matCats     || []).map(dbCat),
           machCats:        (machCats    || []).map(dbCat),
@@ -629,6 +654,30 @@
     },
     async deleteCompanyCat(id) {
       const { error } = await window.supabaseClient.from('company_expense_categories').delete().eq('id', id);
+      if (error) throw error;
+    },
+
+    // ── เจ้าหนี้ / เงินกู้ (company_creditors) — owner only ──
+    async insertCreditor(c) {
+      const { error } = await window.supabaseClient.from('company_creditors').insert(jsCreditor(c));
+      if (error) throw error;
+    },
+    async updateCreditor(id, patch) {
+      const dbPatch = {};
+      if ('creditor'          in patch) dbPatch.creditor           = patch.creditor || '';
+      if ('principal'         in patch) dbPatch.principal          = Number(patch.principal || 0);
+      if ('monthlyPayment'    in patch) dbPatch.monthly_payment    = Number(patch.monthlyPayment || 0);
+      if ('totalInstallments' in patch) dbPatch.total_installments = Number(patch.totalInstallments || 0);
+      if ('paidInstallments'  in patch) dbPatch.paid_installments  = Number(patch.paidInstallments || 0);
+      if ('startDate'         in patch) dbPatch.start_date         = patch.startDate || null;
+      if ('note'              in patch) dbPatch.note               = patch.note || '';
+      if ('meta'              in patch) dbPatch.meta               = patch.meta || {};
+      if (Object.keys(dbPatch).length === 0) return;
+      const { error } = await window.supabaseClient.from('company_creditors').update(dbPatch).eq('id', id);
+      if (error) throw error;
+    },
+    async deleteCreditor(id) {
+      const { error } = await window.supabaseClient.from('company_creditors').delete().eq('id', id);
       if (error) throw error;
     },
 

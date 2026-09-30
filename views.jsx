@@ -52,6 +52,29 @@ function monthLabelTH(ym) {
     .toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
 }
 
+// ยอดผ่อนเจ้าหนี้/เงินกู้ ที่ชำระแล้ว แมปเข้าแต่ละเดือน (งวดที่ i นับจากวันเริ่มผ่อน)
+// คืน { byMonth:{'YYYY-MM':amount}, total } เฉพาะที่อยู่ในช่วง from–to (ว่าง = ไม่จำกัด)
+function loanPaymentsByMonth(creditors, fromDate, toDate) {
+  const byMonth = {}; let total = 0;
+  (creditors || []).forEach(c => {
+    const monthly = Number(c.monthlyPayment) || 0;
+    const paid = Math.max(0, Math.round(Number(c.paidInstallments) || 0));
+    if (monthly <= 0 || paid <= 0 || !c.startDate) return;
+    const start = new Date(c.startDate + 'T00:00:00');
+    if (isNaN(start)) return;
+    for (let i = 0; i < paid; i++) {
+      const d = new Date(start); d.setMonth(d.getMonth() + i);
+      const ymd = d.toISOString().slice(0, 10);
+      if (fromDate && ymd < fromDate) continue;
+      if (toDate && ymd > toDate) continue;
+      const ym = ymd.slice(0, 7);
+      byMonth[ym] = (byMonth[ym] || 0) + monthly;
+      total += monthly;
+    }
+  });
+  return { byMonth, total };
+}
+
 // ยอดยกมาจากปีก่อน (นับเป็นรับ ไม่หัก 15%) — แก้ไขได้เฉพาะ admin
 function CarryoverEditor() {
   const app = window.useApp();
@@ -4848,6 +4871,74 @@ function CompanyCatManagerModal({ open, onClose }) {
   );
 }
 
+// ---- Modal: เพิ่ม/แก้ไขเจ้าหนี้ (เงินกู้) ----
+function CreditorModal({ open, onClose, initial }) {
+  const app = window.useApp();
+  const [creditor, setCreditor] = useState('');
+  const [principal, setPrincipal] = useState('');
+  const [monthly, setMonthly]     = useState('');
+  const [total, setTotal]         = useState('');
+  const [paid, setPaid]           = useState('0');
+  const [startDate, setStartDate] = useState(todayStr());
+  const [note, setNote]           = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setCreditor(initial?.creditor || '');
+    setPrincipal(initial?.principal != null ? String(initial.principal) : '');
+    setMonthly(initial?.monthlyPayment != null ? String(initial.monthlyPayment) : '');
+    setTotal(initial?.totalInstallments != null ? String(initial.totalInstallments) : '');
+    setPaid(initial?.paidInstallments != null ? String(initial.paidInstallments) : '0');
+    setStartDate(initial?.startDate || todayStr());
+    setNote(initial?.note || '');
+  }, [open, initial]); // eslint-disable-line
+
+  const save = () => {
+    if (!creditor.trim()) return app.pushToast('โปรดระบุชื่อเจ้าหนี้', 'error');
+    if (!(Number(monthly) > 0)) return app.pushToast('โปรดระบุยอดผ่อนต่อเดือน', 'error');
+    if (!(Number(total) > 0)) return app.pushToast('โปรดระบุจำนวนงวดทั้งหมด', 'error');
+    const tot = Math.round(Number(total) || 0);
+    const payload = {
+      creditor: creditor.trim(), principal: Number(principal) || 0, monthlyPayment: Number(monthly) || 0,
+      totalInstallments: tot, paidInstallments: Math.max(0, Math.min(Math.round(Number(paid) || 0), tot)),
+      startDate, note: note.trim(),
+    };
+    if (initial?.id) { app.updateCompanyCreditor(initial.id, payload); app.pushToast('แก้ไขเจ้าหนี้เรียบร้อย'); }
+    else { app.addCompanyCreditor(payload); app.pushToast('เพิ่มเจ้าหนี้แล้ว'); }
+    onClose();
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+  const remain = Math.max(0, (Number(total)||0) - (Number(paid)||0));
+  const previewOut = (Number(monthly)||0) * remain;
+
+  return (
+    <window.Modal open={open} onClose={onClose} title={initial?.id ? 'แก้ไขเจ้าหนี้ / เงินกู้' : 'เพิ่มเจ้าหนี้ / เงินกู้'} width={500}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={save}><Icon name="save" size={13}/> บันทึก</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        <div><label style={LS}>ชื่อเจ้าหนี้ / แหล่งกู้</label><input style={IS} value={creditor} onChange={e=>setCreditor(e.target.value)} placeholder="เช่น ธนาคารกสิกรไทย / คุณสมชาย" /></div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>ยอดเงินกู้ (บาท)</label><window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={principal} onChange={setPrincipal} placeholder="0.00" /></div>
+          <div><label style={LS}>ยอดผ่อน/เดือน (บาท)</label><window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={monthly} onChange={setMonthly} placeholder="0.00" /></div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 }}>
+          <div><label style={LS}>จำนวนงวดทั้งหมด</label><input type="number" min="1" step="1" style={IS} value={total} onChange={e=>setTotal(e.target.value)} placeholder="เช่น 12" /></div>
+          <div><label style={LS}>ชำระแล้ว (งวด)</label><input type="number" min="0" step="1" style={IS} value={paid} onChange={e=>setPaid(e.target.value)} placeholder="0" /></div>
+          <div><label style={LS}>เริ่มผ่อนงวดแรก</label><input type="date" style={IS} value={startDate} onChange={e=>setStartDate(e.target.value)} /></div>
+        </div>
+        <div><label style={LS}>หมายเหตุ</label><input style={IS} value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น กู้มาหมุนซื้อวัสดุ" /></div>
+        <div style={{ padding:'10px 14px', borderRadius:9, background:'rgba(220,38,38,0.06)', border:'1px solid rgba(220,38,38,0.2)' }}>
+          <div className="row between"><span className="text-small text-muted">เหลืออีก {remain} งวด · ยอดค้างชำระ</span><span className="mono" style={{ color:'#dc2626', fontWeight:700 }}>฿{fmt(previewOut)}</span></div>
+        </div>
+      </div>
+    </window.Modal>
+  );
+}
+
 // ---- Modal: ส่งออกรายงานบัญชีบริษัท (เลือกประเภทได้) ----
 function CompanyReportModal({ open, onClose }) {
   const app = window.useApp();
@@ -4946,7 +5037,7 @@ function CompanyReportModal({ open, onClose }) {
 
 // ---- รายงานรวม กำไร/ขาดทุนรายเดือน (รายรับจริง − ต้นทุน − ค่าดำเนินการ) ----
 function doExportProfitReport(opts) {
-  const { records = [], projects = [], companyExpenses = [], companyExpenseCats = [], carryover = 0, fromDate, toDate, opexCategories = null } = opts;
+  const { records = [], projects = [], companyExpenses = [], companyExpenseCats = [], companyCreditors = [], carryover = 0, fromDate, toDate, opexCategories = null } = opts;
   const inR = d => d && d >= fromDate && d <= toDate;
   const catOk = e => !opexCategories || opexCategories.includes(e.category);
   const months = {};
@@ -4975,6 +5066,10 @@ function doExportProfitReport(opts) {
     const c = e.category || '—';
     catOpex[c] = (catOpex[c] || 0) + Number(e.amount||0);
   });
+  // ผ่อนเจ้าหนี้/เงินกู้ → นับเป็นค่าดำเนินการ (แมปเข้าเดือนตามวันเริ่มผ่อน)
+  const loanPm = loanPaymentsByMonth(companyCreditors, fromDate, toDate);
+  Object.entries(loanPm.byMonth).forEach(([ym, amt]) => { ens(ym).opex += amt; });
+  if (loanPm.total > 0) catOpex['ผ่อนเจ้าหนี้ / เงินกู้'] = (catOpex['ผ่อนเจ้าหนี้ / เงินกู้'] || 0) + loanPm.total;
 
   const keys = Object.keys(months).sort();
   let tIncome=0, tCost=0, tOpex=0;
@@ -5078,15 +5173,22 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 </div>
 <div class="section">
   <div class="section-header"><div class="section-title">สรุปกำไร/ขาดทุน แยกส่วน (รายรับต้นทุน 85% / รายรับค่าดำเนินการ 15%)</div></div>
-  <table>
-    <thead><tr><th>ส่วน</th><th class="r" style="width:180px">รายรับ</th><th class="r" style="width:180px">รายจ่าย</th><th class="r" style="width:180px">กำไร/ขาดทุน</th></tr></thead>
-    <tbody>
-      <tr><td>ต้นทุนโครงการ <span style="color:#78716c;font-size:10.5px">(รายรับ 85%)</span></td><td class="r">฿${fmtN(costIncome)}</td><td class="r">฿${fmtN(tCost)}</td><td class="r bold">${money(costProfit, pc(costProfit))}</td></tr>
-      <tr class="alt"><td>ค่าดำเนินการบริษัท <span style="color:#78716c;font-size:10.5px">(รายรับ 15%)</span></td><td class="r">฿${fmtN(opexIncome)}</td><td class="r">฿${fmtN(tOpex)}</td><td class="r bold">${money(opexProfit, pc(opexProfit))}</td></tr>
-      ${carry>0?`<tr><td>ยอดยกมาจากปีก่อน <span style="color:#78716c;font-size:10.5px">(นับเป็นรับ)</span></td><td class="r">฿${fmtN(carry)}</td><td class="r">—</td><td class="r bold">${money(carry, pc(carry))}</td></tr>`:''}
-    </tbody>
-    <tfoot><tr><td>รวมทั้งหมด</td><td class="r">฿${fmtN(tIncomeAll)}</td><td class="r">฿${fmtN(tExpense)}</td><td class="r" style="background:${netProfit>=0?'#047857':'#b91c1c'}">${netProfit<0?'−':''}฿${fmtN(Math.abs(netProfit))}</td></tr></tfoot>
-  </table>
+  <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin:0 0 12px">
+    <div class="kpi" style="background:${costProfit>=0?'#ecfdf5':'#fef2f2'};border-color:${costProfit>=0?'#a7f3d0':'#fecaca'}">
+      <div class="kpi-label" style="color:${pc(costProfit)}">ส่วนต้นทุนโครงการ · ${costProfit>=0?'กำไร':'ขาดทุน'}</div>
+      <div class="kpi-value" style="color:${pc(costProfit)}">${costProfit<0?'−':''}฿${fmtN(Math.abs(costProfit))}</div>
+      <div class="kpi-sub">รายรับ 85% ฿${fmtN(costIncome)} − ต้นทุนโครงการ ฿${fmtN(tCost)}</div>
+    </div>
+    <div class="kpi" style="background:${opexProfit>=0?'#ecfdf5':'#fef2f2'};border-color:${opexProfit>=0?'#a7f3d0':'#fecaca'}">
+      <div class="kpi-label" style="color:${pc(opexProfit)}">ส่วนค่าดำเนินการ · ${opexProfit>=0?'กำไร':'ขาดทุน'}</div>
+      <div class="kpi-value" style="color:${pc(opexProfit)}">${opexProfit<0?'−':''}฿${fmtN(Math.abs(opexProfit))}</div>
+      <div class="kpi-sub">รายรับ 15% ฿${fmtN(opexIncome)} − ค่าดำเนินการ ฿${fmtN(tOpex)}</div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;background:#1c1917;color:#fff;padding:13px 20px;border-radius:10px">
+    <span style="font-weight:600;font-size:12px">รวมกำไร/ขาดทุนสุทธิ${carry>0?` (รวมยอดยกมา ฿${fmtN(carry)})`:''} · รับ ฿${fmtN(tIncomeAll)} − จ่าย ฿${fmtN(tExpense)}</span>
+    <span style="font-weight:700;font-size:18px;color:${netProfit>=0?'#6ee7b7':'#fca5a5'}">${netProfit<0?'−':''}฿${fmtN(Math.abs(netProfit))}</span>
+  </div>
 </div>
 <div class="section">
   <div class="section-header"><div class="section-title">สรุปกำไร/ขาดทุน แยกรายเดือน</div></div>
@@ -5156,16 +5258,17 @@ function ProfitReportModal({ open, onClose }) {
     let income=0, cost=0, opex=0;
     (app.records||[]).forEach(r=>{ if(!inR(r.date))return; if(window.isIncome(r))income+=computeTotals(r).total; else if(isExpense(r)&&countsInDashboard(r))cost+=computeTotals(r).total; });
     (app.companyExpenses||[]).forEach(e=>{ if(inR(e.date) && selCats.includes(e.category))opex+=Number(e.amount||0); });
+    opex += loanPaymentsByMonth(app.companyCreditors, fromDate, toDate).total;
     const carry = includeCarry ? Number(app.carryoverIncome||0) : 0;
     return { income: income+carry, expense: cost+opex, net: (income+carry)-(cost+opex) };
-  }, [app.records, app.companyExpenses, app.carryoverIncome, fromDate, toDate, includeCarry, selCats]);
+  }, [app.records, app.companyExpenses, app.companyCreditors, app.carryoverIncome, fromDate, toDate, includeCarry, selCats]);
 
   const run = () => {
     setBusy(true);
     setTimeout(() => {
       try {
         doExportProfitReport({ records: app.records, projects: app.projects, companyExpenses: app.companyExpenses,
-          companyExpenseCats: app.companyExpenseCats,
+          companyExpenseCats: app.companyExpenseCats, companyCreditors: app.companyCreditors,
           carryover: includeCarry ? app.carryoverIncome : 0, fromDate, toDate, opexCategories: selCats });
         app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
         onClose();
@@ -5237,6 +5340,36 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const [catOpen, setCatOpen]   = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [profitOpen, setProfitOpen] = useState(false);
+  const [credModal, setCredModal] = useState({ open:false, initial:null });
+
+  // ── เจ้าหนี้ / เงินกู้ ─────────────────────────────
+  const creditors = (app.companyCreditors || []).slice().sort((a,b)=>{
+    const ao=(Number(a.totalInstallments)-Number(a.paidInstallments))>0?0:1;
+    const bo=(Number(b.totalInstallments)-Number(b.paidInstallments))>0?0:1;
+    if (ao!==bo) return ao-bo; // ที่ยังค้างขึ้นก่อน
+    return (b.monthlyPayment*(b.totalInstallments-b.paidInstallments)) - (a.monthlyPayment*(a.totalInstallments-a.paidInstallments));
+  });
+  const credStat = (c) => {
+    const total = Math.max(0, Math.round(Number(c.totalInstallments)||0));
+    const paid  = Math.max(0, Math.min(Math.round(Number(c.paidInstallments)||0), total));
+    const remain = total - paid;
+    const monthly = Number(c.monthlyPayment)||0;
+    const outstanding = monthly * remain;
+    const totalRepay = monthly * total;
+    const interest = Math.max(0, totalRepay - (Number(c.principal)||0));
+    const pct = total>0 ? Math.round(paid/total*100) : 0;
+    let nextDue = '';
+    if (c.startDate && remain>0) { const d=new Date(c.startDate+'T00:00:00'); d.setMonth(d.getMonth()+paid); nextDue=d.toISOString().slice(0,10); }
+    return { total, paid, remain, monthly, outstanding, totalRepay, interest, pct, nextDue, done: remain===0 && total>0 };
+  };
+  const credOutstandingTotal = creditors.reduce((s,c)=>s+credStat(c).outstanding, 0);
+  const credMonthlyTotal = creditors.reduce((s,c)=>{ const st=credStat(c); return s + (st.remain>0 ? st.monthly : 0); }, 0);
+  const payInstallment = (c) => {
+    const st = credStat(c);
+    if (st.remain<=0) return;
+    app.updateCompanyCreditor(c.id, { paidInstallments: st.paid + 1 });
+    app.pushToast(`บันทึกชำระงวดที่ ${st.paid+1}/${st.total} ของ ${c.creditor} แล้ว`);
+  };
 
   const bounds = useMemo(() => {
     const d = new Date();
@@ -5251,14 +5384,17 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const companyIncome = incomeGross * COMPANY_FEE_RATE;
   const expenses = (app.companyExpenses||[]).filter(e=>inRange(e.date)).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const expenseTotal = expenses.reduce((s,e)=>s+Number(e.amount||0),0);
-  const profit = companyIncome - expenseTotal;
+  const loanOpexTotal = loanPaymentsByMonth(app.companyCreditors, bounds.from, bounds.to).total;
+  const totalOpex = expenseTotal + loanOpexTotal;   // ค่าดำเนินการรวม (รวมยอดผ่อนเจ้าหนี้)
+  const profit = companyIncome - totalOpex;
   const colorOf = (n) => (app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af';
 
   const byCat = useMemo(() => {
     const m = {};
     expenses.forEach(e=>{ const k=e.category||'—'; if(!m[k]) m[k]={name:k,color:colorOf(k),count:0,total:0}; m[k].count++; m[k].total+=Number(e.amount||0); });
+    if (loanOpexTotal > 0) m['ผ่อนเจ้าหนี้ / เงินกู้'] = { name:'ผ่อนเจ้าหนี้ / เงินกู้', color:'#dc2626', count:0, total:loanOpexTotal };
     return Object.values(m).sort((a,b)=>b.total-a.total);
-  }, [expenses, app.companyExpenseCats]);
+  }, [expenses, app.companyExpenseCats, loanOpexTotal]);
 
   const RANGES = [ {k:'all',label:'ทั้งหมด'}, {k:'year',label:'ปีนี้'}, {k:'month',label:'เดือนนี้'} ];
 
@@ -5281,6 +5417,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
           <button className="btn btn-ghost" onClick={()=>setCatOpen(true)}><Icon name="tag" size={14}/> จัดการประเภท</button>
           <button className="btn btn-ghost" onClick={()=>setProfitOpen(true)} title="รายงานรวม รายรับจริง − ต้นทุน − ค่าดำเนินการ = กำไร/ขาดทุนรายเดือน"><Icon name="chart" size={14}/> รายงานกำไร/ขาดทุน</button>
           <button className="btn btn-ghost" onClick={()=>setReportOpen(true)}><Icon name="download" size={14}/> ส่งออกรายงาน</button>
+          <button className="btn btn-ghost" onClick={()=>setCredModal({ open:true, initial:null })}><Icon name="safe" size={14}/> เพิ่มเจ้าหนี้</button>
           <button className="btn btn-accent" onClick={()=>setExpModal({ open:true, initial:null })}><Icon name="plus" size={14}/> เพิ่มรายจ่าย</button>
         </div>
       </div>
@@ -5296,7 +5433,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
         {/* KPI */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:12 }}>
           {card(`รายรับบริษัท (ค่าดำเนินการ ${(COMPANY_FEE_RATE*100).toFixed(0)}%)`, '฿'+fmt(companyIncome), `จากยอดรับลูกค้า ฿${fmt(incomeGross)} · ${incomeRecs.length} รายการ`, '#059669', 'rgba(5,150,105,0.07)', 'rgba(5,150,105,0.25)')}
-          {card('รายจ่ายบริษัท', '฿'+fmt(expenseTotal), `${expenses.length} รายการ`, '#c2410c', 'rgba(217,119,6,0.07)', 'rgba(217,119,6,0.25)')}
+          {card('รายจ่ายบริษัท (รวมผ่อนเจ้าหนี้)', '฿'+fmt(totalOpex), loanOpexTotal>0?`รายจ่าย ฿${fmt(expenseTotal)} + ผ่อนเจ้าหนี้ ฿${fmt(loanOpexTotal)}`:`${expenses.length} รายการ`, '#c2410c', 'rgba(217,119,6,0.07)', 'rgba(217,119,6,0.25)')}
           {card(profit>=0?'กำไรสุทธิ (รับ−จ่าย)':'ขาดทุนสุทธิ (รับ−จ่าย)', (profit<0?'−':'')+'฿'+fmt(Math.abs(profit)), profit>=0?'บริษัทมีกำไร':'บริษัทขาดทุน', profit>=0?'#059669':'#dc2626', profit>=0?'rgba(5,150,105,0.07)':'rgba(220,38,38,0.07)', profit>=0?'rgba(5,150,105,0.25)':'rgba(220,38,38,0.25)')}
         </div>
 
@@ -5309,7 +5446,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
                 <div key={c.name} className="row between" style={{ padding:'8px 10px', border:'1px solid var(--line)', borderRadius:8 }}>
                   <span className="row gap-8" style={{ alignItems:'center' }}>
                     <span style={{ width:11, height:11, borderRadius:'50%', background:c.color, display:'inline-block' }} />
-                    {c.name} <span className="text-small text-muted">· {c.count} รายการ</span>
+                    {c.name} {c.count > 0 && <span className="text-small text-muted">· {c.count} รายการ</span>}
                   </span>
                   <span className="mono" style={{ fontWeight:600 }}>฿{fmt(c.total)}</span>
                 </div>
@@ -5369,10 +5506,61 @@ window.CompanyFinanceView = function CompanyFinanceView() {
         )}
       </div>
 
+      {/* เจ้าหนี้ / เงินกู้ */}
+      <div className="card" style={{ marginTop:16 }}>
+        <div className="row between" style={{ marginBottom:12, flexWrap:'wrap', gap:8 }}>
+          <strong>เจ้าหนี้ / เงินกู้</strong>
+          <span className="text-small text-muted">
+            ยอดค้างชำระรวม <strong className="mono" style={{ color:'#dc2626' }}>฿{fmt(credOutstandingTotal)}</strong>
+            {credMonthlyTotal>0 && <> · ต้องผ่อนรวม/เดือน <strong className="mono" style={{ color:'var(--ink-1)' }}>฿{fmt(credMonthlyTotal)}</strong></>}
+          </span>
+        </div>
+        {creditors.length===0 ? (
+          <div className="empty">
+            <div className="empty-illust"><Icon name="safe" size={28}/></div>
+            <div className="empty-title">ยังไม่มีเจ้าหนี้ / เงินกู้</div>
+            <div className="empty-sub">กด "เพิ่มเจ้าหนี้" เพื่อบันทึกเงินกู้ที่นำมาหมุนในธุรกิจ</div>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {creditors.map(c=>{ const st=credStat(c); return (
+              <div key={c.id} style={{ border:'1px solid var(--line)', borderRadius:10, padding:'12px 14px', opacity: st.done?0.7:1 }}>
+                <div className="row between" style={{ flexWrap:'wrap', gap:8, alignItems:'flex-start' }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:600 }}>{c.creditor}{st.done && <span className="badge" style={{ marginLeft:8, background:'rgba(22,163,74,0.12)', color:'#16a34a' }}>ชำระครบแล้ว ✓</span>}</div>
+                    <div className="text-small text-muted">
+                      ยอดกู้ ฿{fmt(c.principal)} · ผ่อน ฿{fmt(st.monthly)}/เดือน · {st.total} งวด
+                      {st.interest>0 && <> · ดอกเบี้ยรวม ~฿{fmt(st.interest)}</>}
+                      {c.note && <> · {c.note}</>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div className="text-small text-muted">ยอดค้าง</div>
+                    <div className="mono" style={{ fontSize:18, fontWeight:700, color: st.done?'#16a34a':'#dc2626' }}>฿{fmt(st.outstanding)}</div>
+                  </div>
+                </div>
+                <div style={{ margin:'10px 0 6px' }}>
+                  <div className="text-small text-muted" style={{ marginBottom:4 }}>ชำระแล้ว {st.paid}/{st.total} งวด ({st.pct}%){st.nextDue && <> · งวดถัดไปครบกำหนด {fmtDate(st.nextDue)}</>}</div>
+                  <div style={{ background:'var(--bg-2)', borderRadius:99, height:8, overflow:'hidden' }}>
+                    <div style={{ height:8, borderRadius:99, background: st.done?'#16a34a':'var(--accent)', width: st.pct+'%' }} />
+                  </div>
+                </div>
+                <div className="row gap-8" style={{ justifyContent:'flex-end', marginTop:8 }}>
+                  {!st.done && <button className="btn btn-accent btn-sm" onClick={()=>payInstallment(c)}><Icon name="check" size={13}/> จ่ายงวดนี้</button>}
+                  <button className="btn btn-ghost btn-sm" onClick={()=>setCredModal({ open:true, initial:c })}><Icon name="edit" size={13}/> แก้ไข</button>
+                  <button className="btn btn-ghost btn-sm" style={{ color:'var(--danger)' }} onClick={()=>{ if(confirm(`ลบเจ้าหนี้ "${c.creditor}"?`)){ app.deleteCompanyCreditor(c.id); app.pushToast('ลบเจ้าหนี้แล้ว'); } }}><Icon name="trash" size={13}/> ลบ</button>
+                </div>
+              </div>
+            ); })}
+          </div>
+        )}
+      </div>
+
       <CompanyExpenseModal open={expModal.open} initial={expModal.initial} onClose={()=>setExpModal({ open:false, initial:null })} />
       <CompanyCatManagerModal open={catOpen} onClose={()=>setCatOpen(false)} />
       <CompanyReportModal open={reportOpen} onClose={()=>setReportOpen(false)} />
       <ProfitReportModal open={profitOpen} onClose={()=>setProfitOpen(false)} />
+      <CreditorModal open={credModal.open} initial={credModal.initial} onClose={()=>setCredModal({ open:false, initial:null })} />
     </>
   );
 };

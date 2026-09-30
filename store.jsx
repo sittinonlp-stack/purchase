@@ -360,6 +360,7 @@ window.AppProvider = function AppProvider({ children }) {
   // บัญชีบริษัท (เฉพาะ admin) — non-admin จะได้ [] จาก RLS
   const [companyExpenses, setCompanyExpenses] = useState([]);
   const [companyExpenseCats, setCompanyExpenseCats] = useState([]);
+  const [companyCreditors, setCompanyCreditors] = useState([]);
   // ยอดต้นทุน/รับ ยกมาจากปีก่อน (ก้อนเดียว ทั้งบริษัท) — เก็บใน app_settings
   const [carryoverIncome, setCarryoverIncomeState] = useState(0);
   const [records,     setRecords]     = useState(seedRecords());
@@ -424,7 +425,7 @@ window.AppProvider = function AppProvider({ children }) {
       const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
               lumpLaborCats: llc, otherCats: oc, workerTeams: teams, records: recs,
               laborContracts: lcon, incomeContracts: icon,
-              companyExpenses: cexp, companyExpenseCats: ccats,
+              companyExpenses: cexp, companyExpenseCats: ccats, companyCreditors: ccred,
               appSettings: aset } = await window.db.loadAll();
 
       setProjects(ps);
@@ -448,6 +449,7 @@ window.AppProvider = function AppProvider({ children }) {
       setIncomeContracts(icon || []);
       setCompanyExpenses(cexp || []);
       setCompanyExpenseCats(ccats || []);
+      setCompanyCreditors(ccred || []);
       setCarryoverIncomeState(Number((aset || {}).carryover_income || 0));
       setRecords(recs);
       setDbOnline(true);
@@ -536,6 +538,7 @@ window.AppProvider = function AppProvider({ children }) {
             setWorkerTeams(SEED_WORKER_TEAMS);
             setCompanyExpenses([]);
             setCompanyExpenseCats([]);
+            setCompanyCreditors([]);
             setCarryoverIncomeState(0);
             setRecords(seedRecords());
           } else if (event === 'TOKEN_REFRESHED' && s) {
@@ -1022,6 +1025,24 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteCompanyCat(id), 'deleteCompanyCat');
   }, [dbOnline, dbSync]);
 
+  // ── เจ้าหนี้ / เงินกู้ (owner only) ──────────────────
+  const addCompanyCreditor = useCallback((c) => {
+    const nc = { paidInstallments: 0, note: '', meta: {}, ...c, id: c.id || newId() };
+    setCompanyCreditors((xs) => [nc, ...xs]);
+    if (dbOnline) dbSync(window.db.insertCreditor(nc), 'insertCreditor');
+    return nc;
+  }, [dbOnline, dbSync]);
+
+  const updateCompanyCreditor = useCallback((id, patch) => {
+    setCompanyCreditors((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    if (dbOnline) dbSync(window.db.updateCreditor(id, patch), 'updateCreditor');
+  }, [dbOnline, dbSync]);
+
+  const deleteCompanyCreditor = useCallback((id) => {
+    setCompanyCreditors((xs) => xs.filter((x) => x.id !== id));
+    if (dbOnline) dbSync(window.db.deleteCreditor(id), 'deleteCreditor');
+  }, [dbOnline, dbSync]);
+
   // ── ยอดยกมาจากปีก่อน (เฉพาะ admin แก้ไข) ──
   const setCarryoverIncome = useCallback((v) => {
     const num = Number(v || 0);
@@ -1053,13 +1074,14 @@ window.AppProvider = function AppProvider({ children }) {
     incomeContracts, addIncomeContract, updateIncomeContract, deleteIncomeContract,
     companyExpenses, addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
     companyExpenseCats, addCompanyCat, updateCompanyCat, deleteCompanyCat,
+    companyCreditors, addCompanyCreditor, updateCompanyCreditor, deleteCompanyCreditor,
     carryoverIncome, setCarryoverIncome,
     records, addRecord, updateRecord, deleteRecord, hydrateRecord,
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, isOwner, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, carryoverIncome, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, carryoverIncome, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
@@ -1069,7 +1091,9 @@ window.AppProvider = function AppProvider({ children }) {
        addLaborContract, updateLaborContract, deleteLaborContract,
        addIncomeContract, updateIncomeContract, deleteIncomeContract,
        addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
-       addCompanyCat, updateCompanyCat, deleteCompanyCat, setCarryoverIncome, pushToast, updateMyProfile]);
+       addCompanyCat, updateCompanyCat, deleteCompanyCat,
+       addCompanyCreditor, updateCompanyCreditor, deleteCompanyCreditor,
+       setCarryoverIncome, pushToast, updateMyProfile]);
 
   // ── Render guards ─────────────────────────────────────
   if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;
