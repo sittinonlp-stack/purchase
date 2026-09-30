@@ -4218,7 +4218,8 @@ window.LaborHistoryView = function LaborHistoryView() {
             <div className="modal-body">
               <div className="text-small text-muted" style={{ marginBottom: 16 }}>
                 ยอดเงินประกันผลงานที่ยังค้างคืน แยกตามทีมช่าง (หักยอดที่จ่ายคืนแล้ว)<br/>
-                วิธีจ่ายคืน: เปิดหน้า <strong>บันทึกค่าแรง / เหมาจ่าย</strong> แล้วติ๊ก <strong>"จ่ายคืนเงินประกันผลงาน"</strong> ข้างงวดงาน เมื่ออนุมัติแล้วยอดจะถูกหักอัตโนมัติ
+                วิธีจ่ายคืน: เปิดหน้า <strong>บันทึกค่าแรง / เหมาจ่าย</strong> แล้วติ๊ก <strong>"จ่ายคืนเงินประกันผลงาน"</strong> ข้างงวดงาน เมื่ออนุมัติแล้วยอดจะถูกหักอัตโนมัติ<br/>
+                หรือถ้าจ่ายคืนไปแล้วแต่ไม่ได้บันทึกผ่านโหมดนั้น กด <strong style={{ color: 'var(--success, #16a34a)' }}>"จ่ายแล้ว"</strong> ข้างบิลเพื่อตัดออกจากยอดค้างได้เลย
               </div>
               {Object.entries(retentionByTeam).filter(([, v]) => v.balance > 0 || v.paid > 0).length === 0 ? (
                 <div className="text-small text-muted" style={{ padding: '16px 0', textAlign: 'center' }}>ไม่มีเงินประกันผลงานคงค้าง</div>
@@ -4250,13 +4251,26 @@ window.LaborHistoryView = function LaborHistoryView() {
                       </div>
                       <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {info.heldRecords.map(r => (
-                          <div key={r.id} onClick={() => { app.setDetailId(r.id); setRetentionOpen(false); }} title="เปิดดูบิล"
-                            style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'var(--surface-2)', cursor: 'pointer', fontSize: 12 }}>
-                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div key={r.id}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'var(--surface-2)', fontSize: 12 }}>
+                            <span onClick={() => { app.setDetailId(r.id); setRetentionOpen(false); }} title="เปิดดูบิล"
+                              style={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>
                               <span className="mono" style={{ color: 'var(--ink-2)' }}>{r.docNo}</span>
                               <span style={{ color: 'var(--ink-3)' }}> · {(app.projects || []).find(p => p.id === r.projectId)?.name || 'ไม่ระบุโครงการ'} · {fmtDate(r.date)}</span>
                             </span>
                             <span className="mono" style={{ color: 'var(--info)', whiteSpace: 'nowrap' }}>฿{fmt(r.retentionDeduction)}</span>
+                            {app.isAdmin && (
+                              <button className="btn btn-ghost btn-sm" style={{ flexShrink: 0, padding: '3px 8px', color: 'var(--success, #16a34a)', borderColor: 'rgba(22,163,74,0.4)' }}
+                                title="จ่ายเงินประกันผลงานคืนช่างแล้ว — ตัดออกจากยอดค้าง (ใช้กรณีจ่ายไปแล้วแต่ไม่ได้บันทึกผ่านโหมดจ่ายคืน)"
+                                onClick={() => {
+                                  if (confirm(`ยืนยันว่าจ่ายเงินประกันผลงาน ฿${fmt(r.retentionDeduction)} ของบิล ${r.docNo} คืนช่างแล้ว?\n\nบิลนี้จะถูกตัดออกจากยอดค้าง`)) {
+                                    app.updateRecord(r.id, { retentionReturned: true });
+                                    app.pushToast('บันทึกจ่ายเงินประกันแล้ว ✓');
+                                  }
+                                }}>
+                                <Icon name="check" size={12} /> จ่ายแล้ว
+                              </button>
+                            )}
                           </div>
                         ))}
                         {info.paidRecords.map(r => (
