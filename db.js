@@ -120,6 +120,20 @@
     };
   }
 
+  // ── รายจ่ายประจำทุกเดือน (company_recurring) — owner only ──
+  function dbRecurring(row) {
+    return {
+      id: row.id, category: row.category || '', amount: Number(row.amount || 0),
+      startDate: row.start_date || '', endDate: row.end_date || '', note: row.note || '', meta: row.meta || {},
+    };
+  }
+  function jsRecurring(r) {
+    return {
+      id: r.id, category: r.category || '', amount: Number(r.amount || 0),
+      start_date: r.startDate || null, end_date: r.endDate || null, note: r.note || '', meta: r.meta || {},
+    };
+  }
+
   function dbRecord(row) {
     // record_items and work_logs are joined via Supabase select
     const items = (row.record_items || [])
@@ -456,6 +470,13 @@
           if (!crErr) companyCreditors = (crRows || []).map(dbCreditor);
         } catch (e) { /* ตาราง company_creditors ยังไม่มี หรือไม่มีสิทธิ์ */ }
 
+        // รายจ่ายประจำทุกเดือน (owner-only)
+        let companyRecurring = [];
+        try {
+          const { data: rcRows, error: rcErr } = await client.from('company_recurring').select('*').order('created_at');
+          if (!rcErr) companyRecurring = (rcRows || []).map(dbRecurring);
+        } catch (e) { /* ตาราง company_recurring ยังไม่มี หรือไม่มีสิทธิ์ */ }
+
         // ตั้งค่าส่วนกลาง (key-value) เช่น ยอดยกมาจากปีก่อน
         let appSettings = {};
         try {
@@ -464,7 +485,7 @@
         } catch (e) { /* ตาราง app_settings ยังไม่มี */ }
 
         return {
-          laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, appSettings,
+          laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyRecurring, appSettings,
           projects:        (projects    || []).map(dbProject),
           matCats:         (matCats     || []).map(dbCat),
           machCats:        (machCats    || []).map(dbCat),
@@ -678,6 +699,28 @@
     },
     async deleteCreditor(id) {
       const { error } = await window.supabaseClient.from('company_creditors').delete().eq('id', id);
+      if (error) throw error;
+    },
+
+    // ── รายจ่ายประจำทุกเดือน (company_recurring) — owner only ──
+    async insertRecurring(r) {
+      const { error } = await window.supabaseClient.from('company_recurring').insert(jsRecurring(r));
+      if (error) throw error;
+    },
+    async updateRecurring(id, patch) {
+      const dbPatch = {};
+      if ('category'  in patch) dbPatch.category   = patch.category || '';
+      if ('amount'    in patch) dbPatch.amount     = Number(patch.amount || 0);
+      if ('startDate' in patch) dbPatch.start_date = patch.startDate || null;
+      if ('endDate'   in patch) dbPatch.end_date   = patch.endDate || null;
+      if ('note'      in patch) dbPatch.note       = patch.note || '';
+      if ('meta'      in patch) dbPatch.meta       = patch.meta || {};
+      if (Object.keys(dbPatch).length === 0) return;
+      const { error } = await window.supabaseClient.from('company_recurring').update(dbPatch).eq('id', id);
+      if (error) throw error;
+    },
+    async deleteRecurring(id) {
+      const { error } = await window.supabaseClient.from('company_recurring').delete().eq('id', id);
       if (error) throw error;
     },
 
