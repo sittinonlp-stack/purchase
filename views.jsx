@@ -4793,6 +4793,9 @@ function CompanyCatManagerModal({ open, onClose }) {
   const cats = app.companyExpenseCats || [];
   const [name, setName]   = useState('');
   const [color, setColor] = useState('#6366f1');
+  const [editId, setEditId]       = useState(null);
+  const [editName, setEditName]   = useState('');
+  const [editColor, setEditColor] = useState('#6366f1');
 
   const add = () => {
     if (!name.trim()) return app.pushToast('โปรดระบุชื่อประเภท', 'error');
@@ -4800,6 +4803,12 @@ function CompanyCatManagerModal({ open, onClose }) {
     setName(''); app.pushToast('เพิ่มประเภทแล้ว');
   };
   const del = (c) => { if (confirm(`ลบประเภท "${c.name}"?\n(รายจ่ายเดิมที่ใช้ประเภทนี้ยังอยู่ ไม่ถูกลบ)`)) app.deleteCompanyCat(c.id); };
+  const startEdit = (c) => { setEditId(c.id); setEditName(c.name); setEditColor(c.color || '#6366f1'); };
+  const saveEdit = () => {
+    if (!editName.trim()) return app.pushToast('โปรดระบุชื่อประเภท', 'error');
+    app.updateCompanyCat(editId, { name: editName.trim(), color: editColor });
+    setEditId(null); app.pushToast('แก้ไขประเภทแล้ว');
+  };
 
   const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', outline:'none', boxSizing:'border-box' };
 
@@ -4814,13 +4823,23 @@ function CompanyCatManagerModal({ open, onClose }) {
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:320, overflowY:'auto' }}>
           {cats.length === 0 && <div className="text-small text-muted" style={{ textAlign:'center', padding:'12px 0' }}>ยังไม่มีประเภท</div>}
-          {cats.map(c=>(
+          {cats.map(c=> c.id === editId ? (
+            <div key={c.id} className="row gap-8" style={{ alignItems:'center', padding:'8px 10px', border:'1px solid var(--accent)', borderRadius:8, background:'var(--accent-soft)' }}>
+              <input type="color" value={editColor} onChange={e=>setEditColor(e.target.value)} style={{ width:32, height:32, border:'1px solid var(--line)', borderRadius:8, background:'none', cursor:'pointer', flexShrink:0 }} />
+              <input style={{ ...IS, flex:1 }} value={editName} onChange={e=>setEditName(e.target.value)} autoFocus onKeyDown={e=>{ if(e.key==='Enter') saveEdit(); if(e.key==='Escape') setEditId(null); }} />
+              <button className="btn btn-accent btn-sm" onClick={saveEdit} title="บันทึก"><Icon name="save" size={13}/></button>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setEditId(null)} title="ยกเลิก"><Icon name="x" size={13}/></button>
+            </div>
+          ) : (
             <div key={c.id} className="row between" style={{ padding:'8px 10px', border:'1px solid var(--line)', borderRadius:8 }}>
               <span className="row gap-8" style={{ alignItems:'center' }}>
                 <span style={{ width:12, height:12, borderRadius:'50%', background:c.color, display:'inline-block' }} />
                 {c.name}
               </span>
-              <button className="topbar-icon-btn" style={{ width:30, height:30, color:'var(--danger)' }} onClick={()=>del(c)} title="ลบประเภท"><Icon name="trash" size={13}/></button>
+              <span className="row gap-8">
+                <button className="topbar-icon-btn" style={{ width:30, height:30 }} onClick={()=>startEdit(c)} title="แก้ไขประเภท"><Icon name="edit" size={13}/></button>
+                <button className="topbar-icon-btn" style={{ width:30, height:30, color:'var(--danger)' }} onClick={()=>del(c)} title="ลบประเภท"><Icon name="trash" size={13}/></button>
+              </span>
             </div>
           ))}
         </div>
@@ -4927,18 +4946,29 @@ function CompanyReportModal({ open, onClose }) {
 
 // ---- รายงานรวม กำไร/ขาดทุนรายเดือน (รายรับจริง − ต้นทุน − ค่าดำเนินการ) ----
 function doExportProfitReport(opts) {
-  const { records = [], companyExpenses = [], carryover = 0, fromDate, toDate, opexCategories = null } = opts;
+  const { records = [], projects = [], companyExpenses = [], companyExpenseCats = [], carryover = 0, fromDate, toDate, opexCategories = null } = opts;
   const inR = d => d && d >= fromDate && d <= toDate;
   const catOk = e => !opexCategories || opexCategories.includes(e.category);
   const months = {};
   const ens = k => (months[k] || (months[k] = { income:0, cost:0, opex:0 }));
+  const projCost = {};   // ต้นทุนแยกตามโครงการ
+  const catOpex = {};    // ค่าดำเนินการแยกตามประเภท
   records.forEach(r => {
     if (!inR(r.date)) return;
     const k = r.date.slice(0,7);
     if (window.isIncome(r)) ens(k).income += computeTotals(r).total;
-    else if (isExpense(r) && countsInDashboard(r)) ens(k).cost += computeTotals(r).total;
+    else if (isExpense(r) && countsInDashboard(r)) {
+      const t = computeTotals(r).total;
+      ens(k).cost += t;
+      projCost[r.projectId] = (projCost[r.projectId] || 0) + t;
+    }
   });
-  companyExpenses.forEach(e => { if (!inR(e.date) || !catOk(e)) return; ens(e.date.slice(0,7)).opex += Number(e.amount||0); });
+  companyExpenses.forEach(e => {
+    if (!inR(e.date) || !catOk(e)) return;
+    ens(e.date.slice(0,7)).opex += Number(e.amount||0);
+    const c = e.category || '—';
+    catOpex[c] = (catOpex[c] || 0) + Number(e.amount||0);
+  });
 
   const keys = Object.keys(months).sort();
   let tIncome=0, tCost=0, tOpex=0;
@@ -4965,6 +4995,17 @@ function doExportProfitReport(opts) {
       <td class="r bold">${money(p, pc(p))}</td>
     </tr>`;
   }).join('');
+
+  // กราฟแท่งง่าย ๆ — ต้นทุนแยกโครงการ + ค่าดำเนินการแยกประเภท (เรียงมาก→น้อย)
+  const projById = {}; projects.forEach(p => { projById[p.id] = p; });
+  const catColor = {}; companyExpenseCats.forEach(c => { catColor[c.name] = c.color; });
+  const bar = (v, max, color) => `<div style="background:#f0ede8;border-radius:99px;height:7px"><div style="height:7px;border-radius:99px;background:${color};width:${max>0?Math.round(v/max*100):0}%"></div></div>`;
+  const projEntries = Object.entries(projCost).sort((a,b)=>b[1]-a[1]);
+  const maxProj = projEntries.length ? projEntries[0][1] : 0;
+  const projRows = projEntries.map(([pid,v],i)=>{ const p=projById[pid]; const col=p?.color||'#d97706'; return `<tr class="${i%2===0?'alt':''}"><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:7px"></span>${p?.name||'ไม่ระบุโครงการ'}</td><td style="font-size:10.5px;color:#78716c">${p?.code||'—'}</td><td class="r bold">฿${fmtN(v)}</td><td class="r" style="width:60px">${tCost>0?Math.round(v/tCost*100):0}%</td><td style="width:210px">${bar(v,maxProj,col)}</td></tr>`; }).join('');
+  const catEntries = Object.entries(catOpex).sort((a,b)=>b[1]-a[1]);
+  const maxCat = catEntries.length ? catEntries[0][1] : 0;
+  const catRows = catEntries.map(([name,v],i)=>{ const col=catColor[name]||'#c2410c'; return `<tr class="${i%2===0?'alt':''}"><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${col};margin-right:7px"></span>${name}</td><td class="r bold">฿${fmtN(v)}</td><td class="r" style="width:60px">${tOpex>0?Math.round(v/tOpex*100):0}%</td><td style="width:210px">${bar(v,maxCat,col)}</td></tr>`; }).join('');
 
   const html = `<!DOCTYPE html><html lang="th"><head>
 <meta charset="UTF-8"><title>รายงานกำไร/ขาดทุนรายเดือน ${fromDate} – ${toDate}</title>
@@ -5035,6 +5076,22 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
     </tfoot>
   </table>
 </div>
+<div class="section">
+  <div class="section-header" style="border-left-color:#d97706"><div class="section-title">ต้นทุนโครงการ แยกรายโครงการ (มาก → น้อย)</div></div>
+  <table>
+    <thead><tr><th>โครงการ</th><th style="width:100px">รหัส</th><th class="r" style="width:150px">ยอดต้นทุน</th><th class="r" style="width:70px">สัดส่วน</th><th style="width:220px">กราฟ</th></tr></thead>
+    <tbody>${projRows||'<tr><td colspan="5" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีต้นทุนในช่วงนี้</td></tr>'}</tbody>
+    <tfoot><tr><td colspan="2">รวมต้นทุนโครงการ</td><td class="r">฿${fmtN(tCost)}</td><td class="r">100%</td><td></td></tr></tfoot>
+  </table>
+</div>
+<div class="section">
+  <div class="section-header" style="border-left-color:#c2410c"><div class="section-title">ค่าดำเนินการ แยกตามประเภท (มาก → น้อย)</div></div>
+  <table>
+    <thead><tr><th>ประเภทค่าดำเนินการ</th><th class="r" style="width:150px">ยอด</th><th class="r" style="width:70px">สัดส่วน</th><th style="width:220px">กราฟ</th></tr></thead>
+    <tbody>${catRows||'<tr><td colspan="4" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีค่าดำเนินการในช่วงนี้</td></tr>'}</tbody>
+    <tfoot><tr><td>รวมค่าดำเนินการ</td><td class="r">฿${fmtN(tOpex)}</td><td class="r">100%</td><td></td></tr></tfoot>
+  </table>
+</div>
 <div class="report-footer"><span>ForHouse Cost — รายงานกำไร/ขาดทุน (เอกสารภายใน) &nbsp;❖&nbsp; ${now}</span><span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span></div>
 <script>function toggleEdit(btn){var on=document.body.getAttribute('contenteditable')!=='true';document.body.setAttribute('contenteditable',on?'true':'false');btn.textContent=on?'✓ กำลังแก้ไข — กดเพื่อจบ':'✏️ แก้ไขรายงานก่อนบันทึก';btn.style.background=on?'#059669':'#0ea5e9';}</script>
 </body></html>`;
@@ -5085,6 +5142,7 @@ function ProfitReportModal({ open, onClose }) {
     setTimeout(() => {
       try {
         doExportProfitReport({ records: app.records, projects: app.projects, companyExpenses: app.companyExpenses,
+          companyExpenseCats: app.companyExpenseCats,
           carryover: includeCarry ? app.carryoverIncome : 0, fromDate, toDate, opexCategories: selCats });
         app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
         onClose();
