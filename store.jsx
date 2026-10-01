@@ -855,9 +855,7 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── Material categories ───────────────────────────────
   const addMatCat = useCallback((c) => {
-    const nc = { ...c, id: newId() };
-    setMatCats((cs) => [...cs, nc]);
-    if (dbOnline) dbSync(window.db.insertMatCat(nc), 'insertMatCat');
+    setMatCats((cs) => { const nc = { ...c, id: c.id || newId(), sortOrder: cs.length }; if (dbOnline) dbSync(window.db.insertMatCat(nc), 'insertMatCat'); return [...cs, nc]; });
   }, [dbOnline, dbSync]);
 
   const updateMatCat = useCallback((id, patch) => {
@@ -872,9 +870,7 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── Machinery categories ──────────────────────────────
   const addMachCat = useCallback((c) => {
-    const nc = { ...c, id: newId() };
-    setMachCats((cs) => [...cs, nc]);
-    if (dbOnline) dbSync(window.db.insertMachCat(nc), 'insertMachCat');
+    setMachCats((cs) => { const nc = { ...c, id: c.id || newId(), sortOrder: cs.length }; if (dbOnline) dbSync(window.db.insertMachCat(nc), 'insertMachCat'); return [...cs, nc]; });
   }, [dbOnline, dbSync]);
 
   const updateMachCat = useCallback((id, patch) => {
@@ -889,9 +885,7 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── Labor categories ──────────────────────────────────
   const addLaborCat = useCallback((c) => {
-    const nc = { ...c, id: newId() };
-    setLaborCats((cs) => [...cs, nc]);
-    if (dbOnline) dbSync(window.db.insertLaborCat(nc), 'insertLaborCat');
+    setLaborCats((cs) => { const nc = { ...c, id: c.id || newId(), sortOrder: cs.length }; if (dbOnline) dbSync(window.db.insertLaborCat(nc), 'insertLaborCat'); return [...cs, nc]; });
   }, [dbOnline, dbSync]);
 
   const updateLaborCat = useCallback((id, patch) => {
@@ -906,9 +900,7 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── Lump-labor categories ─────────────────────────────
   const addLumpLaborCat = useCallback((c) => {
-    const nc = { ...c, id: newId() };
-    setLumpLaborCats((cs) => [...cs, nc]);
-    if (dbOnline) dbSync(window.db.insertLumpLaborCat(nc), 'insertLumpLaborCat');
+    setLumpLaborCats((cs) => { const nc = { ...c, id: c.id || newId(), sortOrder: cs.length }; if (dbOnline) dbSync(window.db.insertLumpLaborCat(nc), 'insertLumpLaborCat'); return [...cs, nc]; });
   }, [dbOnline, dbSync]);
 
   const updateLumpLaborCat = useCallback((id, patch) => {
@@ -923,9 +915,7 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── Other-expense categories ──────────────────────────
   const addOtherCat = useCallback((c) => {
-    const nc = { ...c, id: newId() };
-    setOtherCats((cs) => [...cs, nc]);
-    if (dbOnline) dbSync(window.db.insertOtherCat(nc), 'insertOtherCat');
+    setOtherCats((cs) => { const nc = { ...c, id: c.id || newId(), sortOrder: cs.length }; if (dbOnline) dbSync(window.db.insertOtherCat(nc), 'insertOtherCat'); return [...cs, nc]; });
   }, [dbOnline, dbSync]);
 
   const updateOtherCat = useCallback((id, patch) => {
@@ -936,6 +926,19 @@ window.AppProvider = function AppProvider({ children }) {
   const deleteOtherCat = useCallback((id) => {
     setOtherCats((cs) => cs.filter((c) => c.id !== id));
     if (dbOnline) dbSync(window.db.deleteOtherCat(id), 'deleteOtherCat');
+  }, [dbOnline, dbSync]);
+
+  // ── จัดลำดับหมวดหมู่ (drag reorder) ──
+  const reorderCats = useCallback((which, orderedIds) => {
+    const setter = { mat: setMatCats, mach: setMachCats, labor: setLaborCats, 'lump-labor': setLumpLaborCats, other: setOtherCats }[which];
+    if (!setter || !Array.isArray(orderedIds)) return;
+    setter((cs) => {
+      const byId = {}; cs.forEach(c => { byId[c.id] = c; });
+      const next = orderedIds.map((id, i) => (byId[id] ? { ...byId[id], sortOrder: i } : null)).filter(Boolean);
+      cs.forEach(c => { if (!orderedIds.includes(c.id)) next.push(c); });
+      return next;
+    });
+    if (dbOnline) dbSync(window.db.reorderCats(which, orderedIds), 'reorderCats');
   }, [dbOnline, dbSync]);
 
   // ── Worker teams ──────────────────────────────────────
@@ -1089,7 +1092,7 @@ window.AppProvider = function AppProvider({ children }) {
     machCats, addMachCat, updateMachCat, deleteMachCat,
     laborCats, addLaborCat, updateLaborCat, deleteLaborCat,
     lumpLaborCats, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
-    otherCats, addOtherCat, updateOtherCat, deleteOtherCat,
+    otherCats, addOtherCat, updateOtherCat, deleteOtherCat, reorderCats,
     workerTeams, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
     laborContracts, addLaborContract, updateLaborContract, deleteLaborContract,
     incomeContracts, addIncomeContract, updateIncomeContract, deleteIncomeContract,
@@ -1108,7 +1111,7 @@ window.AppProvider = function AppProvider({ children }) {
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
        addLaborCat, updateLaborCat, deleteLaborCat, addLumpLaborCat, updateLumpLaborCat, deleteLumpLaborCat,
-       addOtherCat, updateOtherCat, deleteOtherCat,
+       addOtherCat, updateOtherCat, deleteOtherCat, reorderCats,
        addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
        addLaborContract, updateLaborContract, deleteLaborContract,
        addIncomeContract, updateIncomeContract, deleteIncomeContract,

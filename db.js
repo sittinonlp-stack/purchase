@@ -15,11 +15,16 @@
   }
 
   function dbCat(row) {
-    return { id: row.id, name: row.name, color: row.color || '#9ca3af' };
+    return { id: row.id, name: row.name, color: row.color || '#9ca3af', sortOrder: Number(row.sort_order || 0) };
   }
   function jsCat(c) {
     return { id: c.id, name: c.name, color: c.color || '#9ca3af' };
   }
+  // map ชนิดหมวดหมู่ → ชื่อตาราง (ใช้กับการจัดลำดับ)
+  const CAT_TABLE = {
+    mat: 'material_categories', mach: 'machinery_categories', labor: 'labor_categories',
+    'lump-labor': 'lump_labor_categories', other: 'other_categories',
+  };
 
   function dbTeam(row) {
     return {
@@ -411,11 +416,11 @@
           { data: teams,       error: e5 },
         ] = await Promise.all([
           client.from('projects').select('*').order('created_at'),
-          client.from('material_categories').select('*').order('created_at'),
-          client.from('machinery_categories').select('*').order('created_at'),
-          client.from('labor_categories').select('*').order('created_at'),
-          client.from('lump_labor_categories').select('*').order('created_at'),
-          client.from('other_categories').select('*').order('created_at'),
+          client.from('material_categories').select('*').order('sort_order').order('created_at'),
+          client.from('machinery_categories').select('*').order('sort_order').order('created_at'),
+          client.from('labor_categories').select('*').order('sort_order').order('created_at'),
+          client.from('lump_labor_categories').select('*').order('sort_order').order('created_at'),
+          client.from('other_categories').select('*').order('sort_order').order('created_at'),
           client.from('worker_teams').select('*').order('created_at'),
         ]);
         const lightErr = e1 || e2 || e3 || e4 || e7 || e8 || e5;
@@ -732,7 +737,7 @@
     },
 
     async insertMatCat(c) {
-      const { error } = await window.supabaseClient.from('material_categories').insert(jsCat(c));
+      const { error } = await window.supabaseClient.from('material_categories').insert({ ...jsCat(c), sort_order: Number(c.sortOrder || 0) });
       if (error) throw error;
     },
     async updateMatCat(id, patch) {
@@ -746,7 +751,7 @@
 
     // ── Machinery categories ──────────────────────
     async insertMachCat(c) {
-      const { error } = await window.supabaseClient.from('machinery_categories').insert(jsCat(c));
+      const { error } = await window.supabaseClient.from('machinery_categories').insert({ ...jsCat(c), sort_order: Number(c.sortOrder || 0) });
       if (error) throw error;
     },
     async updateMachCat(id, patch) {
@@ -760,7 +765,7 @@
 
     // ── Labor categories ──────────────────────────
     async insertLaborCat(c) {
-      const { error } = await window.supabaseClient.from('labor_categories').insert(jsCat(c));
+      const { error } = await window.supabaseClient.from('labor_categories').insert({ ...jsCat(c), sort_order: Number(c.sortOrder || 0) });
       if (error) throw error;
     },
     async updateLaborCat(id, patch) {
@@ -774,7 +779,7 @@
 
     // ── Lump-labor categories ─────────────────────
     async insertLumpLaborCat(c) {
-      const { error } = await window.supabaseClient.from('lump_labor_categories').insert(jsCat(c));
+      const { error } = await window.supabaseClient.from('lump_labor_categories').insert({ ...jsCat(c), sort_order: Number(c.sortOrder || 0) });
       if (error) throw error;
     },
     async updateLumpLaborCat(id, patch) {
@@ -788,7 +793,7 @@
 
     // ── Other-expense categories ──────────────────
     async insertOtherCat(c) {
-      const { error } = await window.supabaseClient.from('other_categories').insert(jsCat(c));
+      const { error } = await window.supabaseClient.from('other_categories').insert({ ...jsCat(c), sort_order: Number(c.sortOrder || 0) });
       if (error) throw error;
     },
     async updateOtherCat(id, patch) {
@@ -798,6 +803,17 @@
     async deleteOtherCat(id) {
       const { error } = await window.supabaseClient.from('other_categories').delete().eq('id', id);
       if (error) throw error;
+    },
+
+    // ── จัดลำดับหมวดหมู่ (drag reorder) ──
+    async reorderCats(which, orderedIds) {
+      const table = CAT_TABLE[which];
+      if (!table || !Array.isArray(orderedIds)) return;
+      const client = window.supabaseClient;
+      const results = await Promise.all(orderedIds.map((id, i) =>
+        client.from(table).update({ sort_order: i }).eq('id', id)));
+      const err = results.find(r => r && r.error);
+      if (err && err.error) throw err.error;
     },
 
     // ── Worker teams ──────────────────────────────

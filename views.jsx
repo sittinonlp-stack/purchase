@@ -1720,6 +1720,79 @@ function EditCategoryModal({ open, onClose, cat, onSave }) {
   );
 }
 
+// ---- รายการหมวดหมู่ที่ลากจัดลำดับได้ (รองรับเมาส์ + ทัชมือถือ) ----
+function SortableCatList({ cats, which, countByCat, onEdit }) {
+  const app = window.useApp();
+  const [items, setItems] = useState(cats);
+  const itemsRef = useRef(cats);
+  const containerRef = useRef(null);
+  const dragId = useRef(null);
+  const [draggingId, setDraggingId] = useState(null);
+  useEffect(() => { setItems(cats); itemsRef.current = cats; }, [cats]);
+
+  const delFn = { mat: app.deleteMatCat, mach: app.deleteMachCat, labor: app.deleteLaborCat, 'lump-labor': app.deleteLumpLaborCat, other: app.deleteOtherCat }[which];
+
+  const onMove = (e) => {
+    if (!dragId.current || !containerRef.current) return;
+    const rows = [...containerRef.current.querySelectorAll('[data-crow]')];
+    const y = e.clientY;
+    let target = rows.length - 1;
+    for (let i = 0; i < rows.length; i++) { const r = rows[i].getBoundingClientRect(); if (y < r.top + r.height / 2) { target = i; break; } }
+    setItems(prev => {
+      const from = prev.findIndex(c => c.id === dragId.current);
+      if (from < 0 || from === target) return prev;
+      const next = [...prev]; const [m] = next.splice(from, 1); next.splice(target, 0, m); itemsRef.current = next; return next;
+    });
+  };
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    document.body.style.userSelect = '';
+    const id = dragId.current; dragId.current = null; setDraggingId(null);
+    if (!id) return;
+    const newIds = itemsRef.current.map(c => c.id);
+    if (newIds.join('|') !== cats.map(c => c.id).join('|')) { app.reorderCats(which, newIds); app.pushToast('จัดลำดับหมวดหมู่แล้ว'); }
+  };
+  const startDrag = (e, id) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    dragId.current = id; setDraggingId(id);
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  return (
+    <div className="col gap-8" ref={containerRef}>
+      {items.map((c) => (
+        <div key={c.id} data-crow className="row gap-12" style={{
+          padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10,
+          opacity: draggingId === c.id ? 0.55 : 1, transition: 'opacity 120ms',
+        }}>
+          <span onPointerDown={(e) => startDrag(e, c.id)} title="ลากเพื่อจัดลำดับ"
+            style={{ cursor: 'grab', color: 'var(--ink-3)', touchAction: 'none', display: 'flex', alignItems: 'center', padding: '2px', flexShrink: 0 }}>
+            <Icon name="menu" size={15} />
+          </span>
+          <span style={{ width: 14, height: 14, borderRadius: 4, background: c.color, flexShrink: 0 }}></span>
+          <span style={{ flex: 1, fontWeight: 500, fontSize: 13.5, minWidth: 0 }}>{c.name}</span>
+          <span className="badge gray mono">ใช้ {countByCat[c.id] || 0} ครั้ง</span>
+          <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="แก้ไข" onClick={() => onEdit(c)}>
+            <Icon name="edit" size={13} />
+          </button>
+          {app.isAdmin && (
+            <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="ลบ" onClick={() => {
+              if (countByCat[c.id]) { app.pushToast('ลบไม่ได้ — มีรายการใช้หมวดนี้อยู่', 'error'); return; }
+              delFn(c.id); app.pushToast('ลบหมวดหมู่แล้ว');
+            }}>
+              <Icon name="trash" size={13} />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---- Categories view ----
 window.CategoriesView = function CategoriesView() {
   const app = window.useApp();
@@ -1750,46 +1823,12 @@ window.CategoriesView = function CategoriesView() {
     setEditCat(null);
   };
 
-  const renderList = (cats, which) => (
-    <div className="col gap-8">
-      {cats.map((c) => (
-        <div key={c.id} className="row gap-12" style={{
-          padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10,
-          transition: 'border 200ms'
-        }}
-          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--ink-3)'}
-          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--line)'}
-        >
-          <span style={{ width: 14, height: 14, borderRadius: 4, background: c.color, flexShrink: 0 }}></span>
-          <span style={{ flex: 1, fontWeight: 500, fontSize: 13.5 }}>{c.name}</span>
-          <span className="badge gray mono">ใช้ {countByCat[c.id] || 0} ครั้ง</span>
-          {/* ปุ่มแก้ไข — ทุกคนกดได้ */}
-          <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="แก้ไข"
-            onClick={() => setEditCat({ cat: c, which })}>
-            <Icon name="edit" size={13} />
-          </button>
-          {app.isAdmin && (
-            <button className="topbar-icon-btn" style={{ width: 30, height: 30 }} title="ลบ"
-              onClick={() => {
-                if (countByCat[c.id]) { app.pushToast('ลบไม่ได้ — มีรายการใช้หมวดนี้อยู่', 'error'); return; }
-                const fn = which === 'mach' ? app.deleteMachCat : which === 'labor' ? app.deleteLaborCat : which === 'lump-labor' ? app.deleteLumpLaborCat : which === 'other' ? app.deleteOtherCat : app.deleteMatCat;
-                fn(c.id);
-                app.pushToast('ลบหมวดหมู่แล้ว');
-              }}>
-              <Icon name="trash" size={13} />
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-
   return (
     <>
       <div className="page-header">
         <div>
           <h1 className="page-title">หมวดหมู่</h1>
-          <div className="page-sub">จัดการหมวดหมู่ของวัสดุและเครื่องจักร — เพิ่มได้ตามต้องการ</div>
+          <div className="page-sub">จัดการหมวดหมู่ — เพิ่ม/แก้ไขได้ · ลากไอคอน ☰ เพื่อจัดลำดับขึ้น-ลง</div>
         </div>
       </div>
 
@@ -1804,7 +1843,7 @@ window.CategoriesView = function CategoriesView() {
               <Icon name="plus" size={12} stroke={2.5} /> เพิ่ม
             </button>
           </div>
-          <div className="card-body">{renderList(app.matCats, 'mat')}</div>
+          <div className="card-body"><SortableCatList cats={app.matCats} which="mat" countByCat={countByCat} onEdit={(c)=>setEditCat({cat:c,which:'mat'})} /></div>
         </div>
         <div className="card">
           <div className="card-header">
@@ -1816,7 +1855,7 @@ window.CategoriesView = function CategoriesView() {
               <Icon name="plus" size={12} stroke={2.5} /> เพิ่ม
             </button>
           </div>
-          <div className="card-body">{renderList(app.machCats, 'mach')}</div>
+          <div className="card-body"><SortableCatList cats={app.machCats} which="mach" countByCat={countByCat} onEdit={(c)=>setEditCat({cat:c,which:'mach'})} /></div>
         </div>
         <div className="card">
           <div className="card-header">
@@ -1828,7 +1867,7 @@ window.CategoriesView = function CategoriesView() {
               <Icon name="plus" size={12} stroke={2.5} /> เพิ่ม
             </button>
           </div>
-          <div className="card-body">{renderList(app.laborCats, 'labor')}</div>
+          <div className="card-body"><SortableCatList cats={app.laborCats} which="labor" countByCat={countByCat} onEdit={(c)=>setEditCat({cat:c,which:'labor'})} /></div>
         </div>
         <div className="card">
           <div className="card-header">
@@ -1840,7 +1879,7 @@ window.CategoriesView = function CategoriesView() {
               <Icon name="plus" size={12} stroke={2.5} /> เพิ่ม
             </button>
           </div>
-          <div className="card-body">{renderList(app.lumpLaborCats || [], 'lump-labor')}</div>
+          <div className="card-body"><SortableCatList cats={app.lumpLaborCats || []} which="lump-labor" countByCat={countByCat} onEdit={(c)=>setEditCat({cat:c,which:'lump-labor'})} /></div>
         </div>
         <div className="card">
           <div className="card-header">
@@ -1852,7 +1891,7 @@ window.CategoriesView = function CategoriesView() {
               <Icon name="plus" size={12} stroke={2.5} /> เพิ่ม
             </button>
           </div>
-          <div className="card-body">{renderList(app.otherCats || [], 'other')}</div>
+          <div className="card-body"><SortableCatList cats={app.otherCats || []} which="other" countByCat={countByCat} onEdit={(c)=>setEditCat({cat:c,which:'other'})} /></div>
         </div>
       </div>
 
