@@ -5456,6 +5456,7 @@ function ProfitReportModal({ open, onClose }) {
 window.CompanyFinanceView = function CompanyFinanceView() {
   const app = window.useApp();
   const [range, setRange]   = useState('all'); // all | year | month
+  const [selMonth, setSelMonth] = useState(new Date().toISOString().slice(0,7)); // YYYY-MM (ใช้กับ range='month')
   const [expModal, setExpModal] = useState({ open:false, initial:null });
   const [catOpen, setCatOpen]   = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -5494,10 +5495,10 @@ window.CompanyFinanceView = function CompanyFinanceView() {
 
   const bounds = useMemo(() => {
     const d = new Date();
-    if (range === 'year')  return { from: new Date(d.getFullYear(),0,1).toISOString().slice(0,10), to: '9999-12-31' };
-    if (range === 'month') return { from: new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10), to: '9999-12-31' };
+    if (range === 'year')  return { from: new Date(d.getFullYear(),0,1).toISOString().slice(0,10), to: new Date(d.getFullYear(),11,31).toISOString().slice(0,10) };
+    if (range === 'month') return { from: selMonth + '-01', to: selMonth + '-31' };
     return { from: '0000-01-01', to: '9999-12-31' };
-  }, [range]);
+  }, [range, selMonth]);
   const inRange = (s) => s && s>=bounds.from && s<=bounds.to;
 
   const incomeRecs = (app.records||[]).filter(r=>window.isIncome(r) && inRange(r.date));
@@ -5520,7 +5521,6 @@ window.CompanyFinanceView = function CompanyFinanceView() {
     return Object.values(m).sort((a,b)=>b.total-a.total);
   }, [expenses, app.companyExpenseCats, loanOpexTotal, recTotal]);
 
-  const RANGES = [ {k:'all',label:'ทั้งหมด'}, {k:'year',label:'ปีนี้'}, {k:'month',label:'เดือนนี้'} ];
 
   const card = (label, value, sub, color, bg, border) => (
     <div style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'16px 18px' }}>
@@ -5549,10 +5549,15 @@ window.CompanyFinanceView = function CompanyFinanceView() {
 
       <div className="card" style={{ display:'flex', flexDirection:'column', gap:18 }}>
         {/* ช่วงเวลา */}
-        <div className="row gap-8" style={{ flexWrap:'wrap' }}>
-          {RANGES.map(r=>(
-            <button key={r.k} className={"btn btn-sm " + (range===r.k?'btn-accent':'btn-ghost')} onClick={()=>setRange(r.k)}>{r.label}</button>
-          ))}
+        <div className="row gap-8" style={{ flexWrap:'wrap', alignItems:'center' }}>
+          <button className={"btn btn-sm " + (range==='all'?'btn-accent':'btn-ghost')} onClick={()=>setRange('all')}>ทั้งหมด</button>
+          <button className={"btn btn-sm " + (range==='year'?'btn-accent':'btn-ghost')} onClick={()=>setRange('year')}>ปีนี้</button>
+          <div className="row gap-8" style={{ alignItems:'center', gap:6 }}>
+            <button className={"btn btn-sm " + (range==='month'?'btn-accent':'btn-ghost')} onClick={()=>setRange('month')}>รายเดือน</button>
+            <input type="month" className="select" value={selMonth} max={new Date().toISOString().slice(0,7)}
+              onChange={e=>{ if(e.target.value){ setSelMonth(e.target.value); setRange('month'); } }}
+              style={{ fontSize:13, padding:'6px 10px', borderColor: range==='month'?'var(--accent)':undefined, color: range==='month'?'var(--accent-ink)':undefined }} />
+          </div>
         </div>
 
         {/* KPI */}
@@ -5610,13 +5615,13 @@ window.CompanyFinanceView = function CompanyFinanceView() {
                   <tr key={e.id} style={{ borderTop:'1px solid var(--line)' }}>
                     <td style={{ padding:'9px 10px', whiteSpace:'nowrap' }}>{fmtDate(e.date)}</td>
                     <td style={{ padding:'9px 10px' }}>
-                      <span className="row gap-8" style={{ alignItems:'center' }}>
-                        <span style={{ width:9, height:9, borderRadius:'50%', background:colorOf(e.category), display:'inline-block' }} />
+                      <span className="row gap-8" style={{ alignItems:'center', whiteSpace:'nowrap' }}>
+                        <span style={{ width:9, height:9, borderRadius:'50%', background:colorOf(e.category), display:'inline-block', flexShrink:0 }} />
                         {e.category||'—'}
                       </span>
                     </td>
                     <td style={{ padding:'9px 10px', color:'var(--ink-2)' }}>{e.note||'—'}</td>
-                    <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:600 }} className="mono">฿{fmt(e.amount)}</td>
+                    <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:600, whiteSpace:'nowrap' }} className="mono">฿{fmt(e.amount)}</td>
                     <td style={{ padding:'9px 10px' }}>
                       <div className="row gap-8" style={{ justifyContent:'flex-end' }}>
                         <button className="topbar-icon-btn" style={{ width:30, height:30 }} onClick={()=>setExpModal({ open:true, initial:e })} title="แก้ไข"><Icon name="edit" size={13}/></button>
