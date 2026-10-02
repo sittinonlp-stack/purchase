@@ -4828,7 +4828,9 @@ ${expenses.length>0?`
 }
 
 // ---- PDF รายงานค่าใช้จ่ายบริษัทล้วน (ไม่มีรายรับ/กำไร/ขาดทุน) ----
-function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[], companyCreditors=[], companyRecurring=[], fromDate, toDate }) {
+const LOAN_CAT = 'ผ่อนเจ้าหนี้ / เงินกู้';
+function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[], companyCreditors=[], companyRecurring=[], fromDate, toDate, categories=null }) {
+  const catIn = name => !categories || categories.includes(name);
   const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtI = v => Number(v||0).toLocaleString('th-TH');
   const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
@@ -4840,14 +4842,17 @@ function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[
   const addCat = (name, amt, cnt, color) => { if(!byCat[name]) byCat[name]={name, total:0, count:0, color: color||colorOf(name)}; byCat[name].total+=amt; byCat[name].count+=(cnt||0); };
   const addMonth = (ym, amt) => { if(ym) byMonth[ym]=(byMonth[ym]||0)+amt; };
 
-  const exps = companyExpenses.filter(e=>inR(e.date));
+  const exps = companyExpenses.filter(e=>inR(e.date) && catIn(e.category||'—'));
   exps.forEach(e=>{ addCat(e.category||'—', Number(e.amount||0), 1); addMonth((e.date||'').slice(0,7), Number(e.amount||0)); });
-  const recPm = recurringByMonth(companyRecurring, fromDate, toDate);
+  const recSrc = companyRecurring.filter(r=>catIn(r.category));
+  const recPm = recurringByMonth(recSrc, fromDate, toDate);
   Object.entries(recPm.byCat).forEach(([cat,amt])=>addCat(cat, amt, 0));
   Object.entries(recPm.byMonth).forEach(([ym,amt])=>addMonth(ym, amt));
-  const loanPm = loanPaymentsByMonth(companyCreditors, fromDate, toDate);
-  if (loanPm.total>0) addCat('ผ่อนเจ้าหนี้ / เงินกู้', loanPm.total, 0, '#dc2626');
-  Object.entries(loanPm.byMonth).forEach(([ym,amt])=>addMonth(ym, amt));
+  if (catIn(LOAN_CAT)) {
+    const loanPm = loanPaymentsByMonth(companyCreditors, fromDate, toDate);
+    if (loanPm.total>0) addCat(LOAN_CAT, loanPm.total, 0, '#dc2626');
+    Object.entries(loanPm.byMonth).forEach(([ym,amt])=>addMonth(ym, amt));
+  }
 
   const catArr = Object.values(byCat).sort((a,b)=>b.total-a.total);
   const total = catArr.reduce((s,c)=>s+c.total,0);
@@ -5616,25 +5621,39 @@ function CompanyExpenseReportModal({ open, onClose }) {
   const lastOfLastMon = () => { const d=new Date(); d.setDate(0); return d.toISOString().slice(0,10); };
   const [fromDate, setFromDate] = useState(firstOfYear);
   const [toDate, setToDate]     = useState(todayStr);
+  const [selectedCats, setSelectedCats] = useState(null); // null = ทั้งหมด
   const [busy, setBusy] = useState(false);
   const PRESETS = [
     { label:'เดือนนี้', from:firstOfMonth, to:()=>todayStr() },
     { label:'เดือนที่แล้ว', from:firstOfLastMon, to:lastOfLastMon },
     { label:'ปีนี้', from:firstOfYear, to:()=>todayStr() },
   ];
+  const allCatNames = useMemo(() => {
+    const s = new Set((app.companyExpenseCats||[]).map(c=>c.name));
+    (app.companyExpenses||[]).forEach(e=>{ if(e.category) s.add(e.category); });
+    (app.companyRecurring||[]).forEach(r=>{ if(r.category) s.add(r.category); });
+    if ((app.companyCreditors||[]).length>0) s.add(LOAN_CAT);
+    return Array.from(s);
+  }, [app.companyExpenseCats, app.companyExpenses, app.companyRecurring, app.companyCreditors]);
+  const selCats = selectedCats === null ? allCatNames : selectedCats;
+  const toggleCat = (n) => setSelectedCats(cur => { const base = cur===null?allCatNames:cur; return base.includes(n)?base.filter(x=>x!==n):[...base,n]; });
+  const allCatsOn = selCats.length === allCatNames.length;
+  const colorOfCat = (n) => n===LOAN_CAT ? '#dc2626' : ((app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af');
+
   const preview = useMemo(() => {
     const inR = d => d && d>=fromDate && d<=toDate;
-    let t = (app.companyExpenses||[]).filter(e=>inR(e.date)).reduce((s,e)=>s+Number(e.amount||0),0);
-    t += recurringByMonth(app.companyRecurring, fromDate, toDate).total;
-    t += loanPaymentsByMonth(app.companyCreditors, fromDate, toDate).total;
+    const catIn = n => selCats.includes(n);
+    let t = (app.companyExpenses||[]).filter(e=>inR(e.date) && catIn(e.category||'—')).reduce((s,e)=>s+Number(e.amount||0),0);
+    t += recurringByMonth((app.companyRecurring||[]).filter(r=>catIn(r.category)), fromDate, toDate).total;
+    if (catIn(LOAN_CAT)) t += loanPaymentsByMonth(app.companyCreditors, fromDate, toDate).total;
     return t;
-  }, [app.companyExpenses, app.companyRecurring, app.companyCreditors, fromDate, toDate]);
+  }, [app.companyExpenses, app.companyRecurring, app.companyCreditors, fromDate, toDate, selCats]);
   const run = () => {
     setBusy(true);
     setTimeout(() => {
       try {
         doExportCompanyExpenseReport({ companyExpenses: app.companyExpenses, companyExpenseCats: app.companyExpenseCats,
-          companyCreditors: app.companyCreditors, companyRecurring: app.companyRecurring, fromDate, toDate });
+          companyCreditors: app.companyCreditors, companyRecurring: app.companyRecurring, fromDate, toDate, categories: selCats });
         app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
         onClose();
       } catch(e){ console.error('[CompanyExpenseReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
@@ -5660,8 +5679,27 @@ function CompanyExpenseReportModal({ open, onClose }) {
           <div><label style={LS}>ตั้งแต่วันที่</label><input type="date" style={IS} value={fromDate} onChange={e=>setFromDate(e.target.value)} /></div>
           <div><label style={LS}>ถึงวันที่</label><input type="date" style={IS} value={toDate} onChange={e=>setToDate(e.target.value)} /></div>
         </div>
+        <div>
+          <div className="row between" style={{ marginBottom:8 }}>
+            <span style={LS}>ประเภทค่าใช้จ่ายที่จะรายงาน</span>
+            {allCatNames.length>0 && <button className="btn btn-ghost btn-sm" style={{ fontSize:11.5 }} onClick={()=>setSelectedCats(allCatsOn?[]:allCatNames)}>{allCatsOn?'ไม่เลือกทั้งหมด':'เลือกทั้งหมด'}</button>}
+          </div>
+          {allCatNames.length===0 ? <div className="text-small text-muted">ยังไม่มีประเภทค่าใช้จ่าย</div> : (
+            <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:200, overflowY:'auto' }}>
+              {allCatNames.map(n=>{ const on=selCats.includes(n); return (
+                <div key={n} className="row gap-8" style={{ alignItems:'center', padding:'7px 10px', border:'1px solid var(--line)', borderRadius:8, cursor:'pointer', background: on?'rgba(194,65,12,0.06)':'transparent' }} onClick={()=>toggleCat(n)}>
+                  <div style={{ width:18, height:18, borderRadius:5, border:'2px solid', borderColor: on?'#c2410c':'var(--ink-4)', background: on?'#c2410c':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    {on && <Icon name="check" size={11} stroke={3} style={{ color:'#fff' }} />}
+                  </div>
+                  <span style={{ width:11, height:11, borderRadius:'50%', background:colorOfCat(n), display:'inline-block' }} />
+                  <span style={{ fontSize:13 }}>{n}</span>
+                </div>
+              ); })}
+            </div>
+          )}
+        </div>
         <div style={{ padding:'14px 16px', borderRadius:10, background:'rgba(217,119,6,0.07)', border:'1px solid rgba(217,119,6,0.25)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span className="text-small text-muted">ค่าใช้จ่ายรวมในช่วงนี้ (ค่าดำเนินการ + ประจำ + ผ่อนเจ้าหนี้)</span>
+          <span className="text-small text-muted">ค่าใช้จ่ายรวมในช่วงนี้ ({selCats.length}/{allCatNames.length} ประเภท)</span>
           <span className="mono" style={{ fontWeight:700, color:'#c2410c' }}>฿{fmt(preview)}</span>
         </div>
         <div className="text-small text-muted">รายงานนี้แสดงเฉพาะค่าใช้จ่าย — ไม่มีรายรับและกำไร/ขาดทุน (แยกตามประเภท · รายเดือน · รายละเอียด)</div>
