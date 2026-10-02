@@ -1061,8 +1061,11 @@
     // ── Records (delete) ──────────────────────────
     async deleteRecord(id) {
       // ON DELETE CASCADE handles items + work_logs automatically
-      const { error } = await window.supabaseClient.from('records').delete().eq('id', id);
+      // .select() คืนแถวที่ถูกลบจริง — ถ้าว่าง แปลว่า RLS กันไว้ (ลบ 0 แถวแต่ไม่ error)
+      // จึงโยน error ให้เห็นชัด แทนที่จะเงียบแล้วรายการกลับมาตอนรีเฟรช
+      const { data, error } = await window.supabaseClient.from('records').delete().eq('id', id).select('id');
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error('ลบไม่สำเร็จ — ไม่มีสิทธิ์ลบรายการนี้ (ต้องเป็นผู้ดูแลระบบขึ้นไป)');
     },
 
     // ── Records (fetch single, with joins) ─────────

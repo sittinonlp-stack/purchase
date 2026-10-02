@@ -743,8 +743,14 @@ window.AppProvider = function AppProvider({ children }) {
   }, [dbOnline, dbSync]);
 
   const deleteRecord = useCallback((id) => {
-    setRecords((r) => r.filter((x) => x.id !== id));
-    if (dbOnline) dbSync(window.db.deleteRecord(id), 'deleteRecord');
+    let removed = null;
+    setRecords((r) => { removed = r.find((x) => x.id === id) || null; return r.filter((x) => x.id !== id); });
+    if (dbOnline) {
+      const p = window.db.deleteRecord(id);
+      // ถ้าลบใน DB ไม่สำเร็จ (เช่นถูก RLS กัน) → คืนรายการกลับให้ UI ตรงกับ DB (ไม่ใช่หายแล้วโผล่ตอนรีเฟรช)
+      p.catch(() => { if (removed) setRecords((r) => r.some((x) => x.id === id) ? r : [removed, ...r]); });
+      dbSync(p, 'deleteRecord');
+    }
   }, [dbOnline, dbSync]);
 
   // ดึงข้อมูลเต็ม (รวมรูปภาพ + บันทึกงาน) ของ record เดียว แล้ว merge เข้า state
