@@ -52,22 +52,34 @@ function monthLabelTH(ym) {
     .toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
 }
 
+// เดือนปัจจุบันตามเวลาท้องถิ่น (ไม่ใช้ toISOString ซึ่งเป็น UTC — คลาดเดือนตอนต้น/ปลายเดือนในเขต +7)
+function localNowYm() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+// ช่วง to ที่ "ไม่จำกัด" (มุมมองทั้งหมด ใช้ 9999-12-31 เป็น sentinel)
+const isUnboundedTo = (toDate) => !toDate || toDate >= '9999';
+
 // ยอดผ่อนเจ้าหนี้/เงินกู้ ที่ชำระแล้ว แมปเข้าแต่ละเดือน (งวดที่ i นับจากวันเริ่มผ่อน)
-// คืน { byMonth:{'YYYY-MM':amount}, total } เฉพาะที่อยู่ในช่วง from–to (ว่าง = ไม่จำกัด)
+// คืน { byMonth:{'YYYY-MM':amount}, total } เฉพาะเดือนที่อยู่ในช่วง from–to (เทียบระดับเดือน)
 function loanPaymentsByMonth(creditors, fromDate, toDate) {
   const byMonth = {}; let total = 0;
+  const fromYm = fromDate ? fromDate.slice(0, 7) : null;
+  const toYm = isUnboundedTo(toDate) ? null : toDate.slice(0, 7);
   (creditors || []).forEach(c => {
     const monthly = Number(c.monthlyPayment) || 0;
     const paid = Math.max(0, Math.round(Number(c.paidInstallments) || 0));
     if (monthly <= 0 || paid <= 0 || !c.startDate) return;
     const start = new Date(c.startDate + 'T00:00:00');
     if (isNaN(start)) return;
+    const sy = start.getFullYear(), sm = start.getMonth(); // เวลาท้องถิ่น
     for (let i = 0; i < paid; i++) {
-      const d = new Date(start); d.setMonth(d.getMonth() + i);
-      const ymd = d.toISOString().slice(0, 10);
-      if (fromDate && ymd < fromDate) continue;
-      if (toDate && ymd > toDate) continue;
-      const ym = ymd.slice(0, 7);
+      const idx = sm + i;
+      const y = sy + Math.floor(idx / 12);
+      const m = (idx % 12) + 1;
+      const ym = `${y}-${String(m).padStart(2, '0')}`;
+      if (fromYm && ym < fromYm) continue;
+      if (toYm && ym > toYm) continue;
       byMonth[ym] = (byMonth[ym] || 0) + monthly;
       total += monthly;
     }
@@ -75,20 +87,30 @@ function loanPaymentsByMonth(creditors, fromDate, toDate) {
   return { byMonth, total };
 }
 
-// รายจ่ายประจำทุกเดือน — กระจายยอดเข้าแต่ละเดือน ตั้งแต่ startDate ถึง endDate (หรือเดือนปัจจุบันถ้าไม่มี)
+// รายจ่ายประจำทุกเดือน — กระจายยอดเข้าแต่ละเดือน ตั้งแต่ startDate
+// • ถ้ามี endDate → ถึงเดือนนั้น
+// • ถ้าเปิดต่อเนื่อง (ไม่มี endDate):
+//     - โดยปกติหยุดที่เดือนปัจจุบัน (แสดงเฉพาะที่เกิดขึ้นจริง ไม่ทบยอดอนาคต เช่นมุมมอง "ปีนี้")
+//     - แต่ถ้า "ช่วงที่ร้องขอเริ่มในอนาคต" (เช่นเลือกดูเดือนอนาคตโดยตรง) → แสดงถึงเดือนนั้นด้วย
+//   และไม่เกิน toDate เสมอ · มุมมองทั้งหมด (ไม่จำกัด) หยุดที่เดือนปัจจุบัน
 // คืน { byMonth, byCat, total } เฉพาะเดือนในช่วง from–to
 function recurringByMonth(recurrings, fromDate, toDate) {
   const byMonth = {}; const byCat = {}; let total = 0;
-  const nowYm = new Date().toISOString().slice(0, 7);
+  const nowYm = localNowYm();
+  const unbounded = isUnboundedTo(toDate);
+  const toYm = unbounded ? null : toDate.slice(0, 7);
+  const reqFromYm = fromDate ? fromDate.slice(0, 7) : null;
   (recurrings || []).forEach(r => {
     const amt = Number(r.amount) || 0;
     if (amt <= 0 || !r.startDate) return;
     let startYm = r.startDate.slice(0, 7);
-    let endYm = r.endDate ? r.endDate.slice(0, 7) : nowYm;
-    const fromYm = fromDate ? fromDate.slice(0, 7) : startYm;
-    const toYm = toDate ? toDate.slice(0, 7) : endYm;
+    let endYm;
+    if (r.endDate) endYm = r.endDate.slice(0, 7);
+    else if (unbounded) endYm = nowYm;
+    else { const cap = (reqFromYm && reqFromYm > nowYm) ? reqFromYm : nowYm; endYm = cap < toYm ? cap : toYm; } // min(toYm, max(nowYm, reqFrom))
+    const fromYm = reqFromYm || startYm;
     if (startYm < fromYm) startYm = fromYm;
-    if (endYm > toYm) endYm = toYm;
+    if (toYm && endYm > toYm) endYm = toYm;   // ไม่เกินช่วงที่ร้องขอ
     if (startYm > endYm) return;
     let [y, m] = startYm.split('-').map(Number);
     const [ey, em] = endYm.split('-').map(Number);
