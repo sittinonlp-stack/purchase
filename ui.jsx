@@ -206,12 +206,14 @@ function MoneyInput({ value, onChange, ...rest }) {
     const caret = el.selectionStart == null ? before.length : el.selectionStart;
     const raw = before.replace(/,/g, '');
     if (raw !== '' && raw !== '-' && !/^-?\d*\.?\d*$/.test(raw)) return; // ปฏิเสธอักขระที่ไม่ใช่ตัวเลข
-    const digitsLeft = before.slice(0, caret).replace(/[^0-9]/g, '').length;
+    // นับอักขระที่ไม่ใช่คอมมา (ตัวเลข + จุดทศนิยม + ลบ) ทางซ้ายของเคอร์เซอร์
+    // เพื่อให้คืนตำแหน่งเคอร์เซอร์ถูกต้องแม้พิมพ์จุดทศนิยม (เดิมนับเฉพาะตัวเลขทำให้เคอร์เซอร์เด้งไปหน้าจุด)
+    const sigLeft = before.slice(0, caret).replace(/,/g, '').length;
     onChange(raw);
     requestAnimationFrame(() => {
       const formatted = fmtDisplay(raw);
       let pos = 0, cnt = 0;
-      while (pos < formatted.length && cnt < digitsLeft) { if (formatted[pos] >= '0' && formatted[pos] <= '9') cnt++; pos++; }
+      while (pos < formatted.length && cnt < sigLeft) { if (formatted[pos] !== ',') cnt++; pos++; }
       try { el.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
     });
   };
