@@ -4827,6 +4827,122 @@ ${expenses.length>0?`
   win.document.write(html); win.document.close();
 }
 
+// ---- PDF รายงานค่าใช้จ่ายบริษัทล้วน (ไม่มีรายรับ/กำไร/ขาดทุน) ----
+function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[], companyCreditors=[], companyRecurring=[], fromDate, toDate }) {
+  const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtI = v => Number(v||0).toLocaleString('th-TH');
+  const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+  const now  = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
+  const inR = d => d && d>=fromDate && d<=toDate;
+  const colorOf = n => (companyExpenseCats.find(c=>c.name===n)?.color) || '#9ca3af';
+
+  const byCat = {}; const byMonth = {};
+  const addCat = (name, amt, cnt, color) => { if(!byCat[name]) byCat[name]={name, total:0, count:0, color: color||colorOf(name)}; byCat[name].total+=amt; byCat[name].count+=(cnt||0); };
+  const addMonth = (ym, amt) => { if(ym) byMonth[ym]=(byMonth[ym]||0)+amt; };
+
+  const exps = companyExpenses.filter(e=>inR(e.date));
+  exps.forEach(e=>{ addCat(e.category||'—', Number(e.amount||0), 1); addMonth((e.date||'').slice(0,7), Number(e.amount||0)); });
+  const recPm = recurringByMonth(companyRecurring, fromDate, toDate);
+  Object.entries(recPm.byCat).forEach(([cat,amt])=>addCat(cat, amt, 0));
+  Object.entries(recPm.byMonth).forEach(([ym,amt])=>addMonth(ym, amt));
+  const loanPm = loanPaymentsByMonth(companyCreditors, fromDate, toDate);
+  if (loanPm.total>0) addCat('ผ่อนเจ้าหนี้ / เงินกู้', loanPm.total, 0, '#dc2626');
+  Object.entries(loanPm.byMonth).forEach(([ym,amt])=>addMonth(ym, amt));
+
+  const catArr = Object.values(byCat).sort((a,b)=>b.total-a.total);
+  const total = catArr.reduce((s,c)=>s+c.total,0);
+  const maxCat = catArr.length?catArr[0].total:0;
+  const monthKeys = Object.keys(byMonth).sort();
+
+  const catRows = catArr.map((c,i)=>`<tr class="${i%2===0?'alt':''}"><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color};margin-right:8px"></span>${c.name}${c.count>0?` <span style="color:#a8a29e;font-size:10px">(${fmtI(c.count)} รายการ)</span>`:''}</td><td class="r bold">฿${fmtN(c.total)}</td><td class="r" style="width:60px">${total>0?Math.round(c.total/total*100):0}%</td><td style="width:200px"><div style="background:#f0ede8;border-radius:99px;height:6px"><div style="height:6px;border-radius:99px;background:${c.color};width:${maxCat>0?Math.round(c.total/maxCat*100):0}%"></div></div></td></tr>`).join('');
+  const monthRows = monthKeys.map((k,i)=>`<tr class="${i%2===0?'alt':''}"><td>${monthLabelTH(k)}</td><td class="r bold">฿${fmtN(byMonth[k])}</td></tr>`).join('');
+  const detailRows = exps.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map((e,i)=>`<tr class="${i%2===0?'alt':''}"><td style="white-space:nowrap">${fmtD(e.date)}</td><td>${e.category||'—'}</td><td style="max-width:280px">${e.note||'—'}</td><td class="r bold">฿${fmtN(e.amount)}</td></tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="th"><head>
+<meta charset="UTF-8"><title>รายงานค่าใช้จ่ายบริษัท ${fromDate} – ${toDate}</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',sans-serif;font-size:12px;color:#1c1917;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4;margin:16mm 14mm}
+@media print{.no-print{display:none!important}.page-break{page-break-before:always}}
+.report-header{background:#1c1917;color:#fff;padding:22px 28px;display:flex;justify-content:space-between;align-items:flex-start}
+.logo{width:46px;height:46px;background:#c2410c;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0}
+.header-left{display:flex;gap:16px;align-items:center}
+.header-title{font-size:18px;font-weight:700;letter-spacing:-0.3px;line-height:1.3}
+.header-sub{font-size:11px;color:#a8a29e;margin-top:3px}
+.header-right{text-align:right;font-size:11px;color:#a8a29e;line-height:2}
+.header-right strong{color:#fff;font-weight:600}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+.kpi{border-radius:10px;padding:16px 18px;border:1px solid #e7e5e4;background:#fafaf9}
+.kpi.accent{background:#c2410c;border-color:#c2410c;color:#fff}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.7;margin-bottom:6px}
+.kpi-value{font-size:19px;font-weight:700;letter-spacing:-0.5px;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:10px;margin-top:4px;opacity:.75}
+.section{margin:18px 0}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;border-left:4px solid #c2410c;padding-left:10px}
+.section-title{font-size:13px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+thead tr{background:#292524;color:#fff}
+thead th{padding:9px 14px;text-align:left;font-weight:600;font-size:10.5px;white-space:nowrap}
+tbody td{padding:8.5px 14px;border-bottom:1px solid #f5f5f4;vertical-align:middle}
+tbody tr.alt td{background:#fafaf9}
+tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-size:12px}
+.r{text-align:right;font-variant-numeric:tabular-nums}.bold{font-weight:700}
+.report-footer{margin-top:22px;padding-top:12px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;font-size:10px;color:#78716c}
+.print-btn{background:#c2410c;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-family:'Prompt',sans-serif;font-weight:600;cursor:pointer}
+.print-wrap{text-align:center;padding:24px;border-bottom:2px dashed #e7e5e4;margin-bottom:20px}
+@media screen{body[contenteditable="true"] td:focus{outline:2px solid #0ea5e9;background:#e0f2fe}}
+</style></head><body>
+<div class="no-print print-wrap">
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
+  </div>
+  <p style="margin-top:10px;font-size:11px;color:#78716c">รายงานค่าใช้จ่ายบริษัทล้วน (ค่าดำเนินการ + รายจ่ายประจำ + ผ่อนเจ้าหนี้) — ไม่รวมรายรับและกำไร/ขาดทุน</p>
+</div>
+<div class="report-header">
+  <div class="header-left"><div class="logo">฿</div><div>
+    <div class="header-title">รายงานค่าใช้จ่ายบริษัท</div>
+    <div class="header-sub">ค่าดำเนินการ · รายจ่ายประจำ · ผ่อนเจ้าหนี้/เงินกู้</div>
+  </div></div>
+  <div class="header-right">
+    <div>📅 ช่วงเวลา: <strong>${fmtD(fromDate)} – ${fmtD(toDate)}</strong></div>
+    <div>จำนวนประเภท: <strong>${catArr.length}</strong></div>
+    <div>สร้างเมื่อ: <strong>${now}</strong></div>
+  </div>
+</div>
+<div class="kpi-grid">
+  <div class="kpi accent"><div class="kpi-label">ค่าใช้จ่ายรวม</div><div class="kpi-value">฿${fmtN(total)}</div><div class="kpi-sub">${catArr.length} ประเภท · ${monthKeys.length} เดือน</div></div>
+  <div class="kpi"><div class="kpi-label">จำนวนประเภท</div><div class="kpi-value">${fmtI(catArr.length)}</div><div class="kpi-sub">ที่มีค่าใช้จ่าย</div></div>
+  <div class="kpi"><div class="kpi-label">เฉลี่ยต่อเดือน</div><div class="kpi-value">฿${fmtN(monthKeys.length>0?total/monthKeys.length:0)}</div><div class="kpi-sub">${monthKeys.length} เดือนที่มีข้อมูล</div></div>
+</div>
+<div class="section">
+  <div class="section-header"><div class="section-title">ค่าใช้จ่าย แยกตามประเภท (มาก → น้อย)</div></div>
+  <table><thead><tr><th>ประเภท</th><th class="r" style="width:150px">ยอด</th><th class="r" style="width:70px">สัดส่วน</th><th style="width:210px">กราฟ</th></tr></thead>
+  <tbody>${catRows||'<tr><td colspan="4" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีค่าใช้จ่ายในช่วงนี้</td></tr>'}</tbody>
+  <tfoot><tr><td>รวมทั้งหมด</td><td class="r">฿${fmtN(total)}</td><td class="r">100%</td><td></td></tr></tfoot></table>
+</div>
+<div class="section">
+  <div class="section-header"><div class="section-title">ค่าใช้จ่าย รายเดือน</div></div>
+  <table><thead><tr><th>เดือน</th><th class="r" style="width:180px">ยอดค่าใช้จ่าย</th></tr></thead>
+  <tbody>${monthRows||'<tr><td colspan="2" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีข้อมูล</td></tr>'}</tbody>
+  <tfoot><tr><td>รวมทั้งหมด</td><td class="r">฿${fmtN(total)}</td></tr></tfoot></table>
+</div>
+${exps.length>0?`<div class="section">
+  <div class="section-header"><div class="section-title">รายละเอียดค่าดำเนินการ (${exps.length} รายการ)</div></div>
+  <table><thead><tr><th style="width:90px">วันที่</th><th style="width:180px">ประเภท</th><th>หมายเหตุ</th><th class="r" style="width:130px">จำนวนเงิน</th></tr></thead>
+  <tbody>${detailRows}</tbody></table>
+  <p style="margin-top:8px;font-size:10px;color:#78716c">* รายจ่ายประจำและผ่อนเจ้าหนี้ถูกรวมในยอดแยกตามประเภท/รายเดือนด้านบนแล้ว (ไม่แสดงเป็นรายการแยกในตารางนี้)</p>
+</div>`:''}
+<div class="report-footer"><span>ForHouse Cost — รายงานค่าใช้จ่ายบริษัท (เอกสารภายใน) &nbsp;❖&nbsp; ${now}</span><span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span></div>
+<script>function toggleEdit(btn){var on=document.body.getAttribute('contenteditable')!=='true';document.body.setAttribute('contenteditable',on?'true':'false');btn.textContent=on?'✓ กำลังแก้ไข — กดเพื่อจบ':'✏️ แก้ไขรายงานก่อนบันทึก';btn.style.background=on?'#059669':'#0ea5e9';}</script>
+</body></html>`;
+  const win = window.open('', '_blank', 'width=960,height=750');
+  if (!win) { alert('กรุณาอนุญาต Popup ในเบราว์เซอร์เพื่อดูรายงาน PDF'); return; }
+  win.document.write(html); win.document.close();
+}
+
 // ---- Modal: เพิ่ม/แก้ไขรายจ่ายบริษัท ----
 function CompanyExpenseModal({ open, onClose, initial }) {
   const app = window.useApp();
@@ -5491,6 +5607,69 @@ function ProfitReportModal({ open, onClose }) {
   );
 }
 
+// ---- Modal: ส่งออกรายงานค่าใช้จ่ายบริษัทล้วน ----
+function CompanyExpenseReportModal({ open, onClose }) {
+  const app = window.useApp();
+  const firstOfYear   = () => { const d=new Date(); d.setMonth(0); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfMonth  = () => { const d=new Date(); d.setDate(1); return d.toISOString().slice(0,10); };
+  const firstOfLastMon= () => { const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); };
+  const lastOfLastMon = () => { const d=new Date(); d.setDate(0); return d.toISOString().slice(0,10); };
+  const [fromDate, setFromDate] = useState(firstOfYear);
+  const [toDate, setToDate]     = useState(todayStr);
+  const [busy, setBusy] = useState(false);
+  const PRESETS = [
+    { label:'เดือนนี้', from:firstOfMonth, to:()=>todayStr() },
+    { label:'เดือนที่แล้ว', from:firstOfLastMon, to:lastOfLastMon },
+    { label:'ปีนี้', from:firstOfYear, to:()=>todayStr() },
+  ];
+  const preview = useMemo(() => {
+    const inR = d => d && d>=fromDate && d<=toDate;
+    let t = (app.companyExpenses||[]).filter(e=>inR(e.date)).reduce((s,e)=>s+Number(e.amount||0),0);
+    t += recurringByMonth(app.companyRecurring, fromDate, toDate).total;
+    t += loanPaymentsByMonth(app.companyCreditors, fromDate, toDate).total;
+    return t;
+  }, [app.companyExpenses, app.companyRecurring, app.companyCreditors, fromDate, toDate]);
+  const run = () => {
+    setBusy(true);
+    setTimeout(() => {
+      try {
+        doExportCompanyExpenseReport({ companyExpenses: app.companyExpenses, companyExpenseCats: app.companyExpenseCats,
+          companyCreditors: app.companyCreditors, companyRecurring: app.companyRecurring, fromDate, toDate });
+        app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
+        onClose();
+      } catch(e){ console.error('[CompanyExpenseReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
+      finally { setBusy(false); }
+    }, 60);
+  };
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+  return (
+    <window.Modal open={open} onClose={onClose} title="ส่งออกรายงานค่าใช้จ่ายบริษัท" width={520}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose} disabled={busy}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={run} disabled={busy}><Icon name="receipt" size={13}/> {busy?'กำลังสร้าง…':'สร้าง PDF'}</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+        <div>
+          <div style={LS}>ช่วงเวลาสำเร็จรูป</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {PRESETS.map(p=>(<button key={p.label} className="btn btn-ghost btn-sm" style={{ fontSize:12 }} onClick={()=>{ setFromDate(p.from()); setToDate(p.to()); }}>{p.label}</button>))}
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>ตั้งแต่วันที่</label><input type="date" style={IS} value={fromDate} onChange={e=>setFromDate(e.target.value)} /></div>
+          <div><label style={LS}>ถึงวันที่</label><input type="date" style={IS} value={toDate} onChange={e=>setToDate(e.target.value)} /></div>
+        </div>
+        <div style={{ padding:'14px 16px', borderRadius:10, background:'rgba(217,119,6,0.07)', border:'1px solid rgba(217,119,6,0.25)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span className="text-small text-muted">ค่าใช้จ่ายรวมในช่วงนี้ (ค่าดำเนินการ + ประจำ + ผ่อนเจ้าหนี้)</span>
+          <span className="mono" style={{ fontWeight:700, color:'#c2410c' }}>฿{fmt(preview)}</span>
+        </div>
+        <div className="text-small text-muted">รายงานนี้แสดงเฉพาะค่าใช้จ่าย — ไม่มีรายรับและกำไร/ขาดทุน (แยกตามประเภท · รายเดือน · รายละเอียด)</div>
+      </div>
+    </window.Modal>
+  );
+}
+
 // ---- หน้าบัญชีบริษัท ----
 window.CompanyFinanceView = function CompanyFinanceView() {
   const app = window.useApp();
@@ -5500,6 +5679,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const [catOpen, setCatOpen]   = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [profitOpen, setProfitOpen] = useState(false);
+  const [expReportOpen, setExpReportOpen] = useState(false);
   const [credModal, setCredModal] = useState({ open:false, initial:null });
   const [recModal, setRecModal]   = useState({ open:false, initial:null });
 
@@ -5580,6 +5760,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
           <button className="btn btn-ghost" onClick={()=>setCatOpen(true)}><Icon name="tag" size={14}/> จัดการประเภท</button>
           <button className="btn btn-ghost" onClick={()=>setProfitOpen(true)} title="รายงานรวม รายรับจริง − ต้นทุน − ค่าดำเนินการ = กำไร/ขาดทุนรายเดือน"><Icon name="chart" size={14}/> รายงานกำไร/ขาดทุน</button>
           <button className="btn btn-ghost" onClick={()=>setReportOpen(true)}><Icon name="download" size={14}/> ส่งออกรายงาน</button>
+          <button className="btn btn-ghost" onClick={()=>setExpReportOpen(true)} title="รายงานเฉพาะค่าใช้จ่าย (ไม่มีรายรับ/กำไร-ขาดทุน)"><Icon name="receipt" size={14}/> รายงานค่าใช้จ่าย</button>
           <button className="btn btn-ghost" onClick={()=>setRecModal({ open:true, initial:null })}><Icon name="clock" size={14}/> เพิ่มรายจ่ายประจำ</button>
           <button className="btn btn-ghost" onClick={()=>setCredModal({ open:true, initial:null })}><Icon name="safe" size={14}/> เพิ่มเจ้าหนี้</button>
           <button className="btn btn-accent" onClick={()=>setExpModal({ open:true, initial:null })}><Icon name="plus" size={14}/> เพิ่มรายจ่าย</button>
@@ -5762,6 +5943,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
       <CompanyExpenseModal open={expModal.open} initial={expModal.initial} onClose={()=>setExpModal({ open:false, initial:null })} />
       <CompanyCatManagerModal open={catOpen} onClose={()=>setCatOpen(false)} />
       <CompanyReportModal open={reportOpen} onClose={()=>setReportOpen(false)} />
+      <CompanyExpenseReportModal open={expReportOpen} onClose={()=>setExpReportOpen(false)} />
       <ProfitReportModal open={profitOpen} onClose={()=>setProfitOpen(false)} />
       <CreditorModal open={credModal.open} initial={credModal.initial} onClose={()=>setCredModal({ open:false, initial:null })} />
       <RecurringModal open={recModal.open} initial={recModal.initial} onClose={()=>setRecModal({ open:false, initial:null })} />
