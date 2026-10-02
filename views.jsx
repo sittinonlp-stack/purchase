@@ -4800,14 +4800,18 @@ window.IncomeHistoryView = function IncomeHistoryView() {
 const COMPANY_FEE_RATE = 0.15;
 
 // ---- PDF รายงานบัญชีบริษัท ----
-function doExportCompanyPDF({ fromDate, toDate, incomeGross, companyIncome, expenses, catRows, selectedNames }) {
+function doExportCompanyPDF({ fromDate, toDate, incomeGross, companyIncome, expenses, catRows, selectedNames, expenseTotal: expenseTotalParam, recTotal = 0, loanTotal = 0 }) {
   const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtI = v => Number(v||0).toLocaleString('th-TH');
   const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
   const now  = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
 
-  const expenseTotal = expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  // expenseTotal รวมรายจ่ายครั้งเดียว + รายจ่ายประจำ + ผ่อนเจ้าหนี้ (ส่งมาจากผู้เรียก) — fallback เป็นผลรวมรายการครั้งเดียว
+  const expenseTotal = expenseTotalParam != null ? expenseTotalParam : expenses.reduce((s,e)=>s+Number(e.amount||0),0);
   const profit = companyIncome - expenseTotal;
+  const recurringNote = (recTotal > 0 || loanTotal > 0)
+    ? `<p style="margin-top:8px;font-size:10.5px;color:#78716c">* รวม${recTotal>0?`รายจ่ายประจำ ฿${fmtN(recTotal)}`:''}${(recTotal>0&&loanTotal>0)?' และ ':''}${loanTotal>0?`ผ่อนเจ้าหนี้/เงินกู้ ฿${fmtN(loanTotal)}`:''} ไว้ในยอดแยกตามประเภทแล้ว (กระจายเข้าทุกเดือนในช่วง ไม่แสดงเป็นรายการแยกในตารางด้านล่าง)</p>`
+    : '';
 
   const catSummaryRows = catRows.map(c=>`
     <tr>
@@ -4916,6 +4920,7 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
     <tbody>${catSummaryRows||'<tr><td colspan="4" style="text-align:center;color:#a8a29e;padding:16px">ไม่มีรายจ่ายในประเภทที่เลือก</td></tr>'}</tbody>
     <tfoot><tr><td>รวมรายจ่ายทั้งหมด</td><td class="r">${fmtI(expenses.length)}</td><td class="r">฿${fmtN(expenseTotal)}</td><td></td></tr></tfoot>
   </table>
+  ${recurringNote}
 </div>
 
 <div class="section">
@@ -5334,8 +5339,9 @@ function CompanyReportModal({ open, onClose }) {
   const allNames = useMemo(() => {
     const s = new Set((app.companyExpenseCats||[]).map(c=>c.name));
     (app.companyExpenses||[]).forEach(e=>{ if(e.category) s.add(e.category); });
+    (app.companyRecurring||[]).forEach(r=>{ if(r.category) s.add(r.category); });
     return Array.from(s);
-  }, [app.companyExpenseCats, app.companyExpenses]);
+  }, [app.companyExpenseCats, app.companyExpenses, app.companyRecurring]);
 
   const sel = selected === null ? allNames : selected;
   const toggle = (n) => setSelected(cur => { const base = cur===null?allNames:cur; return base.includes(n) ? base.filter(x=>x!==n) : [...base, n]; });
@@ -5355,12 +5361,19 @@ function CompanyReportModal({ open, onClose }) {
     const incomeGross = (app.records||[]).filter(r=>window.isIncome(r) && inRange(r.date)).reduce((s,r)=>s+computeTotals(r).total,0);
     const companyIncome = incomeGross * COMPANY_FEE_RATE;
     const expenses = (app.companyExpenses||[]).filter(e=>inRange(e.date) && sel.includes(e.category));
-    const catRows = sel.map(n=>{
-      const es = expenses.filter(e=>e.category===n);
-      return { name:n, color:colorOf(n), count:es.length, total:es.reduce((s,e)=>s+Number(e.amount||0),0) };
-    }).filter(c=>c.count>0).sort((a,b)=>b.total-a.total);
+    // รายจ่ายประจำ (กระจายเข้าทุกเดือนในช่วง) เฉพาะประเภทที่เลือก + ยอดผ่อนเจ้าหนี้ (รวมเสมอ เหมือนรายงานอื่น)
+    const recByCat = recurringByMonth((app.companyRecurring||[]).filter(r=>sel.includes(r.category)), fromDate, toDate).byCat;
+    const recTotal = Object.values(recByCat).reduce((s,v)=>s+v,0);
+    const loanTotal = loanPaymentsByMonth(app.companyCreditors, fromDate, toDate).total;
+    // รวมยอดต่อประเภท: รายจ่ายครั้งเดียว + รายจ่ายประจำ
+    const catMap = {};
+    sel.forEach(n=>{ const es = expenses.filter(e=>e.category===n); if(es.length) catMap[n]={ name:n, color:colorOf(n), count:es.length, total:es.reduce((s,e)=>s+Number(e.amount||0),0) }; });
+    Object.entries(recByCat).forEach(([n,amt])=>{ if(amt<=0) return; if(!catMap[n]) catMap[n]={ name:n, color:colorOf(n), count:0, total:0 }; catMap[n].total+=amt; });
+    if (loanTotal>0) catMap[LOAN_CAT]={ name:LOAN_CAT, color:'#dc2626', count:0, total:loanTotal };
+    const catRows = Object.values(catMap).sort((a,b)=>b.total-a.total);
+    const expenseTotal = catRows.reduce((s,c)=>s+c.total,0);
     try {
-      doExportCompanyPDF({ fromDate, toDate, incomeGross, companyIncome, expenses, catRows, selectedNames: sel });
+      doExportCompanyPDF({ fromDate, toDate, incomeGross, companyIncome, expenses, catRows, selectedNames: sel, expenseTotal, recTotal, loanTotal });
       app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
       onClose();
     } catch(e) { console.error('[CompanyReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
