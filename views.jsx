@@ -1223,6 +1223,109 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
 }
 window.RecordsTable = RecordsTable;
 
+// ---- Modal: บันทึกยอดรวมย้อนหลัง (วัสดุ/เครื่องจักร/อื่นๆ/ค่าแรง/รายรับ เป็นก้อน) ----
+// ใช้กรอกยอดรวมของเดือนเก่า ๆ ลงไปเป็นรายรับ-รายจ่ายของโครงการ โดยไม่ต้องแยกรายการ/ประเภท
+function BackfillLumpModal({ open, onClose }) {
+  const app = window.useApp();
+  const projects = (app.projects || []).filter(p => !p.archived);
+  const [projectId, setProjectId] = useState('');
+  const [date, setDate] = useState(() => { const d=new Date(); d.setDate(1); return d.toISOString().slice(0,10); });
+  const [vals, setVals] = useState({ material:'', machine:'', other:'', labor:'', income:'' });
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setProjectId(projects[0]?.id || '');
+    const d=new Date(); d.setDate(1);
+    setDate(d.toISOString().slice(0,10));
+    setVals({ material:'', machine:'', other:'', labor:'', income:'' });
+    setNote('');
+  }, [open]); // eslint-disable-line
+
+  const ROWS = [
+    { key:'material', label:'ค่าวัสดุ',       color:'#d97706' },
+    { key:'machine',  label:'ค่าเครื่องจักร', color:'#0ea5e9' },
+    { key:'other',    label:'ค่าใช้จ่ายอื่นๆ', color:'#8b5cf6' },
+    { key:'labor',    label:'ค่าแรง',         color:'#16a34a' },
+    { key:'income',   label:'รายรับ (เงินรับจากลูกค้า)', color:'#059669', income:true },
+  ];
+  const setVal = (k,v) => setVals(s => ({ ...s, [k]: v }));
+  const totalExp = ['material','machine','other','labor'].reduce((s,k)=>s+Number(vals[k]||0),0);
+  const totalInc = Number(vals.income||0);
+
+  const buildRec = (type, amount, isIncome) => ({
+    type,
+    meta: isIncome ? { kind:'income', backfill:true } : { backfill:true },
+    docNo: (isIncome?'IN':'BF') + '-' + new Date(date).getFullYear() + '-' + String(Math.floor(Math.random()*9000+1000)),
+    date,
+    projectId,
+    vendor: '',
+    period: isIncome ? 'ยอดยกมา (ย้อนหลัง)' : '',
+    items: [{ id: newId(), name:'ยอดรวมย้อนหลัง', categoryId:'', qty:1, unit:'เหมารวม', price: Number(amount) }],
+    vatMode: 'cash', vatRate:0, whtEnabled:false, whtRate:0,
+    docs: [], note: note.trim() || 'บันทึกยอดรวมย้อนหลัง', images: [],
+    approved: true, approvedDate: date, paid: true, paidDate: date,
+  });
+
+  const save = () => {
+    if (!projectId) return app.pushToast('โปรดเลือกโครงการ', 'error');
+    if (totalExp <= 0 && totalInc <= 0) return app.pushToast('โปรดระบุยอดอย่างน้อยหนึ่งช่อง', 'error');
+    let n = 0;
+    ROWS.forEach(r => {
+      const amt = Number(vals[r.key] || 0);
+      if (amt > 0) { app.addRecord(buildRec(r.income ? 'other' : r.key, amt, !!r.income)); n++; }
+    });
+    app.pushToast('บันทึกยอดรวมย้อนหลังแล้ว ' + n + ' รายการ');
+    onClose();
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+  const proj = projects.find(p=>p.id===projectId);
+
+  return (
+    <window.Modal open={open} onClose={onClose} title="บันทึกยอดรวมย้อนหลัง" width={500}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={save}><Icon name="save" size={13}/> บันทึก</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        <div className="text-small text-muted" style={{ lineHeight:1.6 }}>
+          กรอกยอดรวมของเดือนเก่า ๆ เป็นก้อนเดียว (ไม่ต้องแยกรายการ) เพื่อให้เข้าไปอยู่ในรายรับ-รายจ่ายของโครงการ สำหรับสรุป/รายงานรายเดือน
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div>
+            <label style={LS}>โครงการ</label>
+            {projects.length===0
+              ? <div className="text-small text-muted">ยังไม่มีโครงการ</div>
+              : <select style={{ ...IS, cursor:'pointer' }} value={projectId} onChange={e=>setProjectId(e.target.value)}>
+                  {projects.map(p=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+                </select>}
+          </div>
+          <div><label style={LS}>วันที่ (เลือกเดือนย้อนหลังได้)</label><input type="date" style={IS} value={date} onChange={e=>setDate(e.target.value)} /></div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {ROWS.map(r=>(
+            <div key={r.key} className="row gap-8" style={{ alignItems:'center' }}>
+              <span style={{ width:11, height:11, borderRadius:'50%', background:r.color, flexShrink:0 }} />
+              <label style={{ fontSize:13, flex:1 }}>{r.label}</label>
+              <div style={{ width:170 }}>
+                <window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace', textAlign:'right' }} value={vals[r.key]} onChange={v=>setVal(r.key,v)} placeholder="0.00" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div><label style={LS}>หมายเหตุ (ไม่บังคับ)</label><input style={IS} value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น ยอดรวมเดือน ส.ค. 67" /></div>
+        <div style={{ padding:'12px 16px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
+          <div className="row between"><span className="text-small text-muted">รวมรายจ่าย (วัสดุ+เครื่องจักร+อื่นๆ+ค่าแรง)</span><span className="mono" style={{ color:'#c2410c', fontWeight:600 }}>฿{fmt(totalExp)}</span></div>
+          <div className="row between" style={{ marginTop:4 }}><span className="text-small text-muted">รวมรายรับ</span><span className="mono" style={{ color:'#059669', fontWeight:600 }}>฿{fmt(totalInc)}</span></div>
+          {proj && <div className="text-small text-muted" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}>บันทึกเข้าโครงการ: <strong style={{ color:'var(--ink-1)' }}>{proj.name}</strong> · วันที่ {fmtDate(date)}</div>}
+        </div>
+      </div>
+    </window.Modal>
+  );
+}
+
 // ---- History view ----
 window.HistoryView = function HistoryView() {
   const app = window.useApp();
@@ -1237,6 +1340,7 @@ window.HistoryView = function HistoryView() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo]     = useState('');
   const [reportOpen, setReportOpen] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
 
   // ── lookup โครงการ (ใช้เช็ค trackBills สำหรับฟีเจอร์ตามบิล) ──
   const projById = useMemo(() => {
@@ -1422,6 +1526,10 @@ window.HistoryView = function HistoryView() {
               <Icon name="check" size={13} /> ปิดรายการเดิม
             </button>
           )}
+          <button className="btn btn-ghost btn-sm" onClick={() => setBackfillOpen(true)}
+            title="กรอกยอดรวมย้อนหลัง (วัสดุ/เครื่องจักร/อื่นๆ/ค่าแรง/รายรับ) เป็นก้อน ไม่ต้องแยกรายการ">
+            <Icon name="plus" size={13} /> บันทึกยอดรวมย้อนหลัง
+          </button>
           <button className="btn btn-accent btn-sm" onClick={() => setReportOpen(true)}
             title="ส่งออกรายงานสรุปการจัดซื้อ (วัสดุ/เครื่องจักร/อื่นๆ) เป็น PDF">
             <Icon name="download" size={13} /> ส่งออกรายงานจัดซื้อ
@@ -1460,6 +1568,7 @@ window.HistoryView = function HistoryView() {
         </div>
       )}
       <window.ExpenseReportModal open={reportOpen} onClose={() => setReportOpen(false)} scope="purchase" />
+      <BackfillLumpModal open={backfillOpen} onClose={() => setBackfillOpen(false)} />
     </>
   );
 };
