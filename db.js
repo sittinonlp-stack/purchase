@@ -433,13 +433,31 @@
           'vat_mode, vat_rate, wht_enabled, wht_rate, advance_deduction, retention_deduction, ' +
           'docs, note, deposit_amount, deposit_status, deposit_return_date, deposit_return_note, ' +
           'meta, created_at, record_items(*)';
-        let recs, e6;
-        ({ data: recs, error: e6 } = await client
-          .from('records').select(LIGHT_COLS).order('created_at', { ascending: false }));
-        if (e6 && isMissingColumnError(e6)) {
-          // DB ที่ยังไม่มีบางคอลัมน์ → fallback ใช้ * (ยังเบากว่าเดิมเพราะไม่ join work_logs)
-          ({ data: recs, error: e6 } = await client
-            .from('records').select('*, record_items(*)').order('created_at', { ascending: false }));
+        // ── โหลดแบบแบ่งหน้า (pagination) ──────────────────────────
+        // PostgREST จำกัดผลลัพธ์สูงสุด 1000 แถว/คำขอ ถ้า records เกินนั้น (เช่น >1000 รายการ)
+        // แถวที่เก่าสุด (เรียง created_at จากใหม่→เก่า) จะถูกตัดทิ้งเงียบ ๆ → ประวัติเดือนเก่าหายไป
+        // จึงต้องวนดึงทีละหน้าจนครบทุกแถว
+        const PAGE = 1000;
+        let recs = [], e6 = null, useFullCols = false;
+        for (let page = 0; page <= 200; page++) {
+          const from = page * PAGE, to = from + PAGE - 1;
+          let data, error;
+          if (!useFullCols) {
+            ({ data, error } = await client.from('records').select(LIGHT_COLS)
+              .order('created_at', { ascending: false }).range(from, to));
+            if (error && isMissingColumnError(error)) {
+              // DB ที่ยังไม่มีบางคอลัมน์ → fallback ใช้ * (ยังเบากว่าเดิมเพราะไม่ join work_logs)
+              useFullCols = true;
+              ({ data, error } = await client.from('records').select('*, record_items(*)')
+                .order('created_at', { ascending: false }).range(from, to));
+            }
+          } else {
+            ({ data, error } = await client.from('records').select('*, record_items(*)')
+              .order('created_at', { ascending: false }).range(from, to));
+          }
+          if (error) { e6 = error; break; }
+          recs = recs.concat(data || []);
+          if (!data || data.length < PAGE) break; // หน้าสุดท้าย
         }
         if (e6) throw e6;
 
@@ -523,15 +541,28 @@
     async loadRecordMedia() {
       const client = window.supabaseClient;
       if (!client) return {};
-      let { data, error } = await client
-        .from('records')
-        .select('id, images, deposit_return_images, work_logs(*)');
-      if (error && isMissingColumnError(error)) {
-        ({ data, error } = await client.from('records').select('id, images, work_logs(*)'));
+      // โหลดแบบแบ่งหน้าเช่นกัน (กันข้อจำกัด 1000 แถว/คำขอ ทำให้รูป/บันทึกงานของเดือนเก่าหาย)
+      const PAGE = 1000;
+      let rows = [], useFull = false;
+      for (let page = 0; page <= 200; page++) {
+        const from = page * PAGE, to = from + PAGE - 1;
+        let data, error;
+        if (!useFull) {
+          ({ data, error } = await client.from('records')
+            .select('id, images, deposit_return_images, work_logs(*)').order('created_at', { ascending: false }).range(from, to));
+          if (error && isMissingColumnError(error)) {
+            useFull = true;
+            ({ data, error } = await client.from('records').select('id, images, work_logs(*)').order('created_at', { ascending: false }).range(from, to));
+          }
+        } else {
+          ({ data, error } = await client.from('records').select('id, images, work_logs(*)').order('created_at', { ascending: false }).range(from, to));
+        }
+        if (error) throw error;
+        rows = rows.concat(data || []);
+        if (!data || data.length < PAGE) break;
       }
-      if (error) throw error;
       const map = {};
-      (data || []).forEach((row) => {
+      (rows || []).forEach((row) => {
         map[row.id] = {
           images: row.images || [],
           depositReturnImages: row.deposit_return_images || [],
