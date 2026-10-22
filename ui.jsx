@@ -238,6 +238,117 @@ function OptionPill({ selected, onClick, children, mode = 'check', icon }) {
 }
 window.OptionPill = OptionPill;
 
+// ---- ช่องหัก ณ ที่จ่าย (รองรับอัตราเดียว + หลายอัตราในบิลเดียว) ----
+// form ต้องมี: whtEnabled, whtRate, whtMode ('single'|'multi'), whtItems [{id,label,base,rate}]
+// totals.wht = ยอดหักที่คำนวณแล้ว (จาก computeTotals) · totals.subTotal = ยอดก่อน VAT (ใช้เทียบฐาน)
+function WhtField({ form, set, totals }) {
+  const RATES = [1, 2, 3, 5];
+  const PRESETS = [
+    { label: 'ค่าขนส่ง', rate: 1 },
+    { label: 'ค่าจ้าง/บริการ', rate: 3 },
+    { label: 'ค่าเช่า', rate: 5 },
+    { label: 'ค่าโฆษณา', rate: 2 },
+  ];
+  const multi = form.whtMode === 'multi';
+  const items = Array.isArray(form.whtItems) ? form.whtItems : [];
+  const updItem = (id, patch) => set({ whtItems: items.map((it) => it.id === id ? { ...it, ...patch } : it) });
+  const addItem = (preset) => set({ whtItems: [...items, { id: window.newId(), label: preset ? preset.label : '', base: '', rate: preset ? preset.rate : 3 }] });
+  const delItem = (id) => set({ whtItems: items.filter((it) => it.id !== id) });
+  const toMulti = () => {
+    // สลับเป็นหลายอัตรา — ถ้ายังไม่มีรายการ ใส่แถวแรกให้ พร้อมเติมฐาน = ยอดก่อน VAT
+    if (items.length === 0) set({ whtMode: 'multi', whtItems: [{ id: window.newId(), label: '', base: totals && totals.subTotal ? String(Math.round(totals.subTotal * 100) / 100) : '', rate: 3 }] });
+    else set({ whtMode: 'multi' });
+  };
+  const baseSum = items.reduce((s, it) => s + Math.max(0, Number(it.base || 0)), 0);
+  const subTotal = totals ? Number(totals.subTotal || 0) : 0;
+  const diff = Math.round((subTotal - baseSum) * 100) / 100;
+
+  return (
+    <div className="field">
+      <label className="field-label"><Icon name="percent" size={14} /> หัก ณ ที่จ่าย</label>
+      <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <Switch on={form.whtEnabled} onChange={(v) => set({ whtEnabled: v })}
+            label={form.whtEnabled ? 'เปิดใช้งานหัก ณ ที่จ่าย' : 'ไม่หัก ณ ที่จ่าย'}
+            sub={form.whtEnabled ? (multi ? 'หลายอัตราในบิลเดียว (แยกตามประเภท)' : 'คำนวณจากยอดก่อน Vat โดยอัตโนมัติ') : 'แตะเพื่อเปิดใช้งาน'} />
+        </div>
+        {form.whtEnabled && (
+          <div className="col gap-8" style={{ minWidth: 220 }}>
+            <div className="field-label" style={{ fontSize: 11.5 }}>รูปแบบการหัก</div>
+            <div className="option-row">
+              <OptionPill mode="radio" selected={!multi} onClick={() => set({ whtMode: 'single' })}>อัตราเดียว</OptionPill>
+              <OptionPill mode="radio" selected={multi} onClick={toMulti}>หลายอัตรา</OptionPill>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {form.whtEnabled && !multi && (
+        <div className="col" style={{ marginTop: 10 }}>
+          <div className="field-label" style={{ fontSize: 11.5 }}>อัตราหัก ณ ที่จ่าย</div>
+          <div className="option-row">
+            {RATES.map((r) => (
+              <OptionPill key={r} mode="radio" selected={Number(form.whtRate) === r} onClick={() => set({ whtRate: r })}>
+                <span className="mono">{r}%</span>
+              </OptionPill>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {form.whtEnabled && multi && (
+        <div className="col gap-8" style={{ marginTop: 10 }}>
+          {items.map((it) => {
+            const lineWht = Math.max(0, Number(it.base || 0)) * (Number(it.rate || 0) / 100);
+            return (
+              <div key={it.id} className="row gap-8" style={{ flexWrap: 'wrap', alignItems: 'flex-end', padding: '10px', border: '1px solid var(--line)', borderRadius: 10 }}>
+                <div className="col" style={{ flex: '2 1 160px', minWidth: 140 }}>
+                  <div className="field-label" style={{ fontSize: 11 }}>ประเภทเงินได้</div>
+                  <input className="input" list="wht-types" placeholder="เช่น ค่าขนส่ง / ค่าเช่า" value={it.label} onChange={(e) => updItem(it.id, { label: e.target.value })} />
+                </div>
+                <div className="col" style={{ flex: '1 1 110px', minWidth: 100 }}>
+                  <div className="field-label" style={{ fontSize: 11 }}>ฐานภาษี (บาท)</div>
+                  <window.MoneyInput className="input mono" placeholder="0.00" value={it.base} onChange={(v) => updItem(it.id, { base: v })} />
+                </div>
+                <div className="col" style={{ flex: '0 0 90px' }}>
+                  <div className="field-label" style={{ fontSize: 11 }}>อัตรา %</div>
+                  <select className="select" value={Number(it.rate) || ''} onChange={(e) => updItem(it.id, { rate: Number(e.target.value) })} style={{ padding: '8px 10px' }}>
+                    {RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                  </select>
+                </div>
+                <div className="col" style={{ flex: '0 0 auto', alignItems: 'flex-end' }}>
+                  <div className="field-label" style={{ fontSize: 11 }}>หัก</div>
+                  <span className="mono" style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600, padding: '8px 0' }}>− {fmt(lineWht)}</span>
+                </div>
+                <button type="button" className="topbar-icon-btn" style={{ width: 30, height: 30 }} onClick={() => delItem(it.id)} title="ลบรายการ"><Icon name="trash" size={13} /></button>
+              </div>
+            );
+          })}
+          <datalist id="wht-types">
+            {PRESETS.map((p) => <option key={p.label} value={p.label} />)}
+          </datalist>
+          <div className="row gap-8" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => addItem(null)}><Icon name="plus" size={12} /> เพิ่มรายการ</button>
+            {PRESETS.map((p) => (
+              <button key={p.label} type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 11.5 }} onClick={() => addItem(p)}>+ {p.label} {p.rate}%</button>
+            ))}
+          </div>
+          <div className="row between" style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
+            <span>ฐานรวม <strong className="mono" style={{ color: 'var(--ink-1)' }}>{fmt(baseSum)}</strong> · ยอดก่อน Vat <span className="mono">{fmt(subTotal)}</span></span>
+            <span>หักรวม <strong className="mono" style={{ color: 'var(--danger)' }}>− {fmt(totals ? totals.wht : 0)}</strong></span>
+          </div>
+          {Math.abs(diff) >= 0.5 && (
+            <div className="text-small" style={{ color: diff > 0 ? '#b45309' : '#b91c1c' }}>
+              {diff > 0 ? `ฐานภาษีรวมน้อยกว่ายอดก่อน Vat อยู่ ฿${fmt(diff)} (ยังไม่ได้หักครบทุกส่วน)` : `ฐานภาษีรวมเกินยอดก่อน Vat อยู่ ฿${fmt(-diff)} — โปรดตรวจสอบ`}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+window.WhtField = WhtField;
+
 // ---- Modal ----
 function Modal({ open, onClose, title, children, footer, width }) {
   useEffect(() => {

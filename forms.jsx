@@ -402,6 +402,8 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
     vatRate: 7,
     whtEnabled: false,
     whtRate: 3,
+    whtMode: 'single',
+    whtItems: [],
     discountEnabled: false,
     discountType: 'baht',
     discountValue: 0,
@@ -582,31 +584,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                 )}
               </div>
 
-              <div className="field">
-                <label className="field-label"><Icon name="percent" size={14} /> หัก ณ ที่จ่าย</label>
-                <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <Switch
-                      on={form.whtEnabled}
-                      onChange={(v) => set({ whtEnabled: v })}
-                      label={form.whtEnabled ? 'เปิดใช้งานหัก ณ ที่จ่าย' : 'ไม่หัก ณ ที่จ่าย'}
-                      sub={form.whtEnabled ? 'คำนวณจากยอดก่อน Vat โดยอัตโนมัติ' : 'แตะเพื่อเปิดใช้งาน'}
-                    />
-                  </div>
-                  {form.whtEnabled && (
-                    <div className="col" style={{ minWidth: 220 }}>
-                      <div className="field-label" style={{ fontSize: 11.5 }}>อัตราหัก ณ ที่จ่าย</div>
-                      <div className="option-row">
-                        {[1, 2, 3, 5].map((r) => (
-                          <OptionPill key={r} mode="radio" selected={Number(form.whtRate) === r} onClick={() => set({ whtRate: r })}>
-                            <span className="mono">{r}%</span>
-                          </OptionPill>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <window.WhtField form={form} set={set} totals={totals} />
 
               <div className="field">
                 <label className="field-label"><Icon name="tag" size={14} /> ส่วนลด</label>
@@ -690,7 +668,7 @@ window.PurchaseForm = function PurchaseForm({ type, initial, onSubmit, onCancel 
                 </div>
                 {form.whtEnabled && (
                   <div className="summary-chip">
-                    <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                    <span className="chip-label">หัก ณ ที่จ่าย {form.whtMode === 'multi' ? '(หลายอัตรา)' : `${form.whtRate}%`}</span>
                     <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
                   </div>
                 )}
@@ -747,6 +725,8 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
     vatRate: 7,
     whtEnabled: false,
     whtRate: 3,
+    whtMode: 'single',
+    whtItems: [],
     discountEnabled: false,
     discountType: 'baht',
     discountValue: 0,
@@ -861,28 +841,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
                   </div>
                 )}
               </div>
-              <div className="field">
-                <label className="field-label"><Icon name="percent" size={14} /> หัก ณ ที่จ่าย</label>
-                <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <Switch on={form.whtEnabled} onChange={(v) => set({ whtEnabled: v })}
-                      label={form.whtEnabled ? 'เปิดใช้งานหัก ณ ที่จ่าย' : 'ไม่หัก ณ ที่จ่าย'}
-                      sub={form.whtEnabled ? 'คำนวณจากยอดก่อน Vat โดยอัตโนมัติ' : 'แตะเพื่อเปิดใช้งาน'} />
-                  </div>
-                  {form.whtEnabled && (
-                    <div className="col" style={{ minWidth: 220 }}>
-                      <div className="field-label" style={{ fontSize: 11.5 }}>อัตราหัก ณ ที่จ่าย</div>
-                      <div className="option-row">
-                        {[1, 2, 3, 5].map((r) => (
-                          <OptionPill key={r} mode="radio" selected={Number(form.whtRate) === r} onClick={() => set({ whtRate: r })}>
-                            <span className="mono">{r}%</span>
-                          </OptionPill>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <window.WhtField form={form} set={set} totals={totals} />
 
               <div className="field">
                 <label className="field-label"><Icon name="tag" size={14} /> ส่วนลด</label>
@@ -968,7 +927,7 @@ window.OtherExpenseForm = function OtherExpenseForm({ initial, onSubmit, onCance
                 </div>
                 {form.whtEnabled && (
                   <div className="summary-chip">
-                    <span className="chip-label">หัก ณ ที่จ่าย {form.whtRate}%</span>
+                    <span className="chip-label">หัก ณ ที่จ่าย {form.whtMode === 'multi' ? '(หลายอัตรา)' : `${form.whtRate}%`}</span>
                     <span className="chip-value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span>
                   </div>
                 )}

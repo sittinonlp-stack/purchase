@@ -259,10 +259,20 @@ const _computeTotals = (rec) => {
   const advance = Number(rec.advanceDeduction || 0);
   const retention = Number(rec.retentionDeduction || 0);
 
-  // หัก ณ ที่จ่าย — คิดจากยอดที่เหลือหลังหักเบิกล่วงหน้า
-  // (เบิกล่วงหน้าจ่ายไปก่อนหน้าและถูกหัก ณ ที่จ่ายไปแล้ว จึงไม่หักซ้ำบนยอดเต็ม)
-  const whtBase = Math.max(0, subTotal - advance);
-  wht = whtBase * whtRate;
+  // หัก ณ ที่จ่าย
+  // โหมด multi (whtMode==='multi') — บิลเดียวหักหลายอัตรา (เช่น ค่าขนส่ง 1% + ค่าเช่า 5%)
+  //   คิดจาก whtItems: ผลรวม (ฐานแต่ละรายการ × อัตรา%) · ฐานรวม = ผลรวมฐานทุกรายการ
+  // โหมดเดี่ยว — อัตราเดียวทั้งบิล คิดจากยอดก่อน VAT ที่เหลือหลังหักเบิกล่วงหน้า
+  const whtItems = Array.isArray(rec.whtItems) ? rec.whtItems : [];
+  const whtMulti = rec.whtEnabled && rec.whtMode === 'multi';
+  let whtBase;
+  if (whtMulti) {
+    whtBase = whtItems.reduce((s, it) => s + Math.max(0, Number(it.base || 0)), 0);
+    wht = whtItems.reduce((s, it) => s + Math.max(0, Number(it.base || 0)) * (Number(it.rate || 0) / 100), 0);
+  } else {
+    whtBase = Math.max(0, subTotal - advance);
+    wht = whtBase * whtRate;
+  }
 
   // total = ยอดรายจ่ายที่บันทึก (ยอดเต็มก่อนหักประกันสังคมเสมอ)
   total = beforeWht - wht - advance - retention;

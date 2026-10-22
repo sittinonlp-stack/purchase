@@ -172,6 +172,9 @@
       vatRate: Number(row.vat_rate || 0),
       whtEnabled: Boolean(row.wht_enabled),
       whtRate: Number(row.wht_rate || 0),
+      // ── หัก ณ ที่จ่ายหลายอัตราในบิลเดียว (เก็บใน meta) ──
+      whtMode: (row.meta || {}).whtMode || 'single',
+      whtItems: (row.meta || {}).whtItems || [],
       advanceDeduction: Number(row.advance_deduction || 0),
       retentionDeduction: Number(row.retention_deduction || 0),
       docs: row.docs || [],
@@ -277,6 +280,8 @@
         discountEnabled: Boolean(rec.discountEnabled),
         discountType: rec.discountType || 'baht',
         discountValue: Number(rec.discountValue || 0),
+        whtMode: rec.whtMode || 'single',
+        whtItems: Array.isArray(rec.whtItems) ? rec.whtItems : [],
         ...(rec.docInfo ? { docInfo: rec.docInfo } : {}),
         ...(rec.createdBy ? { createdBy: rec.createdBy } : {}),
         workNote: rec.workNote || '',
@@ -967,7 +972,7 @@
       // meta JSONB — merge เข้ากับของเดิม (flags ต่าง ๆ ที่เก็บใน meta)
       const META_KEYS = ['accountingPosted', 'approved', 'approvedDate', 'docsIssued', 'docInfo', 'meta',
         'paid', 'paidDate', 'paidSlips', 'isRetentionPayout', 'retentionReturned',
-        'discountEnabled', 'discountType', 'discountValue',
+        'discountEnabled', 'discountType', 'discountValue', 'whtMode', 'whtItems',
         'billStatus', 'billDate', 'billNo', 'billImages', 'workNote', 'socialSecurity', 'socialSecurityNote',
         'socialSecurityEnabled', 'socialSecurityItems', 'socialSecurityPeriod',
         'installmentEnabled', 'installments', 'contractId', 'incomeContractId'];
@@ -1004,6 +1009,8 @@
         if (has('discountEnabled'))  newMeta.discountEnabled = Boolean(patch.discountEnabled);
         if (has('discountType'))     newMeta.discountType = patch.discountType || 'baht';
         if (has('discountValue'))    newMeta.discountValue = Number(patch.discountValue || 0);
+        if (has('whtMode'))          newMeta.whtMode = patch.whtMode || 'single';
+        if (has('whtItems'))         newMeta.whtItems = Array.isArray(patch.whtItems) ? patch.whtItems : [];
         dbPatch.meta = newMeta;
       }
 

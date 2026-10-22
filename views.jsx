@@ -1139,7 +1139,7 @@ const RecordRow = React.memo(function RecordRow({ r, projects, showApprove, show
                 }}>{issued ? '✓ ' : '🧾 '}{label}</span>
               );
             })}
-            {r.whtEnabled && <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'var(--info-soft)', color: '#1a4fb0', border: '1px solid rgba(37,99,235,0.3)', whiteSpace: 'nowrap' }}>หัก {r.whtRate}%</span>}
+            {r.whtEnabled && <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'var(--info-soft)', color: '#1a4fb0', border: '1px solid rgba(37,99,235,0.3)', whiteSpace: 'nowrap' }}>หัก {r.whtMode === 'multi' ? 'หลายอัตรา' : `${r.whtRate}%`}</span>}
           </div>
         )}
         {/* ตามบิล — ใบกำกับภาษี/ใบเสร็จจากร้าน (เฉพาะโครงการที่เปิดตามบิล) */}
@@ -2769,7 +2769,7 @@ window.DetailDrawer = function DetailDrawer() {
             {rec.vatMode === 'cash'
               ? <span className="badge gray">บิลเงินสด</span>
               : Number(rec.vatRate) > 0 && <span className="badge gray">{rec.vatMode === 'inclusive' ? 'รวม Vat แล้ว' : 'ไม่รวม Vat'}</span>}
-            {rec.whtEnabled && <span className="badge">หัก ณ ที่จ่าย {rec.whtRate}%</span>}
+            {rec.whtEnabled && <span className="badge">หัก ณ ที่จ่าย {rec.whtMode === 'multi' ? '(หลายอัตรา)' : `${rec.whtRate}%`}</span>}
           </div>
 
           {/* ข้อมูลผู้รับเงิน (สำหรับออกเอกสาร) — แสดงเมื่อมีข้อมูลที่กรอกไว้ */}
@@ -2795,7 +2795,14 @@ window.DetailDrawer = function DetailDrawer() {
           <div className="summary-rows" style={{ maxWidth: 380, marginLeft: 'auto' }}>
             <div className="summary-row"><span className="label">{rec.type === 'lump-labor' ? 'ยอดเหมารวม' : isLaborType ? 'ค่าแรงรวม' : 'ยอดก่อนภาษี'}</span><span className="value">{fmt(totals.subTotal)}</span></div>
             {Number(rec.vatRate) > 0 && <div className="summary-row"><span className="label">Vat {rec.vatRate}%</span><span className="value">{fmt(totals.vat)}</span></div>}
-            {rec.whtEnabled && <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {rec.whtRate}%{Number(rec.advanceDeduction) > 0 ? ` (ฐาน ฿${fmt(totals.whtBase)})` : ''}</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>}
+            {rec.whtEnabled && rec.whtMode === 'multi' ? (
+              <>
+                {(rec.whtItems || []).map((it) => (
+                  <div className="summary-row" key={it.id}><span className="label" style={{ fontSize: 12 }}>หัก ณ ที่จ่าย {it.rate}% · {it.label || 'ไม่ระบุประเภท'} (ฐาน ฿{fmt(Number(it.base || 0))})</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(Math.max(0, Number(it.base || 0)) * (Number(it.rate || 0) / 100))}</span></div>
+                ))}
+                <div className="summary-row"><span className="label" style={{ fontWeight: 600 }}>หัก ณ ที่จ่ายรวม (หลายอัตรา)</span><span className="value" style={{ color: 'var(--danger)', fontWeight: 600 }}>− {fmt(totals.wht)}</span></div>
+              </>
+            ) : rec.whtEnabled && <div className="summary-row"><span className="label">หัก ณ ที่จ่าย {rec.whtRate}%{Number(rec.advanceDeduction) > 0 ? ` (ฐาน ฿${fmt(totals.whtBase)})` : ''}</span><span className="value" style={{ color: 'var(--danger)' }}>− {fmt(totals.wht)}</span></div>}
             {Number(rec.advanceDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--warn)' }}>หักเบิกล่วงหน้า</span><span className="value" style={{ color: 'var(--warn)' }}>− {fmt(totals.advance)}</span></div>}
             {Number(rec.retentionDeduction) > 0 && <div className="summary-row"><span className="label" style={{ color: 'var(--info)' }}>หักเงินประกัน</span><span className="value" style={{ color: 'var(--info)' }}>− {fmt(totals.retention)}</span></div>}
             <div className="summary-row total"><span className="label">{Number(rec.socialSecurity) > 0 ? 'ยอดสุทธิ (บันทึกรายจ่าย)' : 'ยอดสุทธิ'}</span><span className="value">{fmt(totals.total)} บาท</span></div>
