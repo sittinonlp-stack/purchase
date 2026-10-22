@@ -1249,7 +1249,7 @@ window.RecordsTable = RecordsTable;
 // ใช้กรอกยอดรวมของเดือนเก่า ๆ ลงไปเป็นรายรับ-รายจ่ายของโครงการ โดยไม่ต้องแยกรายการ/ประเภท
 function BackfillLumpModal({ open, onClose }) {
   const app = window.useApp();
-  const projects = (app.projects || []).filter(p => !p.archived);
+  const projects = (app.projects || []).filter(p => p.status !== 'archived');
   const [projectId, setProjectId] = useState('');
   const [date, setDate] = useState(() => { const d=new Date(); d.setDate(1); return d.toISOString().slice(0,10); });
   const [vals, setVals] = useState({ material:'', machine:'', other:'', labor:'', income:'' });
@@ -1514,7 +1514,7 @@ window.HistoryView = function HistoryView() {
           </div>
           <select className="select" value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
-            {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {app.projects.filter(p => p.status !== 'archived' || p.id === projFilter).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <window.DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} />
           <select className="select" value={approveFilter} onChange={(e) => setApproveFilter(e.target.value)}
@@ -2972,7 +2972,7 @@ window.DepositsView = function DepositsView() {
           </div>
           <select className="select" value={projFilter} onChange={e=>setProjFilter(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
-            {app.projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            {app.projects.filter(p=>p.status!=='archived'||p.id===projFilter).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
 
@@ -3930,9 +3930,16 @@ function ExportReportModal({ open, onClose }) {
           <label style={LS}>โครงการ</label>
           <select style={{ ...IS, cursor:'pointer' }} value={projId} onChange={e=>setProjId(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
-            {app.projects.map(p=>(
+            {app.projects.filter(p=>p.status!=='archived').map(p=>(
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
+            {app.projects.some(p=>p.status==='archived') && (
+              <optgroup label="จัดเก็บแล้ว (เสร็จสิ้น)">
+                {app.projects.filter(p=>p.status==='archived').map(p=>(
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
@@ -4190,7 +4197,12 @@ function ExpenseReportModal({ open, onClose, scope }) {
           <label style={LS}>โครงการ</label>
           <select style={{ ...IS, cursor:'pointer' }} value={projId} onChange={e=>setProjId(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
-            {app.projects.map(p=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+            {app.projects.filter(p=>p.status!=='archived').map(p=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+            {app.projects.some(p=>p.status==='archived') && (
+              <optgroup label="จัดเก็บแล้ว (เสร็จสิ้น)">
+                {app.projects.filter(p=>p.status==='archived').map(p=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+              </optgroup>
+            )}
           </select>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'var(--bg-2)', borderRadius:9, border:'1px solid var(--line)', cursor:'pointer' }} onClick={()=>setIncludeDetails(v=>!v)}>
@@ -4600,7 +4612,7 @@ window.LaborHistoryView = function LaborHistoryView() {
           <window.DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} />
           <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
-            {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {app.projects.filter(p => p.status !== 'archived' || p.id === projFilter).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           {usedTeams.length > 0 && (
             <select className="select" value={teamFilter} onChange={e => setTeamFilter(e.target.value)}>
@@ -4762,7 +4774,7 @@ window.IncomeHistoryView = function IncomeHistoryView() {
           <window.DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} />
           <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
-            {app.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {app.projects.filter(p => p.status !== 'archived' || p.id === projFilter).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select className="select" value={accFilter} onChange={e => setAccFilter(e.target.value)}
             style={{ borderColor:accFilter!=='all'?'#059669':undefined, color:accFilter!=='all'?'#059669':undefined }}>
