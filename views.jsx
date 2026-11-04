@@ -1269,6 +1269,25 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
 }
 window.RecordsTable = RecordsTable;
 
+// ตารางประวัติแบบย่อ — แสดงล่าสุด `limit` รายการ แล้วกด "ดูทั้งหมด" เพื่อขยาย
+function CollapsibleRecordsTable({ records, limit = 15, ...rest }) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? records : records.slice(0, limit);
+  const hidden = records.length - shown.length;
+  return (
+    <>
+      <RecordsTable records={shown} {...rest} />
+      {records.length > limit && (
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowAll(v => !v)}>
+            <Icon name="chevron" size={13} /> {showAll ? `ย่อ — แสดง ${limit} รายการล่าสุด` : `ดูทั้งหมด (${records.length} รายการ · ซ่อนอยู่ ${hidden})`}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ---- Modal: บันทึกยอดรวมย้อนหลัง (วัสดุ/เครื่องจักร/อื่นๆ/ค่าแรง/รายรับ เป็นก้อน) ----
 // ใช้กรอกยอดรวมของเดือนเก่า ๆ ลงไปเป็นรายรับ-รายจ่ายของโครงการ โดยไม่ต้องแยกรายการ/ประเภท
 function BackfillLumpModal({ open, onClose }) {
@@ -1580,7 +1599,7 @@ window.HistoryView = function HistoryView() {
             ยอดรวม <strong className="mono" style={{ color: 'var(--ink-1)' }}>฿{fmt(sum)}</strong>
           </div>
         </div>
-        <RecordsTable records={filtered} onOpen={(id) => app.setDetailId(id)} showApprove={true} showPaid={true} />
+        <CollapsibleRecordsTable records={filtered} limit={15} onOpen={(id) => app.setDetailId(id)} showApprove={true} showPaid={true} />
       </div>
 
       {/* Modal: ปิดรายการเดิมทั้งหมด (อนุมัติ + จ่ายแล้ว) ครั้งเดียว */}
@@ -4671,7 +4690,7 @@ window.LaborHistoryView = function LaborHistoryView() {
             <div className="empty-sub">เริ่มบันทึกค่าแรงรายวันหรือค่าแรงเหมาจ่ายรายการแรกได้เลย</div>
           </div>
         ) : (
-          <RecordsTable records={filtered} onOpen={id => app.setDetailId(id)} showApprove={true} showPaid={true}/>
+          <CollapsibleRecordsTable records={filtered} limit={15} onOpen={id => app.setDetailId(id)} showApprove={true} showPaid={true}/>
         )}
       </div>
 
