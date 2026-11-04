@@ -706,25 +706,12 @@ function Sidebar() {
           <div className="nav-section-label">รายการ</div>
           <button className={"nav-item" + (['history','new-material','new-machine','new-other'].includes(view) ? " active" : "")} onClick={() => go('history')}>
             <Icon name="cart" /> จัดซื้อ / เช่า
-            {records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted && !window.isIncome(r)).length > 0 && (
-              <span className="badge">{records.filter(r => (r.type==='material'||r.type==='machine'||r.type==='other') && !r.accountingPosted && !window.isIncome(r)).length}</span>
-            )}
           </button>
           <button className={"nav-item" + (['labor-history','new-labor','new-lump-labor'].includes(view) ? " active" : "")} onClick={() => go('labor-history')}>
             <Icon name="hammer" /> ค่าแรง
-            {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length > 0 && (
-              <span className="badge" style={{ background:'oklch(0.93 0.06 290)', color:'oklch(0.45 0.14 290)', border:'1px solid oklch(0.84 0.08 290)' }}>
-                {records.filter(r => (r.type==='labor'||r.type==='lump-labor') && !r.accountingPosted).length}
-              </span>
-            )}
           </button>
           <button className={"nav-item" + (['income-history','new-income'].includes(view) ? " active" : "")} onClick={() => go('income-history')}>
             <Icon name="money" /> รายรับ
-            {records.filter(r => window.isIncome(r) && !r.accountingPosted).length > 0 && (
-              <span className="badge" style={{ background:'rgba(5,150,105,0.15)', color:'#059669', border:'1px solid rgba(5,150,105,0.3)' }}>
-                {records.filter(r => window.isIncome(r) && !r.accountingPosted).length}
-              </span>
-            )}
           </button>
           <button className={"nav-item" + (view === 'deposits' ? " active" : "")} onClick={() => go('deposits')}
             style={pendingDeposits > 0 ? { color:'#3b82f6' } : {}}>

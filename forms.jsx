@@ -1165,7 +1165,6 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
   };
 
   const isEditing = !!initial;
-  const posted = !!form.accountingPosted;
 
   return (
     <>
@@ -1288,35 +1287,6 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
           </div>
           )}
 
-          {/* Card 3: บัญชี (เครื่องหมายถูกสีเขียว) */}
-          <div className="card">
-            <div className="card-header">
-              <div>
-                <div className="card-title">สถานะบัญชี</div>
-                <div className="card-sub">ทำเครื่องหมายเมื่อบันทึกรายรับนี้ลงบัญชีแล้ว</div>
-              </div>
-            </div>
-            <div className="card-body">
-              <button type="button" onClick={() => set({ accountingPosted: !posted })}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                  padding: '10px 16px', borderRadius: 10, fontFamily: 'inherit', fontSize: 14,
-                  border: posted ? '2px solid #059669' : '2px solid #d1d5db',
-                  background: posted ? 'rgba(5,150,105,0.1)' : '#fff',
-                  color: posted ? '#059669' : 'var(--ink-3)', fontWeight: posted ? 600 : 400,
-                }}>
-                <span style={{
-                  width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                  border: posted ? 'none' : '2px solid #d1d5db',
-                  background: posted ? '#059669' : 'transparent',
-                  color: '#fff', fontSize: 14, fontWeight: 700,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                }}>{posted ? '✓' : ''}</span>
-                {posted ? 'ลงบัญชีแล้ว' : 'ยังไม่ลงบัญชี — คลิกเพื่อทำเครื่องหมาย'}
-              </button>
-            </div>
-          </div>
-
           {/* Card 4: images + note */}
           <div className="card">
             <div className="card-header">
@@ -1340,7 +1310,6 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
           <div className="card form-summary-bottom">
             <div className="card-body form-summary-bar">
               <div className="summary-chips">
-                {posted && <span className="badge dot" style={{ background:'rgba(5,150,105,0.12)', color:'#059669', borderColor:'rgba(5,150,105,0.3)' }}>✓ ลงบัญชีแล้ว</span>}
                 <div className="summary-chip total">
                   <span className="chip-label">ยอดรายรับรวม</span>
                   <span className="chip-value" style={{ color: '#059669' }}>{fmt(totals.total)} <span className="chip-unit">บาท</span></span>

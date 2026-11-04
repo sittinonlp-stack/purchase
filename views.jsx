@@ -766,25 +766,6 @@ window.DashboardView = function DashboardView() {
 };
 
 // ---- Shared records table ----
-// ---- Accounting checkbox — ปุ่มติ๊กลงบัญชี ----
-function AccCheckbox({ record }) {
-  const app = window.useApp();
-  const posted = !!record.accountingPosted;
-  const toggle = (e) => {
-    e.stopPropagation();
-    app.updateRecord(record.id, { accountingPosted: !posted });
-  };
-  return (
-    <button
-      onClick={toggle}
-      className={'status-chip' + (posted ? ' on acct' : '')}
-      title={posted ? 'ลงบัญชีแล้ว — คลิกเพื่อยกเลิก' : 'คลิกเพื่อทำเครื่องหมายว่าลงบัญชีแล้ว'}
-    >
-      <span className="tick">{posted ? '✓' : ''}</span> บัญชี
-    </button>
-  );
-}
-
 // ---- Approve checkbox — อนุมัติโดย Admin เท่านั้น ----
 function ApproveCheckbox({ record }) {
   const app = window.useApp();
@@ -1088,17 +1069,12 @@ function BillReceiveSection({ rec }) {
 const RecordRow = React.memo(function RecordRow({ r, projects, showApprove, showPaid, onOpen }) {
   const proj = projects.find(p => p.id === r.projectId);
   const total = computeTotals(r).total;
-  // อนุมัติแล้วแต่ยังไม่จ่าย → กระพริบเตือน; จ่ายแล้ว = เขียวจาง; ลงบัญชี = เขียวอ่อน
+  // อนุมัติแล้วแต่ยังไม่จ่าย → กระพริบเตือน; จ่ายแล้ว = เขียวจาง
   const pulse = r.approved && !r.paid;
   const rowBg = pulse ? undefined
-    : (r.approved && r.paid) ? 'rgba(5,150,105,0.05)'
-    : r.accountingPosted ? 'rgba(5,150,105,0.04)' : undefined;
+    : (r.approved && r.paid) ? 'rgba(5,150,105,0.05)' : undefined;
   return (
     <tr onClick={() => onOpen(r.id)} className={pulse ? 'pulse-approved' : undefined} style={{ background: rowBg }}>
-      {/* ── Accounting checkbox ── */}
-      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-        <AccCheckbox record={r} />
-      </td>
       {/* ── สถานะ: อนุมัติ + ใบอนุมัติสั่งจ่าย (showApprove=true) ── */}
       {showApprove && (
         <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
@@ -1216,9 +1192,6 @@ function RecordsTable({ records, onOpen, showApprove = false, showPaid = false }
       <table className="history-table">
         <thead>
           <tr>
-            <th style={{ width: 108, textAlign: 'center' }} title="ลงบัญชีโครงการแล้ว">
-              <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>ลงบัญชีโครงการ</span>
-            </th>
             {showApprove && (
               <th style={{ width: 126, textAlign: 'center' }} title="สถานะการอนุมัติ + ใบอนุมัติสั่งจ่าย">
                 <span style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.03em' }}>สถานะ</span>
@@ -1523,12 +1496,6 @@ window.HistoryView = function HistoryView() {
             <option value="pending">รออนุมัติ{pendingCount > 0 ? ` (${pendingCount})` : ''}</option>
             <option value="approved">อนุมัติแล้ว</option>
             <option value="unpaid">อนุมัติแล้ว-รอชำระจ่าย{unpaidCount > 0 ? ` (${unpaidCount})` : ''}</option>
-          </select>
-          <select className="select" value={accFilter} onChange={(e) => setAccFilter(e.target.value)}
-            style={{ borderColor: accFilter !== 'all' ? '#059669' : undefined, color: accFilter !== 'all' ? '#059669' : undefined }}>
-            <option value="all">สถานะบัญชี: ทั้งหมด</option>
-            <option value="unposted">ยังไม่ลงบัญชี</option>
-            <option value="posted">ลงบัญชีแล้ว</option>
           </select>
           <button className={"btn btn-sm" + (docFilter ? " btn-accent" : " btn-ghost")}
             onClick={() => setDocFilter(v => !v)}
@@ -4627,12 +4594,6 @@ window.LaborHistoryView = function LaborHistoryView() {
               {usedTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
-          <select className="select" value={accFilter} onChange={e => setAccFilter(e.target.value)}
-            style={{ borderColor:accFilter!=='all'?'#059669':undefined, color:accFilter!=='all'?'#059669':undefined }}>
-            <option value="all">สถานะบัญชี: ทั้งหมด</option>
-            <option value="unposted">ยังไม่ลงบัญชี</option>
-            <option value="posted">ลงบัญชีแล้ว</option>
-          </select>
           <select className="select" value={approveFilter} onChange={e => setApproveFilter(e.target.value)}
             style={{ borderColor:approveFilter!=='all'?'#2563eb':undefined, color:approveFilter!=='all'?'#2563eb':undefined }}>
             <option value="all">การอนุมัติ: ทั้งหมด</option>
@@ -4732,8 +4693,6 @@ window.IncomeHistoryView = function IncomeHistoryView() {
   }, [allIncome, projFilter, accFilter, sortKey, q, dateFrom, dateTo]);
 
   const sum         = filtered.reduce((s, r) => s + computeTotals(r).total, 0);
-  const postedSum   = filtered.filter(r => r.accountingPosted).reduce((s, r) => s + computeTotals(r).total, 0);
-  const unpostedCnt = allIncome.filter(r => !r.accountingPosted).length;
 
   return (
     <>
@@ -4760,16 +4719,6 @@ window.IncomeHistoryView = function IncomeHistoryView() {
           <div className="stat-value mono">{"฿"+fmt(sum)}</div>
           <div className="stat-icon" style={{ background:'rgba(5,150,105,0.12)', color:'#059669' }}><Icon name="money" size={18} /></div>
         </div>
-        <div className="stat">
-          <div className="stat-label">ลงบัญชีแล้ว</div>
-          <div className="stat-value mono">{"฿"+fmt(postedSum)}</div>
-          <div className="stat-icon" style={{ background:'rgba(5,150,105,0.12)', color:'#059669' }}><Icon name="check" size={18} /></div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">ยังไม่ลงบัญชี</div>
-          <div className="stat-value mono">{fmtInt(unpostedCnt)}</div>
-          <div className="stat-icon" style={{ background:'rgba(234,179,8,0.12)', color:'#b45309' }}><Icon name="bell" size={18} /></div>
-        </div>
       </div>
 
       <div className="card">
@@ -4782,12 +4731,6 @@ window.IncomeHistoryView = function IncomeHistoryView() {
           <select className="select" value={projFilter} onChange={e => setProjFilter(e.target.value)}>
             <option value="all">ทุกโครงการ</option>
             {app.projects.filter(p => p.status !== 'archived' || p.id === projFilter).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select className="select" value={accFilter} onChange={e => setAccFilter(e.target.value)}
-            style={{ borderColor:accFilter!=='all'?'#059669':undefined, color:accFilter!=='all'?'#059669':undefined }}>
-            <option value="all">สถานะบัญชี: ทั้งหมด</option>
-            <option value="unposted">ยังไม่ลงบัญชี</option>
-            <option value="posted">ลงบัญชีแล้ว</option>
           </select>
           <div className="spacer"/>
           <div className="text-small text-muted">
