@@ -1155,6 +1155,11 @@ window.AppProvider = function AppProvider({ children }) {
   // Not logged in + Supabase is available → show login screen
   if (!session && window.supabaseClient) return <window.AuthScreen />;
 
+  // ล็อกอินแล้วแต่บัญชียังไม่ได้รับอนุมัติ (รออนุมัติ/ถูกปฏิเสธ) → แสดงหน้ารอ
+  if (session && userProfile && userProfile.status && userProfile.status !== 'approved') {
+    return <window.PendingApprovalScreen status={userProfile.status} profile={userProfile} onSignOut={signOut} />;
+  }
+
   if (!dbReady) return <DbLoadingScreen msg="กำลังโหลดข้อมูล…" />;
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

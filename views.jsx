@@ -3147,6 +3147,18 @@ window.UsersView = function UsersView() {
     }
   };
 
+  const setStatus = async (profile, status) => {
+    if (isSelf(profile)) { app.pushToast('ไม่สามารถเปลี่ยนสถานะบัญชีตัวเองได้', 'error'); return; }
+    try {
+      await window.db.updateUserStatus(profile.id, status);
+      const label = status === 'approved' ? 'อนุมัติ' : status === 'rejected' ? 'ปฏิเสธ' : 'ตั้งเป็นรออนุมัติ';
+      app.pushToast(`${label} ${profile.full_name || profile.email} แล้ว`);
+      load();
+    } catch (e) {
+      app.pushToast('เปลี่ยนสถานะไม่สำเร็จ: ' + (e.message || ''), 'error');
+    }
+  };
+
   const handleDeleteConfirmed = async () => {
     if (!confirmDelete) return;
     setDeleting(true);
@@ -3169,7 +3181,7 @@ window.UsersView = function UsersView() {
       <div className="page-header">
         <div>
           <h1 className="page-title">จัดการผู้ใช้งาน</h1>
-          <p className="page-sub">กำหนดสิทธิ์ผู้ใช้ที่ลงทะเบียนเข้ามา</p>
+          <p className="page-sub">อนุมัติผู้สมัครใหม่ และกำหนดสิทธิ์การเข้าถึง</p>
         </div>
         <window.HelpButton guideId="users" />
       </div>
@@ -3189,6 +3201,42 @@ window.UsersView = function UsersView() {
             <span style={{ fontSize:12, color:'var(--ink-3)' }}>เพิ่ม/แก้ไขได้ ไม่สามารถลบข้อมูลได้</span>
           </div>
         </div>
+
+        {/* ── ผู้สมัครใหม่ที่รออนุมัติ ── */}
+        {!loading && profiles.some(p => p.status === 'pending') && (
+          <div style={{ marginBottom:20, padding:'14px 16px', borderRadius:12,
+            background:'rgba(217,119,6,0.06)', border:'1px solid rgba(217,119,6,0.3)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, fontWeight:700, color:'#b45309' }}>
+              <span style={{ fontSize:16 }}>⏳</span> ผู้สมัครใหม่รออนุมัติ ({profiles.filter(p=>p.status==='pending').length})
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {profiles.filter(p => p.status === 'pending').map(p => (
+                <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap',
+                  padding:'12px 14px', borderRadius:10, background:'var(--surface)', border:'1px solid var(--line)' }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', flexShrink:0, background:'#b45309',
+                    display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700 }}>
+                    {(p.full_name || p.email || 'U').slice(0,1).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1, minWidth:140 }}>
+                    <div style={{ fontWeight:600, fontSize:14 }}>{p.full_name || '(ไม่ระบุชื่อ)'}</div>
+                    <div style={{ fontSize:12, color:'var(--ink-3)' }}>{p.email}</div>
+                    <div style={{ fontSize:11, color:'var(--ink-4)', marginTop:1 }}>สมัครเมื่อ {fmtDate(p.created_at)}</div>
+                  </div>
+                  <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                    <button className="btn btn-accent btn-sm" onClick={() => setStatus(p, 'approved')} style={{ whiteSpace:'nowrap' }}>
+                      <Icon name="check" size={13} /> อนุมัติ
+                    </button>
+                    <button className="btn btn-sm" onClick={() => setStatus(p, 'rejected')}
+                      style={{ background:'rgba(239,68,68,0.10)', color:'#ef4444', border:'1px solid rgba(239,68,68,0.25)', whiteSpace:'nowrap' }}>
+                      ปฏิเสธ
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize:11.5, color:'var(--ink-3)', marginTop:10 }}>อนุมัติแล้วจะเข้าใช้งานเป็นสิทธิ์ User · ปรับเป็น Admin ได้ในรายการด้านล่าง</div>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign:'center', padding:40, color:'var(--ink-3)' }}>กำลังโหลด…</div>
@@ -3230,6 +3278,15 @@ window.UsersView = function UsersView() {
                   </div>
                 </div>
 
+                {/* Status badge */}
+                {p.status && p.status !== 'approved' && (
+                  <span style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:'nowrap',
+                    background: p.status === 'rejected' ? 'rgba(239,68,68,0.12)' : 'rgba(217,119,6,0.15)',
+                    color: p.status === 'rejected' ? '#ef4444' : '#b45309' }}>
+                    {p.status === 'rejected' ? '🚫 ถูกปฏิเสธ' : '⏳ รออนุมัติ'}
+                  </span>
+                )}
+
                 {/* Role badge */}
                 <span style={{
                   padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600,
@@ -3242,6 +3299,17 @@ window.UsersView = function UsersView() {
                 {/* Actions — ห้ามแตะบัญชีตัวเอง และห้ามแตะ owner (สิทธิ์สูงสุด) */}
                 {!isSelf(p) && p.role !== 'owner' && (
                   <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                    {p.status !== 'approved' && (
+                      <button className="btn btn-accent btn-sm" onClick={() => setStatus(p, 'approved')} style={{ whiteSpace:'nowrap', fontSize:12 }}>
+                        <Icon name="check" size={12} /> อนุมัติ
+                      </button>
+                    )}
+                    {p.status === 'approved' && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => setStatus(p, 'rejected')}
+                        title="ระงับ/ปฏิเสธบัญชีนี้" style={{ whiteSpace:'nowrap', fontSize:12, color:'#ef4444' }}>
+                        ระงับ
+                      </button>
+                    )}
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={() => toggleRole(p)}

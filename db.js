@@ -1206,6 +1206,15 @@
       if (error) throw error;
     },
 
+    // Admin only: อนุมัติ/ปฏิเสธ/พักบัญชีผู้ใช้ (status: approved | pending | rejected)
+    async updateUserStatus(userId, status) {
+      const { data, error } = await window.supabaseClient
+        .from('profiles').update({ status }).eq('id', userId).select('id, status');
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error('ไม่มีสิทธิ์เปลี่ยนสถานะผู้ใช้นี้');
+      return data[0];
+    },
+
     // Admin only: delete a user profile (removes app access; auth.users row remains)
     async deleteUserProfile(userId) {
       const { error } = await window.supabaseClient

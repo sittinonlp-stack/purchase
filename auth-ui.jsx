@@ -229,3 +229,44 @@ function thaiAuthError(msg) {
 }
 
 window.AuthScreen = AuthScreen;
+
+// ---- หน้ารออนุมัติบัญชี (สำหรับผู้สมัครใหม่ที่ผู้ดูแลยังไม่อนุมัติ) ----
+function PendingApprovalScreen({ status, profile, onSignOut }) {
+  const rejected = status === 'rejected';
+  return (
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24,
+      background:'#f8f7f4', fontFamily:'Prompt, IBM Plex Sans Thai, sans-serif' }}>
+      <div style={{ maxWidth:440, width:'100%', background:'#fff', borderRadius:16, padding:'36px 32px',
+        boxShadow:'0 10px 40px rgba(0,0,0,0.08)', border:'1px solid #efeae3', textAlign:'center' }}>
+        <div style={{ width:72, height:72, borderRadius:'50%', margin:'0 auto 20px', display:'grid', placeItems:'center',
+          fontSize:34, background: rejected ? 'rgba(220,38,38,0.1)' : 'rgba(217,119,6,0.12)' }}>
+          {rejected ? '🚫' : '⏳'}
+        </div>
+        <h2 style={{ fontSize:20, color:'#1f1d18', marginBottom:10 }}>
+          {rejected ? 'บัญชีไม่ได้รับการอนุมัติ' : 'บัญชีของคุณกำลังรอการอนุมัติ'}
+        </h2>
+        <p style={{ color:'#7a6f64', fontSize:14, lineHeight:1.75, marginBottom:8 }}>
+          {rejected
+            ? 'ผู้ดูแลระบบไม่ได้อนุมัติให้บัญชีนี้เข้าใช้งาน หากคิดว่าผิดพลาดกรุณาติดต่อผู้ดูแลระบบ'
+            : 'ผู้ดูแลระบบจะตรวจสอบและอนุมัติให้เข้าใช้งานเร็ว ๆ นี้ กรุณาลองเข้าสู่ระบบใหม่อีกครั้งภายหลัง'}
+        </p>
+        {profile?.email && (
+          <div style={{ display:'inline-block', margin:'6px 0 22px', padding:'6px 14px', borderRadius:20,
+            background:'#f0ebe4', color:'#5b5349', fontSize:12.5 }}>
+            {profile.full_name ? profile.full_name + ' · ' : ''}{profile.email}
+          </div>
+        )}
+        <div>
+          <button onClick={onSignOut} style={{ padding:'11px 26px', background:'#1f1d18', color:'#fff', border:'none',
+            borderRadius:10, cursor:'pointer', fontFamily:'inherit', fontWeight:600, fontSize:14 }}>
+            ออกจากระบบ
+          </button>
+        </div>
+        <p style={{ color:'#9ca3af', fontSize:11.5, marginTop:18 }}>
+          ถ้าเพิ่งได้รับการอนุมัติ ให้ออกจากระบบแล้วเข้าสู่ระบบใหม่
+        </p>
+      </div>
+    </div>
+  );
+}
+window.PendingApprovalScreen = PendingApprovalScreen;
