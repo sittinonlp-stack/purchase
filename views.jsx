@@ -6308,3 +6308,567 @@ window.CompanyFinanceView = function CompanyFinanceView() {
     </>
   );
 };
+
+// ═══════════════════════════════════════════════════════════
+//  ยอดลูกหนี้บริษัท (Accounts Receivable)
+//  - ติดตามยอดค้าง / วันที่ชำระ / คงเหลือ
+//  - ออกใบแจ้งยอดคงค้าง (PDF) ส่งให้ลูกหนี้
+//  - คิดดอกเบี้ยแบบลดต้นลดดอก (ดอกเบี้ยเชิงเดี่ยว รายวัน — ถูกกฎหมาย ไม่ทบต้น)
+// ═══════════════════════════════════════════════════════════
+
+// บริษัทผู้ให้เครดิต (แก้ไขได้ในเอกสารก่อนพิมพ์)
+const DEBTOR_COMPANY_NAME = 'หจก.ฟอร์เฮ้าส์โฮมบิลดิ้ง';
+
+// ── หลักกฎหมายดอกเบี้ย (ป.พ.พ. แก้ไข พ.ศ. 2564) ──
+//   • ม.7  ดอกเบี้ยที่ไม่ได้ตกลงกัน = 3%/ปี
+//   • ม.224 ดอกเบี้ยผิดนัดชำระ = 3% + 2% = 5%/ปี (เมื่อไม่ได้ตกลงอัตราไว้)
+//   • พ.ร.บ.ห้ามเรียกดอกเบี้ยเกินอัตราฯ: เพดานเงินกู้ 15%/ปี — เกินเป็นโมฆะ + ผิดอาญา
+//   • ม.655 ห้ามคิดดอกเบี้ยทบต้น → ใช้ "ดอกเบี้ยเชิงเดี่ยว" (simple interest)
+//   • ม.329 ชำระหนี้ให้ตัด "ดอกเบี้ย" ก่อน แล้วจึงตัด "เงินต้น"
+const DEBTOR_LEGAL_DEFAULT_RATE = 5;   // ผิดนัดชำระตามกฎหมาย
+const DEBTOR_LEGAL_MAX_RATE     = 15;  // เพดานตามกฎหมายเงินกู้
+
+const DEBTOR_METHOD_LABEL = {
+  none: 'ไม่คิดดอกเบี้ย',
+  reducing: 'ลดต้นลดดอก (ดอกเบี้ยเชิงเดี่ยว รายวัน)',
+};
+
+function debtorDaysBetween(a, b) {
+  if (!a || !b) return 0;
+  const ms = Date.parse(b + 'T00:00:00') - Date.parse(a + 'T00:00:00');
+  return ms > 0 ? Math.round(ms / 86400000) : 0;
+}
+
+// คำนวณบัญชีลูกหนี้ (เงินต้น + ดอกเบี้ยลดต้นลดดอก) ณ วันที่ asOf
+//   คืนค่า: เงินต้นคงเหลือ, ดอกเบี้ยค้าง, ยอดค้างรวม, ประวัติการชำระ (ledger)
+function computeDebtorLedger(d, asOf) {
+  asOf = asOf || todayStr();
+  const principal0 = Math.max(0, Number(d.principal) || 0);
+  const rate = Math.max(0, Number(d.interestRate) || 0);
+  const useInterest = d.interestMethod === 'reducing' && rate > 0;
+  const start = d.startDate || asOf;
+  const pays = ((d.meta && d.meta.payments) || [])
+    .filter(p => p && p.date && Number(p.amount) > 0)
+    .slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.id || '').localeCompare(b.id || ''));
+
+  let principalBal = principal0;
+  let accrued = 0;                 // ดอกเบี้ยค้างที่ยังไม่ถูกตัดชำระ
+  let cursor = start;
+  let totalInterest = 0, totalPaid = 0, toInterestSum = 0, toPrincipalSum = 0, overpaySum = 0;
+  const rows = [];
+
+  const accrueTo = (date) => {
+    if (!useInterest) { if (date > cursor) cursor = date; return 0; }
+    const days = debtorDaysBetween(cursor, date);
+    const add = principalBal * (rate / 100) * (days / 365);
+    accrued += add; totalInterest += add;
+    if (date > cursor) cursor = date;
+    return add;
+  };
+
+  for (const p of pays) {
+    const pdate = p.date < start ? start : p.date;
+    const intAdded = accrueTo(pdate);
+    let amt = Math.max(0, Number(p.amount) || 0);
+    totalPaid += amt;
+    const toInt = Math.min(amt, accrued);
+    accrued -= toInt; amt -= toInt; toInterestSum += toInt;
+    const toPrin = Math.min(amt, principalBal);
+    principalBal -= toPrin; amt -= toPrin; toPrincipalSum += toPrin;
+    const overpay = amt; overpaySum += overpay;
+    rows.push({
+      id: p.id, date: p.date, note: p.note || '',
+      interestAccrued: intAdded, payment: Number(p.amount) || 0,
+      toInterest: toInt, toPrincipal: toPrin, overpay,
+      principalBal, accruedAfter: accrued,
+    });
+  }
+  // คิดดอกเบี้ยถึงวันที่ asOf
+  const finalAccrued = accrueTo(asOf);
+  const outstanding = Math.max(0, principalBal + accrued);
+  return {
+    principal0, rate, useInterest, method: d.interestMethod || 'none',
+    principalBal, accrued, outstanding,
+    totalInterest, totalPaid, toInterestSum, toPrincipalSum, overpaySum,
+    rows, start, asOf, finalAccrued,
+    paymentCount: pays.length,
+    lastPayDate: pays.length ? pays[pays.length - 1].date : '',
+    done: outstanding <= 0.5 && principal0 > 0,
+  };
+}
+
+// ── Modal: เพิ่ม/แก้ไขลูกหนี้ ────────────────────────────
+function DebtorModal({ open, onClose, initial }) {
+  const app = window.useApp();
+  const [debtor, setDebtor]   = useState('');
+  const [phone, setPhone]     = useState('');
+  const [address, setAddress] = useState('');
+  const [principal, setPrincipal] = useState('');
+  const [startDate, setStartDate] = useState(todayStr());
+  const [dueDate, setDueDate]     = useState('');
+  const [method, setMethod]   = useState('none');
+  const [rate, setRate]       = useState('');
+  const [note, setNote]       = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setDebtor(initial?.debtor || '');
+    setPhone(initial?.phone || '');
+    setAddress(initial?.address || '');
+    setPrincipal(initial?.principal != null && initial?.principal !== 0 ? String(initial.principal) : '');
+    setStartDate(initial?.startDate || todayStr());
+    setDueDate(initial?.dueDate || '');
+    setMethod(initial?.interestMethod || 'none');
+    setRate(initial?.interestRate ? String(initial.interestRate) : '');
+    setNote(initial?.note || '');
+  }, [open, initial]); // eslint-disable-line
+
+  const save = () => {
+    if (!debtor.trim()) return app.pushToast('โปรดระบุชื่อลูกหนี้', 'error');
+    if (!(Number(principal) > 0)) return app.pushToast('โปรดระบุยอดหนี้ตั้งต้น', 'error');
+    const rateNum = method === 'reducing' ? Math.max(0, Number(rate) || 0) : 0;
+    if (method === 'reducing' && !(rateNum > 0)) return app.pushToast('โปรดระบุอัตราดอกเบี้ยต่อปี', 'error');
+    if (rateNum > DEBTOR_LEGAL_MAX_RATE)
+      return app.pushToast(`อัตราดอกเบี้ยเกินเพดานกฎหมาย ${DEBTOR_LEGAL_MAX_RATE}%/ปี (เกินกว่านี้เป็นโมฆะและผิดกฎหมาย)`, 'error');
+    const payload = {
+      debtor: debtor.trim(), phone: phone.trim(), address: address.trim(),
+      principal: Number(principal) || 0, startDate, dueDate: dueDate || '',
+      interestMethod: method, interestRate: rateNum, note: note.trim(),
+    };
+    if (initial?.id) { app.updateCompanyDebtor(initial.id, payload); app.pushToast('แก้ไขลูกหนี้เรียบร้อย'); }
+    else { app.addCompanyDebtor({ ...payload, meta: { payments: [] } }); app.pushToast('เพิ่มลูกหนี้แล้ว'); }
+    onClose();
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title={initial?.id ? 'แก้ไขลูกหนี้' : 'เพิ่มลูกหนี้'} width={560}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={save}><Icon name="save" size={13}/> บันทึก</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        <div><label style={LS}>ชื่อลูกหนี้ *</label><input style={IS} value={debtor} onChange={e=>setDebtor(e.target.value)} placeholder="เช่น คุณสมชาย ใจดี / บจก. เอบีซี" /></div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>เบอร์โทร / ผู้ติดต่อ</label><input style={IS} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="08x-xxx-xxxx" /></div>
+          <div><label style={LS}>ยอดหนี้ตั้งต้น (เงินต้น) *</label><window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={principal} onChange={setPrincipal} placeholder="0.00" /></div>
+        </div>
+        <div><label style={LS}>ที่อยู่ (สำหรับใบแจ้งยอด)</label><input style={IS} value={address} onChange={e=>setAddress(e.target.value)} placeholder="ที่อยู่สำหรับออกเอกสาร" /></div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>วันที่เริ่มเป็นหนี้ / วันที่ในสัญญา</label><input type="date" style={IS} value={startDate} onChange={e=>setStartDate(e.target.value)} /></div>
+          <div><label style={LS}>กำหนดชำระ (ถ้ามี)</label><input type="date" style={IS} value={dueDate} onChange={e=>setDueDate(e.target.value)} /></div>
+        </div>
+
+        <div style={{ padding:'12px 14px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
+          <label style={{ ...LS, fontWeight:600, color:'var(--ink-2)' }}>การคิดดอกเบี้ย</label>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {[['none','ไม่คิดดอกเบี้ย'],['reducing','คิดดอกเบี้ยแบบลดต้นลดดอก (รายวัน)']].map(([val,lbl])=>(
+              <label key={val} style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer', color:'var(--ink-1)' }}>
+                <input type="radio" name="dmethod" checked={method===val} onChange={()=>setMethod(val)} /> {lbl}
+              </label>
+            ))}
+          </div>
+          {method==='reducing' && (
+            <div style={{ marginTop:12 }}>
+              <label style={LS}>อัตราดอกเบี้ยต่อปี (%)</label>
+              <div className="row gap-8" style={{ alignItems:'center', flexWrap:'wrap' }}>
+                <input type="number" min="0" max={DEBTOR_LEGAL_MAX_RATE} step="0.5" style={{ ...IS, width:120 }} value={rate} onChange={e=>setRate(e.target.value)} placeholder="เช่น 5" />
+                <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setRate(String(DEBTOR_LEGAL_DEFAULT_RATE))}>ผิดนัด {DEBTOR_LEGAL_DEFAULT_RATE}%</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setRate(String(DEBTOR_LEGAL_MAX_RATE))}>เพดาน {DEBTOR_LEGAL_MAX_RATE}%</button>
+              </div>
+              <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:8, lineHeight:1.6 }}>
+                ⚖️ ตามกฎหมายไทย: ดอกเบี้ยผิดนัดชำระ = <b>{DEBTOR_LEGAL_DEFAULT_RATE}%/ปี</b> (ป.พ.พ. ม.224) · เพดานเงินกู้ = <b>{DEBTOR_LEGAL_MAX_RATE}%/ปี</b> (เกินเป็นโมฆะ+ผิดอาญา)<br/>
+                คิดแบบ <b>ลดต้นลดดอก ไม่ทบต้น</b> (ดอกเบี้ย = เงินต้นคงเหลือ × อัตรา ÷ 365 × จำนวนวัน) — เงินที่ชำระจะตัดดอกเบี้ยก่อน แล้วจึงตัดเงินต้น (ม.329)
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div><label style={LS}>หมายเหตุ</label><input style={IS} value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น ค่างวดงานที่ค้าง / ยืมเงินหมุน" /></div>
+      </div>
+    </window.Modal>
+  );
+}
+
+// ── Modal: บันทึกการชำระเงินของลูกหนี้ ────────────────────
+function DebtorPaymentModal({ open, onClose, debtor }) {
+  const app = window.useApp();
+  const [date, setDate]     = useState(todayStr());
+  const [amount, setAmount] = useState('');
+  const [note, setNote]     = useState('');
+
+  useEffect(() => { if (open) { setDate(todayStr()); setAmount(''); setNote(''); } }, [open]);
+  if (!debtor) return null;
+  debtor = (app.companyDebtors || []).find(x => x.id === debtor.id) || debtor; // ใช้ข้อมูลล่าสุดจาก store
+
+  const led = computeDebtorLedger(debtor, todayStr());
+  const payAll = () => setAmount(String(Math.round(led.outstanding * 100) / 100));
+
+  const save = () => {
+    if (!(Number(amount) > 0)) return app.pushToast('โปรดระบุจำนวนเงินที่ชำระ', 'error');
+    if (!date) return app.pushToast('โปรดระบุวันที่ชำระ', 'error');
+    const payment = { id: newId(), date, amount: Number(amount) || 0, note: note.trim() };
+    const payments = [ ...((debtor.meta && debtor.meta.payments) || []), payment ];
+    app.updateCompanyDebtor(debtor.id, { meta: { ...(debtor.meta || {}), payments } });
+    app.pushToast(`บันทึกการชำระ ฿${fmt(payment.amount)} ของ ${debtor.debtor} แล้ว`);
+    onClose();
+  };
+
+  const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
+  const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title={`บันทึกการชำระ — ${debtor.debtor}`} width={460}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+        <button className="btn btn-accent" onClick={save}><Icon name="save" size={13}/> บันทึกการชำระ</button>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ padding:'10px 14px', borderRadius:9, background:'rgba(217,119,6,0.07)', border:'1px solid rgba(217,119,6,0.25)' }}>
+          <div className="row between"><span className="text-small text-muted">ยอดค้างชำระปัจจุบัน</span><span className="mono" style={{ color:'#c2410c', fontWeight:700 }}>฿{fmt(led.outstanding)}</span></div>
+          {led.useInterest && <div className="row between" style={{ marginTop:4 }}><span className="text-small text-muted">(เงินต้น ฿{fmt(led.principalBal)} + ดอกเบี้ยค้าง ฿{fmt(led.accrued)})</span></div>}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div><label style={LS}>วันที่ชำระ *</label><input type="date" style={IS} value={date} onChange={e=>setDate(e.target.value)} /></div>
+          <div><label style={LS}>จำนวนเงิน (บาท) *</label><window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={amount} onChange={setAmount} placeholder="0.00" /></div>
+        </div>
+        <div><button type="button" className="btn btn-ghost btn-sm" onClick={payAll}>ชำระเต็มจำนวน (฿{fmt(led.outstanding)})</button></div>
+        <div><label style={LS}>หมายเหตุ</label><input style={IS} value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น โอนผ่านธนาคาร / เงินสด" /></div>
+        {led.useInterest && <div style={{ fontSize:11, color:'var(--ink-3)', lineHeight:1.6 }}>เงินที่ชำระจะถูกตัด <b>ดอกเบี้ยค้างก่อน</b> แล้วจึงตัดเงินต้น (ตามกฎหมาย ป.พ.พ. ม.329)</div>}
+      </div>
+    </window.Modal>
+  );
+}
+
+// ── Modal: รายละเอียด/ประวัติการชำระของลูกหนี้ ──────────────
+function DebtorDetailModal({ open, onClose, debtor, onEdit, onPay }) {
+  const app = window.useApp();
+  if (!debtor) return null;
+  debtor = (app.companyDebtors || []).find(x => x.id === debtor.id) || debtor; // ใช้ข้อมูลล่าสุดจาก store
+  const led = computeDebtorLedger(debtor, todayStr());
+  const payments = ((debtor.meta && debtor.meta.payments) || []).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  const delPayment = (pid) => {
+    if (!confirm('ลบรายการชำระนี้?')) return;
+    const payments = ((debtor.meta && debtor.meta.payments) || []).filter(p => p.id !== pid);
+    app.updateCompanyDebtor(debtor.id, { meta: { ...(debtor.meta || {}), payments } });
+    app.pushToast('ลบรายการชำระแล้ว');
+  };
+
+  return (
+    <window.Modal open={open} onClose={onClose} title={`รายละเอียดลูกหนี้ — ${debtor.debtor}`} width={640}
+      footer={<div style={{ display:'flex', gap:8, justifyContent:'space-between', width:'100%', flexWrap:'wrap' }}>
+        <button className="btn btn-ghost" onClick={()=>doExportDebtorStatement(debtor)}><Icon name="download" size={13}/> ออกใบแจ้งยอด (PDF)</button>
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="btn btn-ghost" onClick={()=>{ onClose(); onEdit && onEdit(debtor); }}><Icon name="edit" size={13}/> แก้ไขข้อมูล</button>
+          <button className="btn btn-accent" onClick={()=>{ onClose(); onPay && onPay(debtor); }}><Icon name="money" size={13}/> บันทึกการชำระ</button>
+        </div>
+      </div>}>
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:10 }}>
+          <div style={{ background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:10, padding:'12px 14px' }}>
+            <div style={{ fontSize:11, color:'var(--ink-3)' }}>ยอดหนี้ตั้งต้น</div>
+            <div className="mono" style={{ fontSize:18, fontWeight:700 }}>฿{fmt(led.principal0)}</div>
+          </div>
+          <div style={{ background:'rgba(5,150,105,0.07)', border:'1px solid rgba(5,150,105,0.25)', borderRadius:10, padding:'12px 14px' }}>
+            <div style={{ fontSize:11, color:'#059669' }}>ชำระมาแล้วรวม</div>
+            <div className="mono" style={{ fontSize:18, fontWeight:700, color:'#059669' }}>฿{fmt(led.totalPaid)}</div>
+          </div>
+          <div style={{ background:'rgba(217,119,6,0.07)', border:'1px solid rgba(217,119,6,0.25)', borderRadius:10, padding:'12px 14px' }}>
+            <div style={{ fontSize:11, color:'#c2410c' }}>คงเหลือค้างชำระ</div>
+            <div className="mono" style={{ fontSize:18, fontWeight:700, color:'#c2410c' }}>฿{fmt(led.outstanding)}</div>
+          </div>
+        </div>
+
+        <div style={{ fontSize:12, color:'var(--ink-3)', lineHeight:1.7, background:'var(--bg-2)', borderRadius:9, padding:'10px 14px' }}>
+          {debtor.phone && <div>📞 {debtor.phone}</div>}
+          <div>📅 เริ่มเป็นหนี้: {fmtDate(debtor.startDate)}{debtor.dueDate ? ` · กำหนดชำระ: ${fmtDate(debtor.dueDate)}` : ''}</div>
+          <div>💠 ดอกเบี้ย: {DEBTOR_METHOD_LABEL[led.method] || 'ไม่คิดดอกเบี้ย'}{led.useInterest ? ` · ${led.rate}%/ปี` : ''}</div>
+          {led.useInterest && <div>เงินต้นคงเหลือ ฿{fmt(led.principalBal)} + ดอกเบี้ยค้าง ฿{fmt(led.accrued)} = ฿{fmt(led.outstanding)}</div>}
+          {debtor.note && <div>📝 {debtor.note}</div>}
+        </div>
+
+        <div>
+          <div className="row between" style={{ marginBottom:8 }}>
+            <div style={{ fontWeight:600, fontSize:13 }}>ประวัติการชำระ ({payments.length} ครั้ง)</div>
+          </div>
+          {payments.length === 0 ? (
+            <div style={{ textAlign:'center', color:'var(--ink-3)', padding:'20px 0', fontSize:13 }}>ยังไม่มีการชำระ</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {payments.map(p => (
+                <div key={p.id} className="row between" style={{ padding:'9px 12px', background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8 }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600 }}>{fmtDate(p.date)}</div>
+                    {p.note && <div style={{ fontSize:11, color:'var(--ink-3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.note}</div>}
+                  </div>
+                  <div className="row gap-8" style={{ alignItems:'center' }}>
+                    <span className="mono" style={{ color:'#059669', fontWeight:700 }}>฿{fmt(p.amount)}</span>
+                    <button className="btn btn-ghost btn-sm" style={{ color:'var(--danger)', padding:'2px 6px' }} onClick={()=>delPayment(p.id)}><Icon name="trash" size={12}/></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </window.Modal>
+  );
+}
+
+// ── PDF: ใบแจ้งยอดหนี้คงค้าง (ส่งให้ลูกหนี้) ────────────────
+function doExportDebtorStatement(d, companyName) {
+  const led = computeDebtorLedger(d, todayStr());
+  const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'}) : '—';
+  const now  = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
+  const docNo = 'AR-' + (d.id||'').slice(0,6).toUpperCase() + '-' + new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const company = companyName || DEBTOR_COMPANY_NAME;
+
+  // แถวประวัติการชำระ + ดอกเบี้ยลดต้นลดดอก
+  const payRows = led.rows.map((r,i)=>`<tr class="${i%2===0?'alt':''}">
+    <td style="white-space:nowrap">${fmtD(r.date)}</td>
+    <td>${r.note||'—'}</td>
+    ${led.useInterest?`<td class="r">฿${fmtN(r.toInterest)}</td>`:''}
+    <td class="r">฿${fmtN(r.toPrincipal)}</td>
+    <td class="r bold" style="color:#059669">฿${fmtN(r.payment)}</td>
+    <td class="r">฿${fmtN(r.principalBal)}</td>
+  </tr>`).join('');
+
+  const interestCols = led.useInterest ? '<th class="r" style="width:95px">ตัดดอกเบี้ย</th>' : '';
+  const interestExplain = led.useInterest
+    ? `<div class="note">คิดดอกเบี้ยแบบ <b>ลดต้นลดดอก (ดอกเบี้ยเชิงเดี่ยว ไม่ทบต้น)</b> อัตรา <b>${led.rate}% ต่อปี</b> — ดอกเบี้ย = เงินต้นคงเหลือ × อัตรา ÷ 365 × จำนวนวัน · การชำระตัดดอกเบี้ยก่อนแล้วจึงตัดเงินต้น (ป.พ.พ. ม.329) · ดอกเบี้ยค้างถึงวันที่ ${fmtD(led.asOf)} = <b>฿${fmtN(led.accrued)}</b></div>`
+    : `<div class="note">เครดิตนี้ <b>ไม่มีการคิดดอกเบี้ย</b></div>`;
+
+  const html = `<!DOCTYPE html><html lang="th"><head>
+<meta charset="UTF-8"><title>ใบแจ้งยอดหนี้คงค้าง — ${d.debtor||''}</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Prompt',sans-serif;font-size:12.5px;color:#1c1917;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4;margin:16mm 16mm}
+@media print{.no-print{display:none!important}}
+.report-header{background:#1c1917;color:#fff;padding:22px 28px;display:flex;justify-content:space-between;align-items:flex-start}
+.logo{width:46px;height:46px;background:#c2410c;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0}
+.header-left{display:flex;gap:16px;align-items:center}
+.header-title{font-size:18px;font-weight:700;line-height:1.3}
+.header-sub{font-size:11px;color:#a8a29e;margin-top:3px}
+.header-right{text-align:right;font-size:11px;color:#a8a29e;line-height:1.9}
+.header-right strong{color:#fff;font-weight:600}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px 28px;border-bottom:1px solid #e7e5e4}
+.meta-box .lbl{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#a8a29e;margin-bottom:5px}
+.meta-box .v{font-size:13px;line-height:1.7}
+.meta-box .v b{font-weight:600}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:20px 28px}
+.kpi{border-radius:10px;padding:16px 18px;border:1px solid #e7e5e4;background:#fafaf9}
+.kpi.accent{background:#c2410c;border-color:#c2410c;color:#fff}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;opacity:.75;margin-bottom:6px}
+.kpi-value{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.section{padding:4px 28px 18px}
+.section-title{font-size:13px;font-weight:700;border-left:4px solid #c2410c;padding-left:10px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+thead tr{background:#292524;color:#fff}
+thead th{padding:9px 12px;text-align:left;font-weight:600;font-size:10.5px;white-space:nowrap}
+tbody td{padding:8px 12px;border-bottom:1px solid #f5f5f4}
+tbody tr.alt td{background:#fafaf9}
+.r{text-align:right;font-variant-numeric:tabular-nums}.bold{font-weight:700}
+.total-box{margin:4px 28px 0;background:#1c1917;color:#fff;border-radius:12px;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
+.total-box .lbl{font-size:13px}.total-box .amt{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:#fbbf24}
+.note{font-size:10.5px;color:#78716c;margin-top:10px;line-height:1.6;background:#faf8f5;border:1px solid #efe9e2;border-radius:8px;padding:9px 12px}
+.sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:34px 28px 10px}
+.sign-box{text-align:center;font-size:11px;color:#57534e}
+.sign-line{border-top:1px dotted #78716c;margin-top:46px;padding-top:6px}
+.report-footer{margin:14px 28px 0;padding-top:12px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;font-size:10px;color:#78716c}
+.print-btn{background:#c2410c;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-family:'Prompt',sans-serif;font-weight:600;cursor:pointer}
+.print-wrap{text-align:center;padding:22px;border-bottom:2px dashed #e7e5e4;margin-bottom:8px}
+</style></head><body>
+<div class="no-print print-wrap">
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขก่อนพิมพ์</button>
+  </div>
+  <p style="margin-top:10px;font-size:11px;color:#78716c">ใบแจ้งยอดหนี้คงค้าง — แก้ไขชื่อบริษัท/ที่อยู่/ข้อความได้ด้วยปุ่ม "แก้ไขก่อนพิมพ์"</p>
+</div>
+<div class="report-header">
+  <div class="header-left"><div class="logo">฿</div><div>
+    <div class="header-title">ใบแจ้งยอดหนี้คงค้าง</div>
+    <div class="header-sub">Statement of Outstanding Balance</div>
+  </div></div>
+  <div class="header-right">
+    <div>เลขที่: <strong>${docNo}</strong></div>
+    <div>วันที่ออก: <strong>${now}</strong></div>
+    <div>ยอด ณ วันที่: <strong>${fmtD(led.asOf)}</strong></div>
+  </div>
+</div>
+<div class="meta-grid">
+  <div class="meta-box">
+    <div class="lbl">จาก (เจ้าหนี้)</div>
+    <div class="v"><b>${company}</b></div>
+  </div>
+  <div class="meta-box">
+    <div class="lbl">ถึง (ลูกหนี้)</div>
+    <div class="v"><b>${d.debtor||'—'}</b>${d.phone?`<br/>โทร. ${d.phone}`:''}${d.address?`<br/>${d.address}`:''}</div>
+  </div>
+</div>
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-label">ยอดหนี้ตั้งต้น</div><div class="kpi-value">฿${fmtN(led.principal0)}</div></div>
+  <div class="kpi"><div class="kpi-label">ชำระมาแล้วรวม</div><div class="kpi-value" style="color:#059669">฿${fmtN(led.totalPaid)}</div></div>
+  <div class="kpi accent"><div class="kpi-label">คงเหลือค้างชำระ</div><div class="kpi-value">฿${fmtN(led.outstanding)}</div></div>
+</div>
+<div class="section">
+  <div class="section-title">ประวัติการชำระ (${led.rows.length} ครั้ง)</div>
+  <table><thead><tr>
+    <th style="width:120px">วันที่ชำระ</th><th>หมายเหตุ</th>${interestCols}<th class="r" style="width:95px">ตัดเงินต้น</th><th class="r" style="width:105px">จำนวนที่ชำระ</th><th class="r" style="width:110px">เงินต้นคงเหลือ</th>
+  </tr></thead>
+  <tbody>${payRows||`<tr><td colspan="${led.useInterest?6:5}" style="text-align:center;color:#a8a29e;padding:16px">ยังไม่มีการชำระ</td></tr>`}</tbody>
+  </table>
+  ${interestExplain}
+</div>
+<div class="total-box">
+  <div class="lbl">ยอดที่ต้องชำระทั้งสิ้น ณ วันที่ ${fmtD(led.asOf)}${led.useInterest?` (เงินต้น ฿${fmtN(led.principalBal)} + ดอกเบี้ย ฿${fmtN(led.accrued)})`:''}</div>
+  <div class="amt">฿${fmtN(led.outstanding)}</div>
+</div>
+<div class="sign-grid">
+  <div class="sign-box"><div class="sign-line">ผู้รับเงิน / เจ้าหนี้</div></div>
+  <div class="sign-box"><div class="sign-line">ผู้ชำระ / ลูกหนี้</div></div>
+</div>
+<div class="report-footer"><span>${company} — ใบแจ้งยอดหนี้คงค้าง</span><span>${docNo}</span></div>
+<script>function toggleEdit(btn){var on=document.body.getAttribute('contenteditable')!=='true';document.body.setAttribute('contenteditable',on?'true':'false');btn.textContent=on?'✓ กำลังแก้ไข — กดเพื่อจบ':'✏️ แก้ไขก่อนพิมพ์';btn.style.background=on?'#059669':'#0ea5e9';}</script>
+</body></html>`;
+  const win = window.open('', '_blank', 'width=960,height=750');
+  if (!win) { alert('กรุณาอนุญาต Popup ในเบราว์เซอร์เพื่อดูเอกสาร PDF'); return; }
+  win.document.write(html); win.document.close();
+}
+
+// ── View หลัก: ยอดลูกหนี้บริษัท ────────────────────────────
+window.DebtorsView = function DebtorsView() {
+  const app = window.useApp();
+  const [modal, setModal]     = useState({ open:false, initial:null });
+  const [payModal, setPayModal]   = useState({ open:false, debtor:null });
+  const [detailModal, setDetailModal] = useState({ open:false, debtor:null });
+  const [showDone, setShowDone] = useState(false);
+
+  const debtors = (app.companyDebtors || []).map(d => ({ d, led: computeDebtorLedger(d, todayStr()) }));
+  const active = debtors.filter(x => !x.led.done);
+  const done   = debtors.filter(x => x.led.done);
+  const shown  = (showDone ? debtors : active).slice().sort((a,b)=> b.led.outstanding - a.led.outstanding);
+
+  const totalOutstanding = debtors.reduce((s,x)=>s+x.led.outstanding,0);
+  const totalPrincipalRemain = debtors.reduce((s,x)=>s+x.led.principalBal,0);
+  const totalAccrued = debtors.reduce((s,x)=>s+x.led.accrued,0);
+  const totalPaid = debtors.reduce((s,x)=>s+x.led.totalPaid,0);
+
+  const card = (label, value, sub, color, bg, border) => (
+    <div style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'16px 18px' }}>
+      <div style={{ fontSize:11, fontWeight:600, letterSpacing:.3, color, opacity:.85, marginBottom:6 }}>{label}</div>
+      <div className="mono" style={{ fontSize:22, fontWeight:700, color, letterSpacing:-.5 }}>{value}</div>
+      {sub && <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+
+  const openEdit = (d) => setModal({ open:true, initial:d });
+  const today = todayStr();
+  const isOverdue = (d, led) => d.dueDate && d.dueDate < today && led.outstanding > 0.5;
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">ยอดลูกหนี้บริษัท</h1>
+          <div className="page-sub">ติดตามยอดค้างชำระ · วันที่ชำระ · คงเหลือ · ออกใบแจ้งยอดส่งลูกหนี้ — เห็นเฉพาะผู้บริหาร</div>
+        </div>
+        <div className="row gap-8" style={{ flexWrap:'wrap' }}>
+          <window.HelpButton guideId="debtors" />
+          <button className="btn btn-accent" onClick={()=>setModal({ open:true, initial:null })}><Icon name="plus" size={14}/> เพิ่มลูกหนี้</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ display:'flex', flexDirection:'column', gap:18 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))', gap:12 }}>
+          {card('ยอดค้างชำระรวม', '฿'+fmt(totalOutstanding), `${active.length} รายที่ยังค้าง`, '#c2410c', 'rgba(217,119,6,0.07)', 'rgba(217,119,6,0.25)')}
+          {card('เงินต้นคงเหลือรวม', '฿'+fmt(totalPrincipalRemain), 'ยังไม่รวมดอกเบี้ย', '#1c1917', 'var(--bg-2)', 'var(--line)')}
+          {card('ดอกเบี้ยค้างรวม', '฿'+fmt(totalAccrued), 'ลดต้นลดดอก (ถ้ามี)', '#7c3aed', 'rgba(124,58,237,0.07)', 'rgba(124,58,237,0.25)')}
+          {card('รับชำระมาแล้วรวม', '฿'+fmt(totalPaid), `ลูกหนี้ทั้งหมด ${debtors.length} ราย`, '#059669', 'rgba(5,150,105,0.07)', 'rgba(5,150,105,0.25)')}
+        </div>
+
+        {done.length > 0 && (
+          <div className="row gap-8" style={{ alignItems:'center' }}>
+            <button className={"btn btn-sm " + (showDone?'btn-accent':'btn-ghost')} onClick={()=>setShowDone(v=>!v)}>
+              {showDone ? 'ซ่อน' : 'แสดง'}รายที่ชำระครบแล้ว ({done.length})
+            </button>
+          </div>
+        )}
+
+        {shown.length === 0 ? (
+          <div style={{ textAlign:'center', color:'var(--ink-3)', padding:'40px 0' }}>
+            <div style={{ fontSize:40, marginBottom:8 }}>📒</div>
+            <div style={{ fontSize:14 }}>ยังไม่มีรายการลูกหนี้</div>
+            <div style={{ fontSize:12, marginTop:4 }}>กด "เพิ่มลูกหนี้" เพื่อเริ่มติดตามยอดค้างชำระ</div>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {shown.map(({ d, led }) => {
+              const paidPct = led.principal0 > 0 ? Math.min(100, Math.round(led.toPrincipalSum / led.principal0 * 100)) : 0;
+              const overdue = isOverdue(d, led);
+              return (
+                <div key={d.id} style={{ border:'1px solid var(--line)', borderRadius:12, padding:'14px 16px', background:'var(--bg-1)' }}>
+                  <div className="row between" style={{ flexWrap:'wrap', gap:10, alignItems:'flex-start' }}>
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div className="row gap-8" style={{ alignItems:'center', flexWrap:'wrap' }}>
+                        <span style={{ fontWeight:700, fontSize:15 }}>{d.debtor}</span>
+                        {led.done && <span className="badge" style={{ background:'rgba(22,163,74,0.12)', color:'#16a34a' }}>ชำระครบแล้ว ✓</span>}
+                        {overdue && <span className="badge" style={{ background:'rgba(220,38,38,0.12)', color:'#dc2626' }}>เกินกำหนด</span>}
+                        {led.useInterest && <span className="badge" style={{ background:'rgba(124,58,237,0.12)', color:'#7c3aed' }}><Icon name="percent" size={10}/> {led.rate}%/ปี</span>}
+                      </div>
+                      <div style={{ fontSize:12, color:'var(--ink-3)', marginTop:3 }}>
+                        {d.phone ? `📞 ${d.phone} · ` : ''}เริ่ม {fmtDate(d.startDate)}{d.dueDate ? ` · กำหนด ${fmtDate(d.dueDate)}` : ''}
+                        {led.lastPayDate ? ` · ชำระล่าสุด ${fmtDate(led.lastPayDate)}` : ' · ยังไม่ชำระ'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontSize:11, color:'var(--ink-3)' }}>คงเหลือค้างชำระ</div>
+                      <div className="mono" style={{ fontSize:20, fontWeight:700, color: led.done ? '#16a34a' : '#c2410c' }}>฿{fmt(led.outstanding)}</div>
+                      {led.useInterest && led.accrued > 0 && <div style={{ fontSize:10, color:'#7c3aed' }}>(รวมดอกเบี้ย ฿{fmt(led.accrued)})</div>}
+                    </div>
+                  </div>
+
+                  <div style={{ margin:'10px 0 6px' }}>
+                    <div style={{ background:'var(--bg-3, #e5e7eb)', borderRadius:99, height:7, overflow:'hidden' }}>
+                      <div style={{ height:7, borderRadius:99, background:'#16a34a', width:`${paidPct}%`, transition:'width .3s' }} />
+                    </div>
+                    <div className="row between" style={{ marginTop:5, fontSize:11, color:'var(--ink-3)' }}>
+                      <span>ชำระเงินต้นแล้ว ฿{fmt(led.toPrincipalSum)} / ฿{fmt(led.principal0)} ({paidPct}%)</span>
+                      <span>{led.paymentCount} ครั้ง</span>
+                    </div>
+                  </div>
+
+                  <div className="row gap-8" style={{ flexWrap:'wrap', marginTop:8 }}>
+                    <button className="btn btn-accent btn-sm" onClick={()=>setPayModal({ open:true, debtor:d })} disabled={led.done}><Icon name="money" size={12}/> บันทึกการชำระ</button>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>setDetailModal({ open:true, debtor:d })}><Icon name="eye" size={12}/> รายละเอียด / ประวัติ</button>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>doExportDebtorStatement(d)}><Icon name="download" size={12}/> ใบแจ้งยอด</button>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>openEdit(d)}><Icon name="edit" size={12}/> แก้ไข</button>
+                    <button className="btn btn-ghost btn-sm" style={{ color:'var(--danger)' }} onClick={()=>{ if(confirm(`ลบลูกหนี้ "${d.debtor}" และประวัติการชำระทั้งหมด?`)){ app.deleteCompanyDebtor(d.id); app.pushToast('ลบลูกหนี้แล้ว'); } }}><Icon name="trash" size={12}/> ลบ</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ fontSize:11, color:'var(--ink-3)', lineHeight:1.7, borderTop:'1px solid var(--line)', paddingTop:12 }}>
+          ⚖️ <b>วิธีคิดดอกเบี้ยถูกกฎหมาย (ประเทศไทย):</b> คิดแบบ <b>ลดต้นลดดอก / ดอกเบี้ยเชิงเดี่ยว ไม่ทบต้น</b> — ดอกเบี้ย = เงินต้นคงเหลือ × อัตราต่อปี ÷ 365 × จำนวนวัน ·
+          เงินที่ชำระจะตัด <b>ดอกเบี้ยก่อน</b> แล้วจึงตัดเงินต้น (ป.พ.พ. ม.329) ·
+          ดอกเบี้ยผิดนัดชำระตามกฎหมาย = <b>{DEBTOR_LEGAL_DEFAULT_RATE}%/ปี</b> (ม.224) · เพดานดอกเบี้ยเงินกู้ = <b>{DEBTOR_LEGAL_MAX_RATE}%/ปี</b> (เกินเป็นโมฆะและมีโทษอาญา)
+        </div>
+      </div>
+
+      <DebtorModal open={modal.open} initial={modal.initial} onClose={()=>setModal({ open:false, initial:null })} />
+      <DebtorPaymentModal open={payModal.open} debtor={payModal.debtor} onClose={()=>setPayModal({ open:false, debtor:null })} />
+      <DebtorDetailModal open={detailModal.open} debtor={detailModal.debtor}
+        onClose={()=>setDetailModal({ open:false, debtor:null })}
+        onEdit={openEdit} onPay={(d)=>setPayModal({ open:true, debtor:d })} />
+    </>
+  );
+};

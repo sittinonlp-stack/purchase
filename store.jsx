@@ -371,6 +371,7 @@ window.AppProvider = function AppProvider({ children }) {
   const [companyExpenses, setCompanyExpenses] = useState([]);
   const [companyExpenseCats, setCompanyExpenseCats] = useState([]);
   const [companyCreditors, setCompanyCreditors] = useState([]);
+  const [companyDebtors, setCompanyDebtors] = useState([]);
   const [companyRecurring, setCompanyRecurring] = useState([]);
   // ยอดต้นทุน/รับ ยกมาจากปีก่อน (ก้อนเดียว ทั้งบริษัท) — เก็บใน app_settings
   const [carryoverIncome, setCarryoverIncomeState] = useState(0);
@@ -438,7 +439,7 @@ window.AppProvider = function AppProvider({ children }) {
       const { projects: ps, matCats: mc, machCats: kc, laborCats: lc,
               lumpLaborCats: llc, otherCats: oc, workerTeams: teams, records: recs,
               laborContracts: lcon, incomeContracts: icon,
-              companyExpenses: cexp, companyExpenseCats: ccats, companyCreditors: ccred, companyRecurring: crec,
+              companyExpenses: cexp, companyExpenseCats: ccats, companyCreditors: ccred, companyDebtors: cdeb, companyRecurring: crec,
               appSettings: aset } = await window.db.loadAll();
 
       setProjects(ps);
@@ -463,6 +464,7 @@ window.AppProvider = function AppProvider({ children }) {
       setCompanyExpenses(cexp || []);
       setCompanyExpenseCats(ccats || []);
       setCompanyCreditors(ccred || []);
+      setCompanyDebtors(cdeb || []);
       setCompanyRecurring(crec || []);
       setCarryoverIncomeState(Number((aset || {}).carryover_income || 0));
       setCompanyLastYearPLState(Number((aset || {}).last_year_pl || 0));
@@ -554,6 +556,7 @@ window.AppProvider = function AppProvider({ children }) {
             setCompanyExpenses([]);
             setCompanyExpenseCats([]);
             setCompanyCreditors([]);
+            setCompanyDebtors([]);
             setCompanyRecurring([]);
             setCarryoverIncomeState(0);
             setCompanyLastYearPLState(0);
@@ -1069,6 +1072,35 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteCreditor(id), 'deleteCreditor');
   }, [dbOnline, dbSync]);
 
+  // ── ลูกหนี้บริษัท (owner only) ──────────────────────
+  const addCompanyDebtor = useCallback((d) => {
+    const nd = { phone: '', address: '', note: '', interestRate: 0, interestMethod: 'none', meta: { payments: [] }, ...d, id: d.id || newId() };
+    setCompanyDebtors((xs) => [nd, ...xs]);
+    if (dbOnline) dbSync(window.db.insertDebtor(nd), 'insertDebtor');
+    return nd;
+  }, [dbOnline, dbSync]);
+
+  const updateCompanyDebtor = useCallback((id, patch) => {
+    let updated = null;
+    setCompanyDebtors((xs) => xs.map((x) => (x.id === id ? (updated = { ...x, ...patch }) : x)));
+    if (dbOnline) {
+      const p = window.db.updateDebtor(id, patch);
+      dbSync(p, 'updateDebtor');
+      // ถ้า DB ปฏิเสธ (เช่น ไม่มีสิทธิ์) → ไม่ทำให้ state ค้างผิด ให้แจ้งเตือนผ่าน dbSync อยู่แล้ว
+    }
+    return updated;
+  }, [dbOnline, dbSync]);
+
+  const deleteCompanyDebtor = useCallback((id) => {
+    let removed = null;
+    setCompanyDebtors((xs) => { removed = xs.find((x) => x.id === id) || null; return xs.filter((x) => x.id !== id); });
+    if (dbOnline) {
+      const p = window.db.deleteDebtor(id);
+      dbSync(p, 'deleteDebtor');
+      p.catch(() => { if (removed) setCompanyDebtors((xs) => xs.some((x) => x.id === id) ? xs : [removed, ...xs]); });
+    }
+  }, [dbOnline, dbSync]);
+
   // ── รายจ่ายประจำทุกเดือน (owner only) ────────────────
   const addCompanyRecurring = useCallback((r) => {
     const nr = { note: '', endDate: '', meta: {}, ...r, id: r.id || newId() };
@@ -1126,6 +1158,7 @@ window.AppProvider = function AppProvider({ children }) {
     companyExpenses, addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
     companyExpenseCats, addCompanyCat, updateCompanyCat, deleteCompanyCat,
     companyCreditors, addCompanyCreditor, updateCompanyCreditor, deleteCompanyCreditor,
+    companyDebtors, addCompanyDebtor, updateCompanyDebtor, deleteCompanyDebtor,
     companyRecurring, addCompanyRecurring, updateCompanyRecurring, deleteCompanyRecurring,
     carryoverIncome, setCarryoverIncome,
     companyLastYearPL, setCompanyLastYearPL,
@@ -1134,7 +1167,7 @@ window.AppProvider = function AppProvider({ children }) {
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, isOwner, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyRecurring, carryoverIncome, companyLastYearPL, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyDebtors, companyRecurring, carryoverIncome, companyLastYearPL, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
@@ -1146,6 +1179,7 @@ window.AppProvider = function AppProvider({ children }) {
        addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
        addCompanyCat, updateCompanyCat, deleteCompanyCat,
        addCompanyCreditor, updateCompanyCreditor, deleteCompanyCreditor,
+       addCompanyDebtor, updateCompanyDebtor, deleteCompanyDebtor,
        addCompanyRecurring, updateCompanyRecurring, deleteCompanyRecurring,
        setCarryoverIncome, setCompanyLastYearPL, pushToast, updateMyProfile]);
 

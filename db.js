@@ -125,6 +125,26 @@
     };
   }
 
+  // ── ลูกหนี้บริษัท (company_debtors) — owner only ──
+  function dbDebtor(row) {
+    return {
+      id: row.id, debtor: row.debtor || '', phone: row.phone || '', address: row.address || '',
+      principal: Number(row.principal || 0),
+      startDate: row.start_date || '', dueDate: row.due_date || '',
+      interestRate: Number(row.interest_rate || 0), interestMethod: row.interest_method || 'none',
+      note: row.note || '', meta: row.meta || {},
+    };
+  }
+  function jsDebtor(d) {
+    return {
+      id: d.id, debtor: d.debtor || '', phone: d.phone || '', address: d.address || '',
+      principal: Number(d.principal || 0),
+      start_date: d.startDate || null, due_date: d.dueDate || null,
+      interest_rate: Number(d.interestRate || 0), interest_method: d.interestMethod || 'none',
+      note: d.note || '', meta: d.meta || {},
+    };
+  }
+
   // ── รายจ่ายประจำทุกเดือน (company_recurring) — owner only ──
   function dbRecurring(row) {
     return {
@@ -498,6 +518,13 @@
           if (!crErr) companyCreditors = (crRows || []).map(dbCreditor);
         } catch (e) { /* ตาราง company_creditors ยังไม่มี หรือไม่มีสิทธิ์ */ }
 
+        // ลูกหนี้บริษัท (owner-only)
+        let companyDebtors = [];
+        try {
+          const { data: dbRows, error: dbErr } = await client.from('company_debtors').select('*').order('created_at');
+          if (!dbErr) companyDebtors = (dbRows || []).map(dbDebtor);
+        } catch (e) { /* ตาราง company_debtors ยังไม่มี หรือไม่มีสิทธิ์ */ }
+
         // รายจ่ายประจำทุกเดือน (owner-only)
         let companyRecurring = [];
         try {
@@ -513,7 +540,7 @@
         } catch (e) { /* ตาราง app_settings ยังไม่มี */ }
 
         return {
-          laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyRecurring, appSettings,
+          laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyDebtors, companyRecurring, appSettings,
           projects:        (projects    || []).map(dbProject),
           matCats:         (matCats     || []).map(dbCat),
           machCats:        (machCats    || []).map(dbCat),
@@ -742,6 +769,34 @@
     async deleteCreditor(id) {
       const { error } = await window.supabaseClient.from('company_creditors').delete().eq('id', id);
       if (error) throw error;
+    },
+
+    // ── ลูกหนี้บริษัท (company_debtors) — owner only ──
+    async insertDebtor(d) {
+      const { error } = await window.supabaseClient.from('company_debtors').insert(jsDebtor(d));
+      if (error) throw error;
+    },
+    async updateDebtor(id, patch) {
+      const dbPatch = {};
+      if ('debtor'         in patch) dbPatch.debtor          = patch.debtor || '';
+      if ('phone'          in patch) dbPatch.phone           = patch.phone || '';
+      if ('address'        in patch) dbPatch.address         = patch.address || '';
+      if ('principal'      in patch) dbPatch.principal       = Number(patch.principal || 0);
+      if ('startDate'      in patch) dbPatch.start_date      = patch.startDate || null;
+      if ('dueDate'        in patch) dbPatch.due_date        = patch.dueDate || null;
+      if ('interestRate'   in patch) dbPatch.interest_rate   = Number(patch.interestRate || 0);
+      if ('interestMethod' in patch) dbPatch.interest_method = patch.interestMethod || 'none';
+      if ('note'           in patch) dbPatch.note            = patch.note || '';
+      if ('meta'           in patch) dbPatch.meta            = patch.meta || {};
+      if (Object.keys(dbPatch).length === 0) return;
+      const { data, error } = await window.supabaseClient.from('company_debtors').update(dbPatch).eq('id', id).select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error('อัปเดตลูกหนี้ไม่สำเร็จ (ไม่พบรายการ หรือไม่มีสิทธิ์)');
+    },
+    async deleteDebtor(id) {
+      const { data, error } = await window.supabaseClient.from('company_debtors').delete().eq('id', id).select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error('ลบลูกหนี้ไม่สำเร็จ (ไม่พบรายการ หรือไม่มีสิทธิ์)');
     },
 
     // ── รายจ่ายประจำทุกเดือน (company_recurring) — owner only ──
