@@ -1019,7 +1019,6 @@ function Topbar({ title, sub }) {
   const app = window.useApp();
   const online = app && app.dbOnline;
   const [profileOpen, setProfileOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
 
   // Search state
   const [q,       setQ]       = useState('');
@@ -1260,8 +1259,6 @@ function Topbar({ title, sub }) {
           boxShadow: online ? '0 0 0 2px rgba(34,197,94,0.25)' : 'none' }} />
         {online ? 'Supabase' : 'Offline'}
       </div>
-      <button className="topbar-icon-btn" title="คู่มือการใช้งาน" onClick={() => setHelpOpen(true)}
-        style={{ fontWeight: 800, fontSize: 16, color: 'var(--accent-ink)' }}>?</button>
       <button className="topbar-icon-btn" title="การแจ้งเตือน">
         <Icon name="bell" />
         <span className="dot"></span>
@@ -1270,7 +1267,6 @@ function Topbar({ title, sub }) {
         <Icon name="settings" />
       </button>
       <ProfileSettingsModal open={profileOpen} onClose={() => setProfileOpen(false)} />
-      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} initialView={app.view} />
     </div>
   );
 }
@@ -1331,45 +1327,67 @@ const HELP_GUIDES = [
   ]},
 ];
 
-function HelpModal({ open, onClose, initialView }) {
-  const [sel, setSel] = useState('dashboard');
-  useEffect(() => { if (open) setSel(HELP_GUIDES.some(g => g.id === initialView) ? initialView : 'dashboard'); }, [open, initialView]);
-  const g = HELP_GUIDES.find(x => x.id === sel) || HELP_GUIDES[0];
+// ภาพประกอบ (inline SVG, ปรับสีตามธีม) — ต่อ 1 คู่มือ
+function GuideIllustration({ id }) {
+  const C = { bg:'var(--bg-2)', line:'var(--line)', ink:'var(--ink-3)', ink2:'var(--ink-4)', acc:'#d97706', green:'#059669', red:'#dc2626', blue:'#0ea5e9', purple:'#8b5cf6' };
+  const box = (x,y,w,h,r,fill,stroke)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r||4}" fill="${fill||'none'}" stroke="${stroke||'none'}" stroke-width="1"/>`;
+  const line = (x,y,w,col,h)=>`<rect x="${x}" y="${y}" width="${w}" height="${h||4}" rx="2" fill="${col||C.ink2}"/>`;
+  const dot = (x,y,col)=>`<circle cx="${x}" cy="${y}" r="4" fill="${col}"/>`;
+  let inner = '';
+  if (id==='dashboard' || id==='company-finance') {
+    const cols = id==='company-finance' ? [C.green,C.acc,C.red] : [C.green,C.acc,C.blue];
+    inner = cols.map((c,i)=>box(12+i*132,14,116,52,8,C.bg,C.line)+line(24+i*132,26,54,C.ink2,5)+line(24+i*132,40,74,c,9)).join('');
+    const bars=[30,46,38,54,42]; inner += bars.map((b,i)=>`<rect x="${20+i*76}" y="${150-b}" width="40" height="${b}" rx="3" fill="${i%2?C.acc:C.green}" opacity="0.85"/>`).join('')+line(12,92,120,C.ink,5);
+  } else if (id==='projects'||id==='categories'||id==='teams'||id==='users') {
+    const cols=[C.acc,C.blue,C.green,C.purple];
+    inner = cols.map((c,i)=>box(12,14+i*34,404,28,6,C.bg,C.line)+dot(28,28+i*34,c)+line(44,22+i*34,120,C.ink,6)+line(44,33+i*34,80,C.ink2,4)+box(372,20+i*34,32,16,4,'none',C.line)).join('');
+  } else {
+    // ตาราง (จัดซื้อ/ค่าแรง/รายรับ/เงินประกัน)
+    inner = box(12,12,404,22,5,C.bg)+line(24,20,40,C.ink2)+line(150,20,60,C.ink2)+line(360,20,44,C.ink2);
+    const rows=[C.green,C.acc,C.blue,C.purple];
+    inner += rows.map((c,i)=>box(12,40+i*26,404,22,5,'none',C.line)+dot(28,51+i*26,c)+line(44,49+i*26,90,C.ink,5)+line(150,49+i*26,110,C.ink2)+line(330,49+i*26,40,C.green,6)+box(380,45+i*26,24,14,3,'none',C.line)).join('');
+  }
+  return <div style={{ background:'var(--surface)', border:'1px solid var(--line)', borderRadius:10, padding:8, marginBottom:16 }}
+    dangerouslySetInnerHTML={{ __html:`<svg viewBox="0 0 428 160" width="100%" style="display:block;border-radius:6">${inner}</svg>` }} />;
+}
+
+function HelpModal({ open, onClose, guideId }) {
+  const g = HELP_GUIDES.find(x => x.id === guideId) || HELP_GUIDES[0];
   return (
-    <Modal open={open} onClose={onClose} title="คู่มือการใช้งาน" width={780}>
-      <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
-        <div style={{ flex:'0 0 180px', minWidth:160, display:'flex', flexDirection:'column', gap:4 }}>
-          {HELP_GUIDES.map(x => (
-            <button key={x.id} onClick={() => setSel(x.id)} className="help-nav-item" style={{
-              display:'flex', alignItems:'center', gap:9, padding:'8px 11px', borderRadius:8, cursor:'pointer',
-              border:'1px solid transparent', textAlign:'left', fontFamily:'inherit', fontSize:13,
-              background: sel===x.id ? 'var(--accent-soft, rgba(217,119,6,0.1))' : 'transparent',
-              color: sel===x.id ? 'var(--accent-ink)' : 'var(--ink-2)', fontWeight: sel===x.id ? 600 : 400,
-            }}>
-              <Icon name={x.icon} size={15} /> {x.title}
-            </button>
-          ))}
-        </div>
-        <div style={{ flex:'1 1 320px', minWidth:0, maxHeight:'60vh', overflowY:'auto', paddingRight:4 }}>
-          <div style={{ fontSize:17, fontWeight:700, marginBottom:4 }}>{g.title}</div>
-          <div className="text-small text-muted" style={{ marginBottom:16, lineHeight:1.6 }}>{g.intro}</div>
-          {g.sections.map((s, i) => (
-            <div key={i} style={{ marginBottom:16 }}>
-              <div style={{ fontSize:13.5, fontWeight:600, marginBottom:7, display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ width:20, height:20, borderRadius:6, background:'var(--accent-soft, rgba(217,119,6,0.12))', color:'var(--accent-ink)', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{i+1}</span>
-                {s.h}
-              </div>
-              <ol style={{ margin:0, paddingLeft:34, display:'flex', flexDirection:'column', gap:5 }}>
-                {s.steps.map((st, j) => (<li key={j} style={{ fontSize:13, lineHeight:1.65, color:'var(--ink-2)' }}>{st}</li>))}
-              </ol>
+    <Modal open={open} onClose={onClose} title={`คู่มือ · ${g.title}`} width={620}>
+      <div style={{ maxHeight:'70vh', overflowY:'auto', paddingRight:4 }}>
+        <GuideIllustration id={g.id} />
+        <div className="text-small text-muted" style={{ marginBottom:18, lineHeight:1.7 }}>{g.intro}</div>
+        {g.sections.map((s, i) => (
+          <div key={i} style={{ marginBottom:16 }}>
+            <div style={{ fontSize:14, fontWeight:600, marginBottom:7, display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ width:22, height:22, borderRadius:6, background:'rgba(217,119,6,0.12)', color:'var(--accent-ink)', fontSize:12, fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{i+1}</span>
+              {s.h}
             </div>
-          ))}
-        </div>
+            <ol style={{ margin:0, paddingLeft:38, display:'flex', flexDirection:'column', gap:6 }}>
+              {s.steps.map((st, j) => (<li key={j} style={{ fontSize:13.5, lineHeight:1.7, color:'var(--ink-2)' }}>{st}</li>))}
+            </ol>
+          </div>
+        ))}
       </div>
     </Modal>
   );
 }
 window.HelpModal = HelpModal;
+
+// ปุ่ม "คู่มือ" ประจำหน้า — วางข้างปุ่มการทำงานในหัวข้อแต่ละหน้า
+function HelpButton({ guideId, size='sm' }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className={"btn btn-ghost" + (size==='sm'?' btn-sm':'')} onClick={() => setOpen(true)} title="คู่มือการใช้งานหน้านี้">
+        <Icon name="clipboard" size={14} /> คู่มือ
+      </button>
+      <HelpModal open={open} onClose={() => setOpen(false)} guideId={guideId} />
+    </>
+  );
+}
+window.HelpButton = HelpButton;
 
 // ---- Image Lightbox (fullscreen viewer) ----
 // ใช้ขยายดูรูปภาพแนบ — รองรับ string / object { dataUrl }

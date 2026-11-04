@@ -399,6 +399,7 @@ window.DashboardView = function DashboardView() {
           <div className="page-sub">ภาพรวมการจัดซื้อและการเช่าเครื่องจักรของทุกโครงการ</div>
         </div>
         <div className="row gap-8 dash-actions">
+          <window.HelpButton guideId="dashboard" />
           <select className="select" value={periodMode === 'all' ? 'all' : activeMonth}
             onChange={(e) => {
               if (e.target.value === 'all') setPeriodMode('all');
@@ -1492,6 +1493,7 @@ window.HistoryView = function HistoryView() {
           <div className="page-sub">เรียกดู ค้นหา และเปิดดูรายละเอียดบิลย้อนหลังได้ตลอดเวลา</div>
         </div>
         <div className="row gap-8 dash-actions">
+          <window.HelpButton guideId="history" />
           <button className="btn btn-accent" onClick={() => { app.setEditingId(null); app.setView('new-material'); }}>
             <Icon name="cart" size={14} /> จัดซื้อวัสดุ
           </button>
@@ -1667,9 +1669,12 @@ window.ProjectsView = function ProjectsView() {
           <h1 className="page-title">โครงการ</h1>
           <div className="page-sub">จัดการโครงการก่อสร้างทั้งหมด เพิ่มได้เรื่อย ๆ ตามที่รับงาน</div>
         </div>
-        <button className="btn btn-accent" onClick={() => setOpen(true)}>
-          <Icon name="plus" size={14} stroke={2.5} /> เพิ่มโครงการ
-        </button>
+        <div className="row gap-8 dash-actions">
+          <window.HelpButton guideId="projects" />
+          <button className="btn btn-accent" onClick={() => setOpen(true)}>
+            <Icon name="plus" size={14} stroke={2.5} /> เพิ่มโครงการ
+          </button>
+        </div>
       </div>
 
       {/* แท็บ ดำเนินการ / เก็บถาวร */}
@@ -1999,6 +2004,7 @@ window.CategoriesView = function CategoriesView() {
           <h1 className="page-title">หมวดหมู่</h1>
           <div className="page-sub">จัดการหมวดหมู่ — เพิ่ม/แก้ไขได้ · ลากไอคอน ☰ เพื่อจัดลำดับขึ้น-ลง</div>
         </div>
+        <window.HelpButton guideId="categories" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }} className="cat-grid">
@@ -2350,9 +2356,12 @@ window.TeamsView = function TeamsView() {
           <h1 className="page-title">ทีมช่าง</h1>
           <div className="page-sub">จัดการทีมช่าง — ดูประวัติการเบิกค่าแรงของแต่ละทีม</div>
         </div>
-        <button className="btn btn-accent" onClick={() => setOpen(true)}>
-          <Icon name="plus" size={14} stroke={2.5} /> เพิ่มทีมช่าง
-        </button>
+        <div className="row gap-8 dash-actions">
+          <window.HelpButton guideId="teams" />
+          <button className="btn btn-accent" onClick={() => setOpen(true)}>
+            <Icon name="plus" size={14} stroke={2.5} /> เพิ่มทีมช่าง
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
@@ -2975,6 +2984,7 @@ window.DepositsView = function DepositsView() {
           <h1 className="page-title">เงินประกันสินค้า</h1>
           <div className="page-sub">ติดตามเงินมัดจำ / ค่าประกันที่วางกับผู้ขาย พร้อมสถานะการรับคืน</div>
         </div>
+        <window.HelpButton guideId="deposits" />
       </div>
 
       {/* Stats */}
@@ -3161,6 +3171,7 @@ window.UsersView = function UsersView() {
           <h1 className="page-title">จัดการผู้ใช้งาน</h1>
           <p className="page-sub">กำหนดสิทธิ์ผู้ใช้ที่ลงทะเบียนเข้ามา</p>
         </div>
+        <window.HelpButton guideId="users" />
       </div>
 
       <div className="card" style={{ maxWidth: 760 }}>
@@ -4403,6 +4414,7 @@ window.LaborHistoryView = function LaborHistoryView() {
           <div className="page-sub">ค่าแรงรายวัน และค่าแรงเหมาจ่าย — รายการย้อนหลังทั้งหมด</div>
         </div>
         <div className="row gap-8 dash-actions">
+          <window.HelpButton guideId="labor-history" />
           <button className="btn btn-ghost" onClick={() => setReportOpen(true)}
             title="ส่งออกรายงานสรุปค่าแรง (รายวัน + เหมาจ่าย) เป็น PDF">
             <Icon name="download" size={14} /> รายงานค่าแรง
@@ -4773,6 +4785,7 @@ window.IncomeHistoryView = function IncomeHistoryView() {
           <div className="page-sub">เงินรับเข้าโครงการทั้งหมด — รายการย้อนหลัง</div>
         </div>
         <div className="row gap-8 dash-actions">
+          <window.HelpButton guideId="income-history" />
           <button className="btn btn-accent" onClick={() => { app.setEditingId(null); app.setView('new-income'); }}>
             <Icon name="money" size={14} /> บันทึกรายรับ
           </button>
@@ -6013,6 +6026,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
           <div className="page-sub">รายรับค่าดำเนินการ {(COMPANY_FEE_RATE*100).toFixed(0)}% (auto จากยอดรับลูกค้า) · รายจ่ายบริษัท · กำไร/ขาดทุน — เห็นเฉพาะผู้ดูแลระบบ</div>
         </div>
         <div className="row gap-8" style={{ flexWrap:'wrap' }}>
+          <window.HelpButton guideId="company-finance" />
           <button className="btn btn-ghost" onClick={()=>setCatOpen(true)}><Icon name="tag" size={14}/> จัดการประเภท</button>
           <button className="btn btn-ghost" onClick={()=>setProfitOpen(true)} title="รายงานรวม รายรับจริง − ต้นทุน − ค่าดำเนินการ = กำไร/ขาดทุนรายเดือน"><Icon name="chart" size={14}/> รายงานกำไร/ขาดทุน</button>
           <button className="btn btn-ghost" onClick={()=>setReportOpen(true)}><Icon name="download" size={14}/> ส่งออกรายงาน</button>
