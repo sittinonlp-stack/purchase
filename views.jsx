@@ -5680,6 +5680,7 @@ function ProfitReportModal({ open, onClose }) {
   const [fromDate, setFromDate] = useState(firstOfYear);
   const [toDate, setToDate]     = useState(todayStr);
   const [includeCarry, setIncludeCarry] = useState(true);
+  const [includeLastPL, setIncludeLastPL] = useState(false); // รวมกำไร/ขาดทุนปีที่แล้ว (สรุปสะสม) — ปิดไว้ก่อน
   const [selectedCats, setSelectedCats] = useState(null); // null = ทั้งหมด
   const [busy, setBusy] = useState(false);
 
@@ -5694,9 +5695,10 @@ function ProfitReportModal({ open, onClose }) {
   const colorOfCat = (n) => (app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af';
 
   const PRESETS = [
-    { label:'ปีนี้', from:firstOfYear, to:()=>todayStr() },
-    { label:'ปีที่แล้ว', from:firstOfLastYear, to:endOfLastYear },
-    { label:'12 เดือนล่าสุด', from:()=>{const d=new Date();d.setMonth(d.getMonth()-11);d.setDate(1);return d.toISOString().slice(0,10);}, to:()=>todayStr() },
+    { label:'ปีนี้', from:firstOfYear, to:()=>todayStr(), lastPL:false },
+    { label:'ปีที่แล้ว', from:firstOfLastYear, to:endOfLastYear, lastPL:false },
+    { label:'12 เดือนล่าสุด', from:()=>{const d=new Date();d.setMonth(d.getMonth()-11);d.setDate(1);return d.toISOString().slice(0,10);}, to:()=>todayStr(), lastPL:false },
+    { label:'ทั้งหมด (สะสม)', from:()=>'2000-01-01', to:()=>todayStr(), lastPL:true },
   ];
 
   const preview = useMemo(() => {
@@ -5717,7 +5719,7 @@ function ProfitReportModal({ open, onClose }) {
       try {
         doExportProfitReport({ records: app.records, projects: app.projects, companyExpenses: app.companyExpenses,
           companyExpenseCats: app.companyExpenseCats, companyCreditors: app.companyCreditors, companyRecurring: app.companyRecurring,
-          carryover: includeCarry ? app.carryoverIncome : 0, lastYearPL: app.companyLastYearPL, fromDate, toDate, opexCategories: selCats });
+          carryover: includeCarry ? app.carryoverIncome : 0, lastYearPL: includeLastPL ? app.companyLastYearPL : 0, fromDate, toDate, opexCategories: selCats });
         app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
         onClose();
       } catch(e){ console.error('[ProfitReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
@@ -5738,7 +5740,7 @@ function ProfitReportModal({ open, onClose }) {
         <div>
           <div style={LS}>ช่วงเวลาสำเร็จรูป</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-            {PRESETS.map(p=>(<button key={p.label} className="btn btn-ghost btn-sm" style={{ fontSize:12 }} onClick={()=>{ setFromDate(p.from()); setToDate(p.to()); }}>{p.label}</button>))}
+            {PRESETS.map(p=>(<button key={p.label} className="btn btn-ghost btn-sm" style={{ fontSize:12 }} onClick={()=>{ setFromDate(p.from()); setToDate(p.to()); setIncludeLastPL(!!p.lastPL); }}>{p.label}</button>))}
           </div>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
@@ -5770,11 +5772,17 @@ function ProfitReportModal({ open, onClose }) {
           </div>
           <div><div style={{ fontSize:13, fontWeight:500 }}>รวมยอดยกมาจากปีก่อน (฿{fmt(Number(app.carryoverIncome||0))})</div><div style={{ fontSize:11, color:'var(--ink-3)', marginTop:1 }}>นับเป็นรับเพิ่มในยอดรวม (ไม่กระจายรายเดือน)</div></div>
         </div>
+        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'var(--bg-2)', borderRadius:9, border:'1px solid var(--line)', cursor:'pointer' }} onClick={()=>setIncludeLastPL(v=>!v)}>
+          <div style={{ width:18, height:18, borderRadius:5, border:'2px solid', borderColor: includeLastPL ? '#059669' : 'var(--ink-4)', background: includeLastPL ? '#059669' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            {includeLastPL && <Icon name="check" size={11} stroke={3} style={{ color:'#fff' }} />}
+          </div>
+          <div><div style={{ fontSize:13, fontWeight:500 }}>รวมกำไร/ขาดทุนปีที่แล้ว — สรุปยอดสะสม ({(() => { const v=Number(app.companyLastYearPL||0); return (v<0?'−':'')+'฿'+fmt(Math.abs(v)); })()})</div><div style={{ fontSize:11, color:'var(--ink-3)', marginTop:1 }}>ติ๊กเมื่อต้องการยอดสะสมทั้งหมด · ไม่ติ๊ก = สรุปเฉพาะช่วงที่เลือก</div></div>
+        </div>
         <div style={{ padding:'14px 16px', borderRadius:10, background:'rgba(5,150,105,0.06)', border:'1px solid rgba(5,150,105,0.2)' }}>
           <div className="row between"><span className="text-small text-muted">รายรับจริง (ไม่หัก 15%)</span><span className="mono" style={{ color:'#059669', fontWeight:600 }}>฿{fmt(preview.income)}</span></div>
           <div className="row between" style={{ marginTop:4 }}><span className="text-small text-muted">หัก ต้นทุน + ค่าดำเนินการ</span><span className="mono" style={{ color:'#c2410c', fontWeight:600 }}>−฿{fmt(preview.expense)}</span></div>
-          <div className="row between" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}><strong>{preview.net>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'} (ปีนี้)</strong><strong className="mono" style={{ color: preview.net>=0?'#059669':'#dc2626' }}>{preview.net<0?'−':''}฿{fmt(Math.abs(preview.net))}</strong></div>
-          {Number(app.companyLastYearPL||0) !== 0 && (() => { const ly = Number(app.companyLastYearPL||0); const grand = preview.net + ly; return (
+          <div className="row between" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}><strong>{preview.net>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}{includeLastPL?' (เฉพาะช่วงที่เลือก)':''}</strong><strong className="mono" style={{ color: preview.net>=0?'#059669':'#dc2626' }}>{preview.net<0?'−':''}฿{fmt(Math.abs(preview.net))}</strong></div>
+          {includeLastPL && Number(app.companyLastYearPL||0) !== 0 && (() => { const ly = Number(app.companyLastYearPL||0); const grand = preview.net + ly; return (
             <>
               <div className="row between" style={{ marginTop:4 }}><span className="text-small text-muted">บวก กำไร/ขาดทุนปีที่แล้ว</span><span className="mono" style={{ color: ly>=0?'#059669':'#dc2626' }}>{ly<0?'−':'+'}฿{fmt(Math.abs(ly))}</span></div>
               <div className="row between" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}><strong>กำไร/ขาดทุนสะสม (ปีนี้ + ปีที่แล้ว)</strong><strong className="mono" style={{ color: grand>=0?'#059669':'#dc2626' }}>{grand<0?'−':''}฿{fmt(Math.abs(grand))}</strong></div>
@@ -5894,6 +5902,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const [expReportOpen, setExpReportOpen] = useState(false);
   const [credModal, setCredModal] = useState({ open:false, initial:null });
   const [recModal, setRecModal]   = useState({ open:false, initial:null });
+  const [showAllExp, setShowAllExp] = useState(false); // รายการรายจ่าย: ย่อเหลือ 7 วันล่าสุด
 
   // ── เจ้าหนี้ / เงินกู้ ─────────────────────────────
   const creditors = (app.companyCreditors || []).slice().sort((a,b)=>{
@@ -6021,10 +6030,19 @@ window.CompanyFinanceView = function CompanyFinanceView() {
       {/* กำไร/ขาดทุนปีที่แล้ว (ยกมา) */}
       <div style={{ marginTop:16 }}><LastYearPLEditor /></div>
 
-      {/* รายการรายจ่าย */}
+      {/* รายการรายจ่าย — ย่อเหลือ 7 วันล่าสุด (กดดูทั้งหมดได้) */}
+      {(() => {
+        // anchor = วันที่ล่าสุดในรายการ (expenses เรียงใหม่→เก่าอยู่แล้ว) · cutoff = anchor − 7 วัน
+        const anchor = expenses[0]?.date || todayStr();
+        const cutoffD = new Date(anchor + 'T00:00:00'); cutoffD.setDate(cutoffD.getDate() - 6);
+        const cutoff = cutoffD.toISOString().slice(0,10);
+        const recent = expenses.filter(e => (e.date || '') >= cutoff);
+        const shownExp = showAllExp ? expenses : recent;
+        const hiddenCnt = expenses.length - recent.length;
+      return (
       <div className="card" style={{ marginTop:0 }}>
         <div className="row between" style={{ marginBottom:12, flexWrap:'wrap', gap:8 }}>
-          <strong>รายการรายจ่ายบริษัท</strong>
+          <strong>รายการรายจ่ายบริษัท {!showAllExp && expenses.length>0 && <span className="text-small text-muted" style={{ fontWeight:400 }}>· 7 วันล่าสุด</span>}</strong>
           <span className="text-small text-muted">{expenses.length} รายการ · รวม <strong className="mono" style={{ color:'var(--ink-1)' }}>฿{fmt(expenseTotal)}</strong></span>
         </div>
         {expenses.length === 0 ? (
@@ -6046,7 +6064,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
                 </tr>
               </thead>
               <tbody>
-                {expenses.map(e=>(
+                {shownExp.map(e=>(
                   <tr key={e.id} style={{ borderTop:'1px solid var(--line)' }}>
                     <td style={{ padding:'9px 10px', whiteSpace:'nowrap' }}>{fmtDate(e.date)}</td>
                     <td style={{ padding:'9px 10px' }}>
@@ -6069,7 +6087,15 @@ window.CompanyFinanceView = function CompanyFinanceView() {
             </table>
           </div>
         )}
+        {expenses.length > 0 && hiddenCnt > 0 && (
+          <div style={{ textAlign:'center', marginTop:10 }}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setShowAllExp(v=>!v)}>
+              <Icon name={showAllExp?'chevron':'chevron'} size={13}/> {showAllExp ? 'ย่อ — แสดงเฉพาะ 7 วันล่าสุด' : `ดูทั้งหมด (${expenses.length} รายการ · ซ่อนอยู่ ${hiddenCnt})`}
+            </button>
+          </div>
+        )}
       </div>
+      ); })()}
 
       {/* รายจ่ายประจำทุกเดือน */}
       <div className="card" style={{ marginTop:16 }}>
