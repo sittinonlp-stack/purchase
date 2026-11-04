@@ -374,6 +374,8 @@ window.AppProvider = function AppProvider({ children }) {
   const [companyRecurring, setCompanyRecurring] = useState([]);
   // ยอดต้นทุน/รับ ยกมาจากปีก่อน (ก้อนเดียว ทั้งบริษัท) — เก็บใน app_settings
   const [carryoverIncome, setCarryoverIncomeState] = useState(0);
+  // กำไร/ขาดทุนของปีที่แล้ว (ค่าบวก=กำไร ค่าลบ=ขาดทุน) — ใช้รวมในรายงานกำไร/ขาดทุนสะสม
+  const [companyLastYearPL, setCompanyLastYearPLState] = useState(0);
   const [records,     setRecords]     = useState(seedRecords());
   // record ของโครงการที่เก็บถาวร — โหลดเมื่อเปิดแท็บ "เก็บถาวร" เท่านั้น (ไม่ปนกับ records หลัก)
   const [archivedRecords, setArchivedRecords] = useState([]);
@@ -463,6 +465,7 @@ window.AppProvider = function AppProvider({ children }) {
       setCompanyCreditors(ccred || []);
       setCompanyRecurring(crec || []);
       setCarryoverIncomeState(Number((aset || {}).carryover_income || 0));
+      setCompanyLastYearPLState(Number((aset || {}).last_year_pl || 0));
       setRecords(recs);
       setDbOnline(true);
       loadedUserIdRef.current = userId; // ✓ data loaded — mark for skip on next SIGNED_IN
@@ -553,6 +556,7 @@ window.AppProvider = function AppProvider({ children }) {
             setCompanyCreditors([]);
             setCompanyRecurring([]);
             setCarryoverIncomeState(0);
+            setCompanyLastYearPLState(0);
             setRecords(seedRecords());
           } else if (event === 'TOKEN_REFRESHED' && s) {
             // Token was refreshed silently — keep current data, just update session
@@ -1090,6 +1094,13 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.upsertAppSetting('carryover_income', num), 'upsertAppSetting');
   }, [dbOnline, dbSync]);
 
+  // ── กำไร/ขาดทุนปีที่แล้ว (ค่าบวก/ลบได้ · เฉพาะ owner แก้ไข) ──
+  const setCompanyLastYearPL = useCallback((v) => {
+    const num = Number(v || 0);
+    setCompanyLastYearPLState(num);
+    if (dbOnline) dbSync(window.db.upsertAppSetting('last_year_pl', num), 'upsertAppSetting');
+  }, [dbOnline, dbSync]);
+
   // ── Update own profile (name / avatar_url) ───────────
   const updateMyProfile = useCallback(async (patch) => {
     if (!userProfile?.id) return;
@@ -1117,12 +1128,13 @@ window.AppProvider = function AppProvider({ children }) {
     companyCreditors, addCompanyCreditor, updateCompanyCreditor, deleteCompanyCreditor,
     companyRecurring, addCompanyRecurring, updateCompanyRecurring, deleteCompanyRecurring,
     carryoverIncome, setCarryoverIncome,
+    companyLastYearPL, setCompanyLastYearPL,
     records, addRecord, updateRecord, deleteRecord, hydrateRecord,
     toasts, pushToast,
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, isOwner, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyRecurring, carryoverIncome, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyRecurring, carryoverIncome, companyLastYearPL, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,
@@ -1135,7 +1147,7 @@ window.AppProvider = function AppProvider({ children }) {
        addCompanyCat, updateCompanyCat, deleteCompanyCat,
        addCompanyCreditor, updateCompanyCreditor, deleteCompanyCreditor,
        addCompanyRecurring, updateCompanyRecurring, deleteCompanyRecurring,
-       setCarryoverIncome, pushToast, updateMyProfile]);
+       setCarryoverIncome, setCompanyLastYearPL, pushToast, updateMyProfile]);
 
   // ── Render guards ─────────────────────────────────────
   if (!authChecked) return <DbLoadingScreen msg="กำลังตรวจสอบสิทธิ์…" />;

@@ -167,6 +167,57 @@ function CarryoverEditor() {
   );
 }
 
+// กำไร/ขาดทุนของปีที่แล้ว (ก้อนเดียว) — ใช้รวมในรายงานกำไร/ขาดทุนสะสม · แก้ไขเฉพาะ owner
+function LastYearPLEditor() {
+  const app = window.useApp();
+  const value = Number(app.companyLastYearPL || 0);
+  const [editing, setEditing] = useState(false);
+  const [sign, setSign] = useState(value < 0 ? 'loss' : 'profit');
+  const [mag, setMag]   = useState(String(Math.abs(value)));
+  useEffect(() => {
+    const v = Number(app.companyLastYearPL || 0);
+    setSign(v < 0 ? 'loss' : 'profit'); setMag(String(Math.abs(v)));
+  }, [app.companyLastYearPL]);
+  const save = () => {
+    const v = (sign === 'loss' ? -1 : 1) * (Number(mag) || 0);
+    app.setCompanyLastYearPL(v); setEditing(false); app.pushToast('บันทึกกำไร/ขาดทุนปีที่แล้วแล้ว');
+  };
+  const pos = value >= 0;
+  return (
+    <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: pos ? 'rgba(5,150,105,0.12)' : 'rgba(220,38,38,0.12)', color: pos ? '#059669' : '#dc2626' }}>
+        <Icon name="chart" size={22} />
+      </div>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>กำไร/ขาดทุนของปีที่แล้ว</div>
+        <div className="text-small text-muted">กรอกยอดสรุปปีก่อน (ยังไม่มีข้อมูลในระบบ) · นำไปรวมในรายงานกำไร/ขาดทุนสะสม</div>
+      </div>
+      <div className="row gap-8" style={{ alignItems: 'center', flexShrink: 0 }}>
+        {editing && app.isOwner ? (
+          <>
+            <div className="option-row">
+              <window.OptionPill mode="radio" selected={sign === 'profit'} onClick={() => setSign('profit')}>กำไร</window.OptionPill>
+              <window.OptionPill mode="radio" selected={sign === 'loss'} onClick={() => setSign('loss')}>ขาดทุน</window.OptionPill>
+            </div>
+            <div className="input-affix" style={{ width: 170 }}>
+              <div className="input-affix-prefix">฿</div>
+              <window.MoneyInput className="input mono" value={mag} onChange={setMag} autoFocus placeholder="0" />
+            </div>
+            <button className="btn btn-accent btn-sm" onClick={save}><Icon name="save" size={13} /> บันทึก</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setSign(value < 0 ? 'loss' : 'profit'); setMag(String(Math.abs(value))); setEditing(false); }}>ยกเลิก</button>
+          </>
+        ) : (
+          <>
+            <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: pos ? '#059669' : '#dc2626' }}>{value < 0 ? '−' : ''}฿{fmt(Math.abs(value))}</span>
+            {app.isOwner && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}><Icon name="edit" size={13} /> แก้ไข</button>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 window.DashboardView = function DashboardView() {
   const app = window.useApp();
 
@@ -5391,7 +5442,7 @@ function CompanyReportModal({ open, onClose }) {
 
 // ---- รายงานรวม กำไร/ขาดทุนรายเดือน (รายรับจริง − ต้นทุน − ค่าดำเนินการ) ----
 function doExportProfitReport(opts) {
-  const { records = [], projects = [], companyExpenses = [], companyExpenseCats = [], companyCreditors = [], companyRecurring = [], carryover = 0, fromDate, toDate, opexCategories = null } = opts;
+  const { records = [], projects = [], companyExpenses = [], companyExpenseCats = [], companyCreditors = [], companyRecurring = [], carryover = 0, lastYearPL = 0, fromDate, toDate, opexCategories = null } = opts;
   const inR = d => d && d >= fromDate && d <= toDate;
   const catOk = e => !opexCategories || opexCategories.includes(e.category);
   const months = {};
@@ -5437,6 +5488,8 @@ function doExportProfitReport(opts) {
   const tIncomeAll = tIncome + carry;
   const tExpense = tCost + tOpex;
   const netProfit = tIncomeAll - tExpense;
+  const lastPL = Number(lastYearPL || 0);        // กำไร/ขาดทุนปีที่แล้ว (บวก/ลบ)
+  const grandNet = netProfit + lastPL;           // กำไร/ขาดทุนสะสม (ปีนี้ + ปีที่แล้ว)
   // แยกรายรับตามสัดส่วน: รายรับค่าดำเนินการ = 15% ของรายรับจริง · รายรับต้นทุน = 85% ที่เหลือ
   const opexIncome = tIncome * COMPANY_FEE_RATE;
   const costIncome = tIncome - opexIncome;
@@ -5557,6 +5610,15 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
     <span style="font-weight:600;font-size:12px">รวมกำไร/ขาดทุนสุทธิ${carry>0?` (รวมยอดยกมา ฿${fmtN(carry)})`:''} · รับ ฿${fmtN(tIncomeAll)} − จ่าย ฿${fmtN(tExpense)}</span>
     <span style="font-weight:700;font-size:18px;color:${netProfit>=0?'#6ee7b7':'#fca5a5'}">${netProfit<0?'−':''}฿${fmtN(Math.abs(netProfit))}</span>
   </div>
+  ${lastPL!==0?`
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;background:#f5f5f4;color:#44403c;padding:11px 20px;border-radius:10px;margin-top:8px;border:1px solid #e7e5e4">
+    <span style="font-size:12px">บวก กำไร/ขาดทุนปีที่แล้ว (ยกมา)</span>
+    <span style="font-weight:600;font-size:14px;color:${lastPL>=0?'#059669':'#dc2626'}">${lastPL<0?'−':'+'}฿${fmtN(Math.abs(lastPL))}</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;background:${grandNet>=0?'#047857':'#b91c1c'};color:#fff;padding:13px 20px;border-radius:10px;margin-top:8px">
+    <span style="font-weight:700;font-size:13px">กำไร/ขาดทุนสะสม (ปีนี้ + ปีที่แล้ว)</span>
+    <span style="font-weight:800;font-size:19px">${grandNet<0?'−':''}฿${fmtN(Math.abs(grandNet))}</span>
+  </div>`:''}
 </div>
 <div class="section">
   <div class="section-header"><div class="section-title">สรุปกำไร/ขาดทุน แยกรายเดือน</div></div>
@@ -5655,7 +5717,7 @@ function ProfitReportModal({ open, onClose }) {
       try {
         doExportProfitReport({ records: app.records, projects: app.projects, companyExpenses: app.companyExpenses,
           companyExpenseCats: app.companyExpenseCats, companyCreditors: app.companyCreditors, companyRecurring: app.companyRecurring,
-          carryover: includeCarry ? app.carryoverIncome : 0, fromDate, toDate, opexCategories: selCats });
+          carryover: includeCarry ? app.carryoverIncome : 0, lastYearPL: app.companyLastYearPL, fromDate, toDate, opexCategories: selCats });
         app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
         onClose();
       } catch(e){ console.error('[ProfitReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
@@ -5711,7 +5773,13 @@ function ProfitReportModal({ open, onClose }) {
         <div style={{ padding:'14px 16px', borderRadius:10, background:'rgba(5,150,105,0.06)', border:'1px solid rgba(5,150,105,0.2)' }}>
           <div className="row between"><span className="text-small text-muted">รายรับจริง (ไม่หัก 15%)</span><span className="mono" style={{ color:'#059669', fontWeight:600 }}>฿{fmt(preview.income)}</span></div>
           <div className="row between" style={{ marginTop:4 }}><span className="text-small text-muted">หัก ต้นทุน + ค่าดำเนินการ</span><span className="mono" style={{ color:'#c2410c', fontWeight:600 }}>−฿{fmt(preview.expense)}</span></div>
-          <div className="row between" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}><strong>{preview.net>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}</strong><strong className="mono" style={{ color: preview.net>=0?'#059669':'#dc2626' }}>{preview.net<0?'−':''}฿{fmt(Math.abs(preview.net))}</strong></div>
+          <div className="row between" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}><strong>{preview.net>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'} (ปีนี้)</strong><strong className="mono" style={{ color: preview.net>=0?'#059669':'#dc2626' }}>{preview.net<0?'−':''}฿{fmt(Math.abs(preview.net))}</strong></div>
+          {Number(app.companyLastYearPL||0) !== 0 && (() => { const ly = Number(app.companyLastYearPL||0); const grand = preview.net + ly; return (
+            <>
+              <div className="row between" style={{ marginTop:4 }}><span className="text-small text-muted">บวก กำไร/ขาดทุนปีที่แล้ว</span><span className="mono" style={{ color: ly>=0?'#059669':'#dc2626' }}>{ly<0?'−':'+'}฿{fmt(Math.abs(ly))}</span></div>
+              <div className="row between" style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--line)' }}><strong>กำไร/ขาดทุนสะสม (ปีนี้ + ปีที่แล้ว)</strong><strong className="mono" style={{ color: grand>=0?'#059669':'#dc2626' }}>{grand<0?'−':''}฿{fmt(Math.abs(grand))}</strong></div>
+            </>
+          ); })()}
         </div>
       </div>
     </window.Modal>
@@ -5950,8 +6018,11 @@ window.CompanyFinanceView = function CompanyFinanceView() {
         )}
       </div>
 
+      {/* กำไร/ขาดทุนปีที่แล้ว (ยกมา) */}
+      <div style={{ marginTop:16 }}><LastYearPLEditor /></div>
+
       {/* รายการรายจ่าย */}
-      <div className="card" style={{ marginTop:16 }}>
+      <div className="card" style={{ marginTop:0 }}>
         <div className="row between" style={{ marginBottom:12, flexWrap:'wrap', gap:8 }}>
           <strong>รายการรายจ่ายบริษัท</strong>
           <span className="text-small text-muted">{expenses.length} รายการ · รวม <strong className="mono" style={{ color:'var(--ink-1)' }}>฿{fmt(expenseTotal)}</strong></span>
