@@ -8,10 +8,10 @@
   // ──────────────────────────────────────────────────
 
   function dbProject(row) {
-    return { id: row.id, code: row.code, name: row.name, client: row.client || '', color: row.color || '#d97706', status: row.status || 'active', trackBills: Boolean(row.track_bills) };
+    return { id: row.id, code: row.code, name: row.name, client: row.client || '', color: row.color || '#d97706', status: row.status || 'active', trackBills: Boolean(row.track_bills), internal: Boolean(row.internal) };
   }
   function jsProject(p) {
-    return { id: p.id, code: p.code, name: p.name, client: p.client || '', color: p.color || '#d97706', status: p.status || 'active', track_bills: Boolean(p.trackBills) };
+    return { id: p.id, code: p.code, name: p.name, client: p.client || '', color: p.color || '#d97706', status: p.status || 'active', track_bills: Boolean(p.trackBills), internal: Boolean(p.internal) };
   }
 
   function dbCat(row) {
@@ -584,8 +584,8 @@
       const row = jsProject(p);
       let { error } = await window.supabaseClient.from('projects').insert(row);
       if (error && isMissingColumnError(error)) {
-        // คอลัมน์ track_bills ยังไม่ถูกสร้าง (ยังไม่รัน migration) → insert โดยไม่มีคอลัมน์นี้
-        const { track_bills, ...fallback } = row;
+        // คอลัมน์ track_bills/internal ยังไม่ถูกสร้าง (ยังไม่รัน migration) → insert โดยไม่มีคอลัมน์นี้
+        const { track_bills, internal, ...fallback } = row;
         ({ error } = await window.supabaseClient.from('projects').insert(fallback));
       }
       if (error) throw error;
@@ -612,11 +612,12 @@
       if ('color'  in patch) dbPatch.color  = patch.color || '#d97706';
       if ('status' in patch) dbPatch.status = patch.status || 'active';
       if ('trackBills' in patch) dbPatch.track_bills = Boolean(patch.trackBills);
+      if ('internal'   in patch) dbPatch.internal    = Boolean(patch.internal);
       if (Object.keys(dbPatch).length === 0) return;
       let { error } = await window.supabaseClient.from('projects').update(dbPatch).eq('id', id);
       if (error && isMissingColumnError(error)) {
-        // คอลัมน์ track_bills ยังไม่ถูกสร้าง → อัปเดตคอลัมน์อื่นไปก่อน (ตามบิลจะยังไม่เก็บจนกว่าจะรัน migration)
-        const { track_bills, ...fallback } = dbPatch;
+        // คอลัมน์ track_bills/internal ยังไม่ถูกสร้าง → อัปเดตคอลัมน์อื่นไปก่อน
+        const { track_bills, internal, ...fallback } = dbPatch;
         if (Object.keys(fallback).length > 0) {
           ({ error } = await window.supabaseClient.from('projects').update(fallback).eq('id', id));
         } else { error = null; }

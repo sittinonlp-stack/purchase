@@ -1705,6 +1705,7 @@ window.ProjectsView = function ProjectsView() {
                   <span className="mono text-small text-muted">{p.code}</span>
                   <div className="row gap-6">
                     {p.trackBills && <span className="badge dot" style={{ background: 'var(--warn-soft)', color: '#96590a', borderColor: 'rgba(217,119,6,0.35)' }} title="เปิดตามบิล — เก็บใบกำกับภาษี/ใบเสร็จจากร้าน">📥 ตามบิล</span>}
+                    {p.internal && <span className="badge dot" style={{ background: 'rgba(100,116,139,0.12)', color: '#475569', borderColor: 'rgba(100,116,139,0.35)' }} title="โครงการภายใน — ค่าใช้จ่ายนับเป็นรายจ่ายบริษัท">🏢 ภายใน</span>}
                     {p.status === 'active'
                       ? <span className="badge green dot">ดำเนินการ</span>
                       : p.status === 'archived'
@@ -5968,7 +5969,21 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const loanOpexTotal = loanPaymentsByMonth(app.companyCreditors, bounds.from, bounds.to).total;
   const recData = recurringByMonth(app.companyRecurring, bounds.from, bounds.to);
   const recTotal = recData.total;
-  const totalOpex = expenseTotal + loanOpexTotal + recTotal;   // ค่าดำเนินการรวม (รวมผ่อนเจ้าหนี้ + รายจ่ายประจำ)
+  // โครงการภายใน (ค่าดำเนินการออฟฟิศ, งานซ่อมแซมงานรับประกัน ฯลฯ) → นับค่าใช้จ่ายเป็นรายจ่ายบริษัท
+  const internalProjs = (app.projects||[]).filter(p=>p.internal);
+  const internalMap = {};   // { projectId: {name,color,total} }
+  let internalTotal = 0;
+  if (internalProjs.length > 0) {
+    const idSet = new Set(internalProjs.map(p=>p.id));
+    (app.records||[]).forEach(r=>{
+      if (!idSet.has(r.projectId) || !inRange(r.date)) return;
+      if (!isExpense(r) || !countsInDashboard(r)) return;
+      const t = computeTotals(r).total;
+      if (!internalMap[r.projectId]) { const pj = internalProjs.find(p=>p.id===r.projectId); internalMap[r.projectId] = { name: pj?.name || 'โครงการภายใน', color: pj?.color || '#64748b', total:0, count:0 }; }
+      internalMap[r.projectId].total += t; internalMap[r.projectId].count++; internalTotal += t;
+    });
+  }
+  const totalOpex = expenseTotal + loanOpexTotal + recTotal + internalTotal;   // ค่าดำเนินการรวม (+ ผ่อนเจ้าหนี้ + รายจ่ายประจำ + โครงการภายใน)
   const profit = companyIncome - totalOpex;
   const colorOf = (n) => (app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af';
 
@@ -5977,8 +5992,9 @@ window.CompanyFinanceView = function CompanyFinanceView() {
     expenses.forEach(e=>{ const k=e.category||'—'; if(!m[k]) m[k]={name:k,color:colorOf(k),count:0,total:0}; m[k].count++; m[k].total+=Number(e.amount||0); });
     Object.entries(recData.byCat).forEach(([cat,amt])=>{ if(!m[cat]) m[cat]={name:cat,color:colorOf(cat),count:0,total:0}; m[cat].total+=amt; });
     if (loanOpexTotal > 0) m['ผ่อนเจ้าหนี้ / เงินกู้'] = { name:'ผ่อนเจ้าหนี้ / เงินกู้', color:'#dc2626', count:0, total:loanOpexTotal };
+    Object.values(internalMap).forEach(v=>{ const k='ภายใน: '+v.name; m[k] = { name:k, color:v.color, count:v.count, total:v.total }; });
     return Object.values(m).sort((a,b)=>b.total-a.total);
-  }, [expenses, app.companyExpenseCats, loanOpexTotal, recTotal]);
+  }, [expenses, app.companyExpenseCats, loanOpexTotal, recTotal, internalTotal]);
 
 
   const card = (label, value, sub, color, bg, border) => (
@@ -6023,7 +6039,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
         {/* KPI */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:12 }}>
           {card(`รายรับบริษัท (ค่าดำเนินการ ${(COMPANY_FEE_RATE*100).toFixed(0)}%)`, '฿'+fmt(companyIncome), `จากยอดรับลูกค้า ฿${fmt(incomeGross)} · ${incomeRecs.length} รายการ`, '#059669', 'rgba(5,150,105,0.07)', 'rgba(5,150,105,0.25)')}
-          {card('รายจ่ายบริษัทรวม', '฿'+fmt(totalOpex), [`รายจ่าย ฿${fmt(expenseTotal)}`, recTotal>0?`ประจำ ฿${fmt(recTotal)}`:'', loanOpexTotal>0?`ผ่อนเจ้าหนี้ ฿${fmt(loanOpexTotal)}`:''].filter(Boolean).join(' + '), '#c2410c', 'rgba(217,119,6,0.07)', 'rgba(217,119,6,0.25)')}
+          {card('รายจ่ายบริษัทรวม', '฿'+fmt(totalOpex), [`รายจ่าย ฿${fmt(expenseTotal)}`, recTotal>0?`ประจำ ฿${fmt(recTotal)}`:'', loanOpexTotal>0?`ผ่อนเจ้าหนี้ ฿${fmt(loanOpexTotal)}`:'', internalTotal>0?`ภายใน ฿${fmt(internalTotal)}`:''].filter(Boolean).join(' + '), '#c2410c', 'rgba(217,119,6,0.07)', 'rgba(217,119,6,0.25)')}
           {card(profit>=0?'กำไรสุทธิ (รับ−จ่าย)':'ขาดทุนสุทธิ (รับ−จ่าย)', (profit<0?'−':'')+'฿'+fmt(Math.abs(profit)), profit>=0?'บริษัทมีกำไร':'บริษัทขาดทุน', profit>=0?'#059669':'#dc2626', profit>=0?'rgba(5,150,105,0.07)':'rgba(220,38,38,0.07)', profit>=0?'rgba(5,150,105,0.25)':'rgba(220,38,38,0.25)')}
         </div>
 

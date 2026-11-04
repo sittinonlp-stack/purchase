@@ -1434,6 +1434,7 @@ function EditProjectModal({ project, onClose, onSave }) {
   const [client, setClient] = useState('');
   const [color, setColor] = useState('#d97706');
   const [trackBills, setTrackBills] = useState(false);
+  const [internal, setInternal] = useState(false);
   useEffect(() => {
     if (project) {
       setName(project.name || '');
@@ -1441,6 +1442,7 @@ function EditProjectModal({ project, onClose, onSave }) {
       setClient(project.client || '');
       setColor(project.color || '#d97706');
       setTrackBills(!!project.trackBills);
+      setInternal(!!project.internal);
     }
   }, [project]);
   const base = ['#d97706', '#dc2626', '#a855f7', '#0ea5e9', '#16a34a', '#eab308'];
@@ -1449,7 +1451,7 @@ function EditProjectModal({ project, onClose, onSave }) {
     <Modal open={!!project} onClose={onClose} title="แก้ไขรายละเอียดโครงการ"
       footer={<>
         <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
-        <button className="btn btn-accent" onClick={() => name.trim() && onSave({ name: name.trim(), code, client, color, trackBills })}>
+        <button className="btn btn-accent" onClick={() => name.trim() && onSave({ name: name.trim(), code, client, color, trackBills, internal })}>
           <Icon name="save" size={14} /> บันทึกการแก้ไข
         </button>
       </>}>
@@ -1485,6 +1487,15 @@ function EditProjectModal({ project, onClose, onSave }) {
               <span className="tick">{trackBills ? '✓' : ''}</span> {trackBills ? 'เปิดตามบิลโครงการนี้' : 'ปิด (ไม่ตามบิล)'}
             </button>
             <div className="field-hint">เปิดเมื่อโครงการนี้ต้องเก็บใบกำกับภาษี/ใบเสร็จตัวจริงจากร้านไว้ยื่นภาษีซื้อ — รายการวัสดุ/เครื่องจักรของโครงการนี้จะขึ้นสถานะ "รอรับบิล" ให้ตามจนครบ</div>
+          </div>
+          <div className="field full">
+            <label className="field-label">โครงการภายใน (ค่าใช้จ่ายบริษัท)</label>
+            <button type="button" onClick={() => setInternal(v => !v)}
+              className={"status-chip" + (internal ? " on approve" : "")}
+              style={{ alignSelf: 'flex-start' }}>
+              <span className="tick">{internal ? '✓' : ''}</span> {internal ? 'เป็นโครงการภายใน' : 'ปิด (โครงการลูกค้าปกติ)'}
+            </button>
+            <div className="field-hint">เปิดเมื่อเป็นค่าใช้จ่ายภายในบริษัท (เช่น ค่าดำเนินการออฟฟิศ, งานซ่อมแซมงานรับประกัน) — ค่าใช้จ่ายของโครงการนี้จะถูกนำไปรวมเป็น "รายจ่ายบริษัท" ในหน้าบัญชีบริษัท</div>
           </div>
         </div>
       </div>
