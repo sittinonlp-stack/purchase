@@ -117,6 +117,33 @@ function installmentCostByMonth(records, fromDate, toDate, filterFn) {
   return { byMonth, totalGross, totalCost };
 }
 
+// แปลง record รายจ่ายเป็น "โพสต์ต้นทุน" รายการย่อย (วันที่ + ยอด) สำหรับการนับตามช่วงเวลา
+//   • บิลปกติ: 1 โพสต์ = (r.date, computeTotals.total)
+//   • บิลแบ่งจ่ายเป็นงวด: 1 โพสต์ต่อ "งวดที่จ่ายแล้ว" = (it.date, ต้นทุนตามสัดส่วนยอดงวด)
+//     งวดที่ยังไม่จ่าย = ไม่ลงต้นทุน (ยังไม่เป็นรายจ่ายจริง)
+function expenseCostPostings(r) {
+  const t = computeTotals(r);
+  if (r.installmentEnabled && Array.isArray(r.installments)) {
+    const planGross = Number(t.instPlanGross) || 0;
+    const out = [];
+    r.installments.forEach(it => {
+      if (!it.paid || !it.date) return;
+      const gross = Number(it.amount || 0);
+      out.push({ date: it.date, amount: planGross > 0 ? t.total * (gross / planGross) : 0 });
+    });
+    return out;
+  }
+  return [{ date: r.date, amount: t.total }];
+}
+// ผลรวมต้นทุนของ record ที่ตกอยู่ในช่วง [lo,hi] (รวม inclusive, ระดับวัน) — รองรับบิลแบ่งงวด
+function costPostedInRange(r, lo, hi) {
+  return expenseCostPostings(r).reduce((s, p) => (p.date && p.date >= lo && p.date <= hi ? s + p.amount : s), 0);
+}
+// ผลรวมต้นทุนของ record ในเดือน ym ('YYYY-MM') — รองรับบิลแบ่งงวด
+function costPostedInMonth(r, ym) {
+  return expenseCostPostings(r).reduce((s, p) => ((p.date || '').slice(0, 7) === ym ? s + p.amount : s), 0);
+}
+
 // รายจ่ายประจำทุกเดือน — กระจายยอดเข้าแต่ละเดือน ตั้งแต่ startDate
 // • ถ้ามี endDate → ถึงเดือนนั้น
 // • ถ้าเปิดต่อเนื่อง (ไม่มี endDate):
@@ -254,7 +281,13 @@ window.DashboardView = function DashboardView() {
   // ── ตัวเลือกช่วงเวลา: เดือนล่าสุด (ค่าเริ่มต้น) / เลือกเดือน / ทั้งหมด ──
   const monthsAvailable = useMemo(() => {
     const set = new Set();
-    app.records.forEach(r => { const k = (r.date || '').slice(0, 7); if (k) set.add(k); });
+    app.records.forEach(r => {
+      const k = (r.date || '').slice(0, 7); if (k) set.add(k);
+      // บิลแบ่งจ่ายเป็นงวด — นับเดือนของงวดที่จ่ายแล้วด้วย (เผื่อจ่ายคนละเดือนกับวันที่บิล)
+      if (isExpense(r) && r.installmentEnabled && Array.isArray(r.installments)) {
+        r.installments.forEach(it => { if (it.paid && it.date) set.add(it.date.slice(0, 7)); });
+      }
+    });
     return [...set].sort().reverse(); // เดือนล่าสุดอยู่หน้าสุด
   }, [app.records]);
   const [periodMode, setPeriodMode] = useState('month'); // 'month' | 'all'
@@ -264,33 +297,34 @@ window.DashboardView = function DashboardView() {
     if (periodMode === 'month' && !selMonth && monthsAvailable.length) setSelMonth(monthsAvailable[0]);
   }, [monthsAvailable, periodMode, selMonth]);
   const activeMonth = selMonth || (monthsAvailable[0] || '');
-  const periodRecords = useMemo(() => {
-    if (periodMode === 'all' || !activeMonth) return app.records;
-    return app.records.filter(r => (r.date || '').slice(0, 7) === activeMonth);
-  }, [app.records, periodMode, activeMonth]);
-
   const stats = useMemo(() => {
-    // รายจ่ายจริงเท่านั้น — ไม่รวม income, quick-receipt, receipt, tax-invoice, invoice
-    const exp = periodRecords.filter(isExpense);
-    // นับเฉพาะที่ผ่านเงื่อนไขอนุมัติ (วัสดุ/เครื่องจักร/ค่าแรง ต้องอนุมัติก่อน; อื่นๆ นับทันที)
-    const matRecs   = exp.filter(r => (r.type === 'material' || r.type === 'machine' || r.type === 'other') && countsInDashboard(r));
-    const laborRecs = exp.filter(r => (r.type === 'labor' || r.type === 'lump-labor') && r.approved);
-    const allTotals = [...matRecs, ...laborRecs].map(r => computeTotals(r));
-    const totalAmount = allTotals.reduce((s, t) => s + t.total, 0);
+    // ต้นทุนของ record ที่ตกอยู่ในช่วงเวลาที่เลือก (รองรับบิลแบ่งจ่ายเป็นงวด — นับเฉพาะงวดที่จ่ายในเดือนนั้น)
+    const inCost = (r) => periodMode === 'all'
+      ? expenseCostPostings(r).reduce((s, p) => s + p.amount, 0)
+      : costPostedInMonth(r, activeMonth);
+    // record (ที่ไม่ใช่บิลแบ่งงวด) อยู่ในช่วงเวลาตามวันที่บิล — ใช้กับรายรับ/เงินประกัน
+    const inRDate = (r) => periodMode === 'all' ? true : (r.date || '').slice(0, 7) === activeMonth;
+
+    const allExp = app.records.filter(isExpense);
+    // รายจ่ายจริงเท่านั้น — นับเฉพาะที่ผ่านเงื่อนไขอนุมัติ และมีต้นทุนเกิดขึ้นจริงในช่วงเวลานั้น
+    const matRecs   = allExp.filter(r => (r.type === 'material' || r.type === 'machine' || r.type === 'other') && countsInDashboard(r) && inCost(r) > 0);
+    const laborRecs = allExp.filter(r => (r.type === 'labor' || r.type === 'lump-labor') && r.approved && inCost(r) > 0);
+    const matTotal   = matRecs.reduce((s, r) => s + inCost(r), 0);
+    const laborTotal = laborRecs.reduce((s, r) => s + inCost(r), 0);
+    const totalAmount = matTotal + laborTotal;
     const matCount  = matRecs.length;
     const laborCount = laborRecs.length;
-    const matTotal   = matRecs.reduce((s, r) => s + computeTotals(r).total, 0);
-    const laborTotal = laborRecs.reduce((s, r) => s + computeTotals(r).total, 0);
-    const whtTotal = allTotals.reduce((s, t) => s + t.wht, 0);
-    // เงินประกันสินค้า (deposit) — เฉพาะวัสดุ/เครื่องจักร ที่ยังวางอยู่ (รอรับคืน)
-    const depositRecs = exp.filter(r =>
-      (r.type === 'material' || r.type === 'machine') &&
+    // หัก ณ ที่จ่าย — คิดตามสัดส่วนต้นทุนที่เกิดขึ้นจริงในช่วง (บิลแบ่งงวดจ่ายบางงวด → หักตามสัดส่วน)
+    const whtTotal = [...matRecs, ...laborRecs].reduce((s, r) => { const t = computeTotals(r); return s + (t.total > 0 ? t.wht * (inCost(r) / t.total) : 0); }, 0);
+    // เงินประกันสินค้า (deposit) — เฉพาะวัสดุ/เครื่องจักร ที่ยังวางอยู่ (รอรับคืน) · อิงวันที่บิล
+    const depositRecs = allExp.filter(r =>
+      (r.type === 'material' || r.type === 'machine') && inRDate(r) &&
       Number(r.depositAmount) > 0 &&
       (!r.depositStatus || r.depositStatus === 'pending'));
     const depositTotal = depositRecs.reduce((s, r) => s + Number(r.depositAmount), 0);
     const depositCount = depositRecs.length;
     // ── รายรับ (income) — หักค่าดำเนินการ 15% (เหลือ 85%) ──
-    const incomeRecs  = periodRecords.filter(r => window.isIncome(r));
+    const incomeRecs  = app.records.filter(r => window.isIncome(r) && inRDate(r));
     const incomeGross = incomeRecs.reduce((s, r) => s + computeTotals(r).total, 0);
     const incomeFee   = incomeGross * 0.15;          // ค่าดำเนินการ 15%
     // ยอดยกมาจากปีก่อน — นับเป็นรับ (ไม่หัก 15%) · รวมเฉพาะมุมมอง "ทั้งหมด"
@@ -299,7 +333,7 @@ window.DashboardView = function DashboardView() {
     const incomeCount = incomeRecs.length;
     const netTotal    = incomeTotal - totalAmount;    // คงเหลือสุทธิ (รับหลังหัก − จ่าย)
     return { totalAmount, matCount, laborCount, matTotal, laborTotal, whtTotal, depositTotal, depositCount, incomeGross, incomeFee, incomeTotal, incomeCount, netTotal, carry };
-  }, [periodRecords, periodMode, app.carryoverIncome]);
+  }, [app.records, periodMode, activeMonth, app.carryoverIncome]);
 
   // by-project chart (รายจ่ายจริงเท่านั้น)
   const byProject = useMemo(() => {
@@ -307,8 +341,8 @@ window.DashboardView = function DashboardView() {
     app.records.forEach((r) => {
       if (!isExpense(r)) return;
       if (!countsInDashboard(r)) return;
-      const t = computeTotals(r).total;
-      m[r.projectId] = (m[r.projectId] || 0) + t;
+      const c = expenseCostPostings(r).reduce((s, p) => s + p.amount, 0); // บิลแบ่งงวด = เฉพาะงวดที่จ่ายแล้ว
+      if (c) m[r.projectId] = (m[r.projectId] || 0) + c;
     });
     return app.projects.map((p) => ({ ...p, total: m[p.id] || 0 })).sort((a, b) => b.total - a.total);
   }, [app.records, app.projects]);
@@ -325,14 +359,14 @@ window.DashboardView = function DashboardView() {
     app.records.forEach((r) => {
       if (!isExpense(r)) return;
       if (!countsInDashboard(r)) return;
-      const k = (r.date || '').slice(0, 7);
-      const m = months.find(x => x.key === k);
-      if (!m) return;
-      const total = computeTotals(r).total;
-      if (r.type === 'material') m.mat += total;
-      else if (r.type === 'machine') m.mach += total;
-      else if (r.type === 'labor' || r.type === 'lump-labor') m.labor += total;
-      else if (r.type === 'other') m.other = (m.other || 0) + total;
+      expenseCostPostings(r).forEach(p => {
+        const m = months.find(x => x.key === (p.date || '').slice(0, 7));
+        if (!m) return;
+        if (r.type === 'material') m.mat += p.amount;
+        else if (r.type === 'machine') m.mach += p.amount;
+        else if (r.type === 'labor' || r.type === 'lump-labor') m.labor += p.amount;
+        else if (r.type === 'other') m.other = (m.other || 0) + p.amount;
+      });
     });
     return months;
   }, [app.records]);
@@ -365,12 +399,13 @@ window.DashboardView = function DashboardView() {
     app.records.forEach(r => {
       if (!isExpense(r)) return;
       if (!countsInDashboard(r)) return;
-      const d = days.find(x => x.key === r.date); if (!d) return;
-      const total = computeTotals(r).total;
-      if (r.type === 'material') d.mat += total;
-      else if (r.type === 'machine') d.mach += total;
-      else if (r.type === 'labor' || r.type === 'lump-labor') d.labor += total;
-      d.count++;
+      expenseCostPostings(r).forEach(p => {
+        const d = days.find(x => x.key === p.date); if (!d) return;
+        if (r.type === 'material') d.mat += p.amount;
+        else if (r.type === 'machine') d.mach += p.amount;
+        else if (r.type === 'labor' || r.type === 'lump-labor') d.labor += p.amount;
+        d.count++;
+      });
     });
     return days;
   }, [app.records]);
@@ -390,14 +425,16 @@ window.DashboardView = function DashboardView() {
           : `${mon.getDate()} ${mon.toLocaleDateString('th-TH', { month: 'short' })}` });
     }
     app.records.forEach(r => {
-      if (!r.date || !isExpense(r)) return;
+      if (!isExpense(r)) return;
       if (!countsInDashboard(r)) return;
-      const w = weeks.find(x => r.date >= x.start && r.date <= x.end); if (!w) return;
-      const total = computeTotals(r).total;
-      if (r.type === 'material') w.mat += total;
-      else if (r.type === 'machine') w.mach += total;
-      else if (r.type === 'labor' || r.type === 'lump-labor') w.labor += total;
-      w.count++;
+      expenseCostPostings(r).forEach(p => {
+        if (!p.date) return;
+        const w = weeks.find(x => p.date >= x.start && p.date <= x.end); if (!w) return;
+        if (r.type === 'material') w.mat += p.amount;
+        else if (r.type === 'machine') w.mach += p.amount;
+        else if (r.type === 'labor' || r.type === 'lump-labor') w.labor += p.amount;
+        w.count++;
+      });
     });
     return weeks;
   }, [app.records]);
@@ -413,13 +450,18 @@ window.DashboardView = function DashboardView() {
 
   // Records inside the highlighted period (today / this week)
   const focusRecords = useMemo(() => {
-    if (periodTab === 'daily') {
-      const today = todayStr();
-      return app.records.filter(r => r.date === today);
-    }
-    const cur = weekly[weekly.length - 1];
-    return app.records.filter(r => r.date >= cur.start && r.date <= cur.end);
+    let lo, hi;
+    if (periodTab === 'daily') { lo = hi = todayStr(); }
+    else { const cur = weekly[weekly.length - 1]; lo = cur.start; hi = cur.end; }
+    // บิลแบ่งจ่ายเป็นงวด — แสดงถ้ามีงวดที่จ่ายในช่วงนี้ (แม้วันที่บิลจะคนละช่วง) · อื่น ๆ อิงวันที่บิล
+    return app.records.filter(r =>
+      (isExpense(r) && countsInDashboard(r)) ? costPostedInRange(r, lo, hi) > 0 : (r.date >= lo && r.date <= hi));
   }, [periodTab, app.records, weekly]);
+  const focusLo = periodTab === 'daily' ? todayStr() : weekly[weekly.length - 1].start;
+  const focusHi = periodTab === 'daily' ? todayStr() : weekly[weekly.length - 1].end;
+  // ยอดของ record ในช่วงที่โฟกัส — บิลแบ่งงวดใช้เฉพาะงวดที่จ่ายในช่วงนั้น
+  const focusAmount = (r) => (isExpense(r) && countsInDashboard(r) && r.installmentEnabled)
+    ? costPostedInRange(r, focusLo, focusHi) : computeTotals(r).total;
 
   return (
     <>
@@ -643,7 +685,7 @@ window.DashboardView = function DashboardView() {
               {periodTab === 'daily' ? 'บิลวันนี้' : 'บิลสัปดาห์นี้'}
               {focusRecords.length > 0 && (
                 <span style={{ marginLeft:8, fontWeight:400, color:'var(--ink-3)' }}>
-                  ({focusRecords.length} รายการ — ฿{fmt(focusRecords.reduce((s,r)=>s+computeTotals(r).total,0))})
+                  ({focusRecords.length} รายการ — ฿{fmt(focusRecords.reduce((s,r)=>s+focusAmount(r),0))})
                 </span>
               )}
             </div>
@@ -657,7 +699,7 @@ window.DashboardView = function DashboardView() {
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                   {focusRecords.slice(0,6).map(r => {
                     const proj  = app.projects.find(p => p.id === r.projectId);
-                    const total = computeTotals(r).total;
+                    const total = focusAmount(r);
                     const isInc = window.isIncome(r);
                     const typeColor =
                       r.type === 'material'              ? 'var(--accent)' :
