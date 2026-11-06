@@ -87,6 +87,36 @@ function loanPaymentsByMonth(creditors, fromDate, toDate) {
   return { byMonth, total };
 }
 
+// บิล "ต้นทุนโครงการ" ที่แบ่งจ่ายเป็นงวด — รวมเฉพาะงวดที่จ่ายแล้ว แมปเข้าเดือนของ "วันที่จ่าย"
+//   cost  = ต้นทุนสุทธิทั้งบิล (computeTotals.total) × (ยอดงวด ÷ ยอดแผนรวม)  → ใช้แทนการลงต้นทุนเต็มในเดือนวันที่บิล
+//   gross = ยอดจ่ายต่องวด (ก่อนหัก ณ ที่จ่าย) → แสดงเป็น "ยอดจ่ายจริงต่อเดือน"
+//   filterFn (ถ้ามี) = กรอง record เพิ่มเติม เช่น ตัดโครงการภายในออก
+// คืน { byMonth:{'YYYY-MM':{gross,cost,count}}, totalGross, totalCost }
+function installmentCostByMonth(records, fromDate, toDate, filterFn) {
+  const byMonth = {}; let totalGross = 0, totalCost = 0;
+  const fromYm = fromDate ? fromDate.slice(0, 7) : null;
+  const toYm = isUnboundedTo(toDate) ? null : toDate.slice(0, 7);
+  (records || []).forEach(r => {
+    if (!r.installmentEnabled || !Array.isArray(r.installments)) return;
+    if (!isExpense(r) || !countsInDashboard(r)) return;
+    if (filterFn && !filterFn(r)) return;
+    const t = computeTotals(r);
+    const planGross = Number(t.instPlanGross) || 0;
+    r.installments.forEach(it => {
+      if (!it.paid || !it.date) return;
+      const ym = it.date.slice(0, 7);
+      if (fromYm && ym < fromYm) return;
+      if (toYm && ym > toYm) return;
+      const gross = Number(it.amount || 0);
+      const cost = planGross > 0 ? t.total * (gross / planGross) : 0;
+      if (!byMonth[ym]) byMonth[ym] = { gross: 0, cost: 0, count: 0 };
+      byMonth[ym].gross += gross; byMonth[ym].cost += cost; byMonth[ym].count++;
+      totalGross += gross; totalCost += cost;
+    });
+  });
+  return { byMonth, totalGross, totalCost };
+}
+
 // รายจ่ายประจำทุกเดือน — กระจายยอดเข้าแต่ละเดือน ตั้งแต่ startDate
 // • ถ้ามี endDate → ถึงเดือนนั้น
 // • ถ้าเปิดต่อเนื่อง (ไม่มี endDate):
@@ -5079,7 +5109,7 @@ ${expenses.length>0?`
 
 // ---- PDF รายงานค่าใช้จ่ายบริษัทล้วน (ไม่มีรายรับ/กำไร/ขาดทุน) ----
 const LOAN_CAT = 'ผ่อนเจ้าหนี้ / เงินกู้';
-function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[], companyCreditors=[], companyRecurring=[], fromDate, toDate, categories=null }) {
+function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[], companyCreditors=[], companyRecurring=[], records=[], projects=[], fromDate, toDate, categories=null }) {
   const catIn = name => !categories || categories.includes(name);
   const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtI = v => Number(v||0).toLocaleString('th-TH');
@@ -5108,6 +5138,39 @@ function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[
   const total = catArr.reduce((s,c)=>s+c.total,0);
   const maxCat = catArr.length?catArr[0].total:0;
   const monthKeys = Object.keys(byMonth).sort();
+
+  // บิลต้นทุนโครงการที่แบ่งจ่ายเป็นงวด — แสดงแยกเป็นข้อมูลประกอบ (ไม่รวมในยอดค่าใช้จ่ายบริษัทด้านบน เพื่อไม่ให้ซ้ำกับต้นทุนโครงการใน P&L)
+  const instData = installmentCostByMonth(records, fromDate, toDate);
+  const instMonthKeys = Object.keys(instData.byMonth).sort();
+  const projById2 = {}; (projects||[]).forEach(p=>{ projById2[p.id]=p; });
+  const instByProj = {};
+  (records||[]).forEach(r=>{
+    if (!r.installmentEnabled || !Array.isArray(r.installments)) return;
+    if (!isExpense(r) || !countsInDashboard(r)) return;
+    const t = computeTotals(r); const planGross = Number(t.instPlanGross)||0;
+    r.installments.forEach(it=>{
+      if (!it.paid || !it.date) return;
+      const ym = it.date.slice(0,7);
+      if (fromDate && ym < fromDate.slice(0,7)) return;
+      if (!(toDate>='9999') && toDate && ym > toDate.slice(0,7)) return;
+      const gross = Number(it.amount||0);
+      if (!instByProj[r.projectId]) instByProj[r.projectId] = { gross:0, count:0 };
+      instByProj[r.projectId].gross += gross; instByProj[r.projectId].count++;
+    });
+  });
+  const instProjRows = Object.entries(instByProj).sort((a,b)=>b[1].gross-a[1].gross)
+    .map(([pid,v],i)=>`<tr class="${i%2===0?'alt':''}"><td>${(projById2[pid]?.name)||'ไม่ระบุโครงการ'}</td><td class="r">${fmtI(v.count)} งวด</td><td class="r bold">฿${fmtN(v.gross)}</td></tr>`).join('');
+  const instMonthRows = instMonthKeys.map((k,i)=>`<tr class="${i%2===0?'alt':''}"><td>${monthLabelTH(k)}</td><td class="r">${fmtI(instData.byMonth[k].count)} งวด</td><td class="r bold">฿${fmtN(instData.byMonth[k].gross)}</td></tr>`).join('');
+  const instSection = instData.totalGross>0 ? `<div class="section page-break">
+  <div class="section-header" style="border-left-color:#7c3aed"><div class="section-title">บิลต้นทุนโครงการ — แบ่งจ่ายเป็นงวด (ข้อมูลประกอบ)</div></div>
+  <p style="font-size:10.5px;color:#78716c;margin-bottom:10px">ยอดที่ "จ่ายจริงต่อเดือน" ของบิลต้นทุนโครงการที่แบ่งจ่ายเป็นงวด (เฉพาะงวดที่จ่ายแล้ว ตามวันที่จ่าย) — เป็นต้นทุนโครงการ ไม่นับรวมในยอดค่าใช้จ่ายบริษัทด้านบน</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <table><thead><tr><th>เดือน</th><th class="r" style="width:60px">งวด</th><th class="r" style="width:130px">ยอดจ่าย</th></tr></thead>
+    <tbody>${instMonthRows}</tbody><tfoot><tr><td>รวม</td><td class="r">—</td><td class="r">฿${fmtN(instData.totalGross)}</td></tr></tfoot></table>
+    <table><thead><tr><th>โครงการ</th><th class="r" style="width:60px">งวด</th><th class="r" style="width:130px">ยอดจ่าย</th></tr></thead>
+    <tbody>${instProjRows}</tbody><tfoot><tr><td>รวม</td><td class="r">—</td><td class="r">฿${fmtN(instData.totalGross)}</td></tr></tfoot></table>
+  </div>
+</div>` : '';
 
   const catRows = catArr.map((c,i)=>`<tr class="${i%2===0?'alt':''}"><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color};margin-right:8px"></span>${c.name}${c.count>0?` <span style="color:#a8a29e;font-size:10px">(${fmtI(c.count)} รายการ)</span>`:''}</td><td class="r bold">฿${fmtN(c.total)}</td><td class="r" style="width:60px">${total>0?Math.round(c.total/total*100):0}%</td><td style="width:200px"><div style="background:#f0ede8;border-radius:99px;height:6px"><div style="height:6px;border-radius:99px;background:${c.color};width:${maxCat>0?Math.round(c.total/maxCat*100):0}%"></div></div></td></tr>`).join('');
   const monthRows = monthKeys.map((k,i)=>`<tr class="${i%2===0?'alt':''}"><td>${monthLabelTH(k)}</td><td class="r bold">฿${fmtN(byMonth[k])}</td></tr>`).join('');
@@ -5190,6 +5253,7 @@ ${exps.length>0?`<div class="section">
   <tbody>${detailRows}</tbody></table>
   <p style="margin-top:8px;font-size:10px;color:#78716c">* รายจ่ายประจำและผ่อนเจ้าหนี้ถูกรวมในยอดแยกตามประเภท/รายเดือนด้านบนแล้ว (ไม่แสดงเป็นรายการแยกในตารางนี้)</p>
 </div>`:''}
+${instSection}
 <div class="report-footer"><span>ForHouse Cost — รายงานค่าใช้จ่ายบริษัท (เอกสารภายใน) &nbsp;❖&nbsp; ${now}</span><span>ช่วงเวลา ${fmtD(fromDate)} – ${fmtD(toDate)}</span></div>
 <script>function toggleEdit(btn){var on=document.body.getAttribute('contenteditable')!=='true';document.body.setAttribute('contenteditable',on?'true':'false');btn.textContent=on?'✓ กำลังแก้ไข — กดเพื่อจบ':'✏️ แก้ไขรายงานก่อนบันทึก';btn.style.background=on?'#059669':'#0ea5e9';}</script>
 </body></html>`;
@@ -5551,19 +5615,32 @@ function doExportProfitReport(opts) {
   const projCost = {};   // ต้นทุนแยกตามโครงการ (แยกวัสดุ/เครื่องจักร/อื่นๆ/ค่าแรง)
   const catOpex = {};    // ค่าดำเนินการแยกตามประเภท
   let tMat=0, tMach=0, tOther=0, tLabor=0;   // รวมต้นทุนแยกประเภท
+  const addProjCost = (r, amt) => {
+    const pcx = projCost[r.projectId] || (projCost[r.projectId] = { material:0, machine:0, other:0, labor:0, total:0 });
+    if (r.type === 'material')      { pcx.material += amt; tMat += amt; }
+    else if (r.type === 'machine')  { pcx.machine += amt;  tMach += amt; }
+    else if (r.type === 'labor' || r.type === 'lump-labor') { pcx.labor += amt; tLabor += amt; }
+    else                            { pcx.other += amt;    tOther += amt; }
+    pcx.total += amt;
+  };
   records.forEach(r => {
-    if (!inR(r.date)) return;
-    const k = r.date.slice(0,7);
-    if (window.isIncome(r)) ens(k).income += computeTotals(r).total;
-    else if (isExpense(r) && countsInDashboard(r)) {
-      const t = computeTotals(r).total;
-      ens(k).cost += t;
-      const pcx = projCost[r.projectId] || (projCost[r.projectId] = { material:0, machine:0, other:0, labor:0, total:0 });
-      if (r.type === 'material')      { pcx.material += t; tMat += t; }
-      else if (r.type === 'machine')  { pcx.machine += t;  tMach += t; }
-      else if (r.type === 'labor' || r.type === 'lump-labor') { pcx.labor += t; tLabor += t; }
-      else                            { pcx.other += t;    tOther += t; }
-      pcx.total += t;
+    if (window.isIncome(r)) { if (inR(r.date)) ens(r.date.slice(0,7)).income += computeTotals(r).total; return; }
+    if (!(isExpense(r) && countsInDashboard(r))) return;
+    const t = computeTotals(r);
+    if (r.installmentEnabled && Array.isArray(r.installments)) {
+      // แบ่งจ่ายเป็นงวด → ลงต้นทุนตาม "วันที่จ่าย" ของแต่ละงวดที่จ่ายแล้ว (ต้นทุนตามสัดส่วนยอดงวด)
+      const planGross = Number(t.instPlanGross) || 0;
+      r.installments.forEach(it => {
+        if (!it.paid || !it.date || !inR(it.date)) return;
+        const gross = Number(it.amount || 0);
+        const cost = planGross > 0 ? t.total * (gross / planGross) : 0;
+        ens(it.date.slice(0,7)).cost += cost;
+        addProjCost(r, cost);
+      });
+    } else {
+      if (!inR(r.date)) return;
+      ens(r.date.slice(0,7)).cost += t.total;
+      addProjCost(r, t.total);
     }
   });
   companyExpenses.forEach(e => {
@@ -5936,7 +6013,8 @@ function CompanyExpenseReportModal({ open, onClose }) {
     setTimeout(() => {
       try {
         doExportCompanyExpenseReport({ companyExpenses: app.companyExpenses, companyExpenseCats: app.companyExpenseCats,
-          companyCreditors: app.companyCreditors, companyRecurring: app.companyRecurring, fromDate, toDate, categories: selCats });
+          companyCreditors: app.companyCreditors, companyRecurring: app.companyRecurring,
+          records: app.records, projects: app.projects, fromDate, toDate, categories: selCats });
         app.pushToast('เปิดหน้าต่าง PDF แล้ว — เลือก "บันทึกเป็น PDF"');
         onClose();
       } catch(e){ console.error('[CompanyExpenseReport]', e); app.pushToast('ส่งออกไม่สำเร็จ: '+e.message, 'error'); }
@@ -6068,6 +6146,26 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const profit = companyIncome - totalOpex;
   const colorOf = (n) => (app.companyExpenseCats||[]).find(c=>c.name===n)?.color || '#9ca3af';
 
+  // บิลต้นทุนโครงการที่แบ่งจ่ายเป็นงวด (เฉพาะงวดที่จ่ายแล้ว · ตามวันที่จ่าย) — ข้อมูลประกอบ
+  // ไม่รวมในรายจ่ายบริษัท/กำไร เพราะเป็น "ต้นทุนโครงการ" (นับใน P&L อยู่แล้ว) · ตัดโครงการภายในออก (นับเป็น opex แล้ว)
+  const internalIdSet = new Set(internalProjs.map(p=>p.id));
+  const instData = installmentCostByMonth(app.records, bounds.from, bounds.to, r => !internalIdSet.has(r.projectId));
+  const instByProj = useMemo(() => {
+    const m = {};
+    (app.records||[]).forEach(r=>{
+      if (!r.installmentEnabled || !Array.isArray(r.installments) || internalIdSet.has(r.projectId)) return;
+      if (!isExpense(r) || !countsInDashboard(r)) return;
+      r.installments.forEach(it=>{
+        if (!it.paid || !it.date || !inRange(it.date)) return;
+        const pj = (app.projects||[]).find(p=>p.id===r.projectId);
+        if (!m[r.projectId]) m[r.projectId] = { name: pj?.name || 'ไม่ระบุโครงการ', color: pj?.color || '#7c3aed', gross:0, count:0 };
+        m[r.projectId].gross += Number(it.amount||0); m[r.projectId].count++;
+      });
+    });
+    return Object.values(m).sort((a,b)=>b.gross-a.gross);
+  }, [app.records, app.projects, bounds.from, bounds.to]);
+  const instMonths = Object.keys(instData.byMonth).sort();
+
   const byCat = useMemo(() => {
     const m = {};
     expenses.forEach(e=>{ const k=e.category||'—'; if(!m[k]) m[k]={name:k,color:colorOf(k),count:0,total:0}; m[k].count++; m[k].total+=Number(e.amount||0); });
@@ -6143,6 +6241,50 @@ window.CompanyFinanceView = function CompanyFinanceView() {
           </div>
         )}
       </div>
+
+      {/* บิลต้นทุนโครงการ แบ่งจ่ายเป็นงวด — ข้อมูลประกอบ (ไม่รวมในรายจ่ายบริษัท/กำไร) */}
+      {instData.totalGross > 0 && (
+        <div className="card" style={{ marginTop:16, borderColor:'rgba(124,58,237,0.3)' }}>
+          <div className="row between" style={{ marginBottom:4, flexWrap:'wrap', gap:8, alignItems:'center' }}>
+            <strong className="row gap-8" style={{ alignItems:'center' }}>
+              <span style={{ width:11, height:11, borderRadius:'50%', background:'#7c3aed', display:'inline-block' }} />
+              บิลผ่อนงวด — ต้นทุนโครงการ
+            </strong>
+            <span className="mono" style={{ fontWeight:700, color:'#7c3aed' }}>฿{fmt(instData.totalGross)}</span>
+          </div>
+          <div className="text-small text-muted" style={{ marginBottom:12 }}>
+            ยอดที่จ่ายจริงต่อเดือนของบิลต้นทุนโครงการที่แบ่งจ่ายเป็นงวด (เฉพาะงวดที่จ่ายแล้ว · ตามวันที่จ่าย) — เป็นต้นทุนโครงการ <b>ไม่รวม</b>ในรายจ่ายบริษัท/กำไรด้านบน
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:16 }}>
+            <div>
+              <div className="text-small text-muted" style={{ marginBottom:6 }}>แยกตามเดือน</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                {instMonths.map(k=>(
+                  <div key={k} className="row between" style={{ padding:'7px 10px', border:'1px solid var(--line)', borderRadius:8 }}>
+                    <span>{monthLabelTH(k)} <span className="text-small text-muted">· {instData.byMonth[k].count} งวด</span></span>
+                    <span className="mono" style={{ fontWeight:600 }}>฿{fmt(instData.byMonth[k].gross)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-small text-muted" style={{ marginBottom:6 }}>แยกตามโครงการ</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                {instByProj.map((v,i)=>(
+                  <div key={i} className="row between" style={{ padding:'7px 10px', border:'1px solid var(--line)', borderRadius:8 }}>
+                    <span className="row gap-8" style={{ alignItems:'center', minWidth:0 }}>
+                      <span style={{ width:9, height:9, borderRadius:'50%', background:v.color, display:'inline-block', flexShrink:0 }} />
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{v.name}</span>
+                      <span className="text-small text-muted" style={{ flexShrink:0 }}>· {v.count} งวด</span>
+                    </span>
+                    <span className="mono" style={{ fontWeight:600, flexShrink:0 }}>฿{fmt(v.gross)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* กำไร/ขาดทุนปีที่แล้ว (ยกมา) */}
       <div style={{ marginTop:16 }}><LastYearPLEditor /></div>
