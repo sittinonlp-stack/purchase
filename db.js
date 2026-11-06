@@ -129,6 +129,7 @@
   function dbDebtor(row) {
     return {
       id: row.id, debtor: row.debtor || '', phone: row.phone || '', address: row.address || '',
+      type: row.type || 'general',
       principal: Number(row.principal || 0),
       startDate: row.start_date || '', dueDate: row.due_date || '',
       interestRate: Number(row.interest_rate || 0), interestMethod: row.interest_method || 'none',
@@ -138,6 +139,7 @@
   function jsDebtor(d) {
     return {
       id: d.id, debtor: d.debtor || '', phone: d.phone || '', address: d.address || '',
+      type: d.type || 'general',
       principal: Number(d.principal || 0),
       start_date: d.startDate || null, due_date: d.dueDate || null,
       interest_rate: Number(d.interestRate || 0), interest_method: d.interestMethod || 'none',
@@ -779,6 +781,7 @@
     async updateDebtor(id, patch) {
       const dbPatch = {};
       if ('debtor'         in patch) dbPatch.debtor          = patch.debtor || '';
+      if ('type'           in patch) dbPatch.type            = patch.type || 'general';
       if ('phone'          in patch) dbPatch.phone           = patch.phone || '';
       if ('address'        in patch) dbPatch.address         = patch.address || '';
       if ('principal'      in patch) dbPatch.principal       = Number(patch.principal || 0);

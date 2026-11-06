@@ -6319,6 +6319,13 @@ window.CompanyFinanceView = function CompanyFinanceView() {
 // บริษัทผู้ให้เครดิต (แก้ไขได้ในเอกสารก่อนพิมพ์)
 const DEBTOR_COMPANY_NAME = 'หจก.ฟอร์เฮ้าส์โฮมบิลดิ้ง';
 
+// ประเภทลูกหนี้
+const DEBTOR_TYPES = [
+  { id:'contract', label:'ลูกค้าค้างจ่ายในสัญญา', short:'ในสัญญา', color:'#c2410c', bg:'rgba(217,119,6,0.12)' },
+  { id:'general',  label:'ทั่วไป',                short:'ทั่วไป',   color:'#0ea5e9', bg:'rgba(14,165,233,0.12)' },
+];
+const debtorTypeOf = (id) => DEBTOR_TYPES.find(t => t.id === id) || DEBTOR_TYPES[1];
+
 // ── หลักกฎหมายดอกเบี้ย (ป.พ.พ. แก้ไข พ.ศ. 2564) ──
 //   • ม.7  ดอกเบี้ยที่ไม่ได้ตกลงกัน = 3%/ปี
 //   • ม.224 ดอกเบี้ยผิดนัดชำระ = 3% + 2% = 5%/ปี (เมื่อไม่ได้ตกลงอัตราไว้)
@@ -6453,6 +6460,7 @@ function computeInstallmentSchedule(d, asOf) {
 function DebtorModal({ open, onClose, initial }) {
   const app = window.useApp();
   const [debtor, setDebtor]   = useState('');
+  const [type, setType]       = useState('contract');
   const [phone, setPhone]     = useState('');
   const [address, setAddress] = useState('');
   const [principal, setPrincipal] = useState('');
@@ -6471,6 +6479,7 @@ function DebtorModal({ open, onClose, initial }) {
   useEffect(() => {
     if (!open) return;
     setDebtor(initial?.debtor || '');
+    setType(initial?.type || 'contract');
     setPhone(initial?.phone || '');
     setAddress(initial?.address || '');
     setPrincipal(initial?.principal != null && initial?.principal !== 0 ? String(initial.principal) : '');
@@ -6502,7 +6511,7 @@ function DebtorModal({ open, onClose, initial }) {
       plan = { count: cnt, amount: Number(planAmount) || 0, firstDue: planFirstDue, everyMonths: Math.max(1, Math.round(Number(planEvery) || 1)) };
     }
     const payload = {
-      debtor: debtor.trim(), phone: phone.trim(), address: address.trim(),
+      debtor: debtor.trim(), type, phone: phone.trim(), address: address.trim(),
       principal: Number(principal) || 0, startDate, dueDate: dueDate || '',
       interestMethod: method, interestRate: rateNum, note: note.trim(),
     };
@@ -6535,6 +6544,17 @@ function DebtorModal({ open, onClose, initial }) {
       </div>}>
       <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
         <div><label style={LS}>ชื่อลูกหนี้ *</label><input style={IS} value={debtor} onChange={e=>setDebtor(e.target.value)} placeholder="เช่น คุณสมชาย ใจดี / บจก. เอบีซี" /></div>
+        <div>
+          <label style={LS}>ประเภทลูกหนี้</label>
+          <div className="row gap-8" style={{ flexWrap:'wrap' }}>
+            {DEBTOR_TYPES.map(t => (
+              <button key={t.id} type="button" onClick={()=>setType(t.id)}
+                className={"btn btn-sm " + (type===t.id ? 'btn-accent' : 'btn-ghost')}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
           <div><label style={LS}>เบอร์โทร / ผู้ติดต่อ</label><input style={IS} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="08x-xxx-xxxx" /></div>
           <div><label style={LS}>ยอดหนี้ตั้งต้น (เงินต้น) *</label><window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace' }} value={principal} onChange={setPrincipal} placeholder="0.00" /></div>
@@ -6699,6 +6719,7 @@ function DebtorDetailModal({ open, onClose, debtor, onEdit, onPay }) {
         </div>
 
         <div style={{ fontSize:12, color:'var(--ink-3)', lineHeight:1.7, background:'var(--bg-2)', borderRadius:9, padding:'10px 14px' }}>
+          <div>🏷 ประเภท: {debtorTypeOf(debtor.type).label}</div>
           {debtor.phone && <div>📞 {debtor.phone}</div>}
           <div>📅 เริ่มเป็นหนี้: {fmtDate(debtor.startDate)}{debtor.dueDate ? ` · กำหนดชำระ: ${fmtDate(debtor.dueDate)}` : ''}</div>
           <div>💠 ดอกเบี้ย: {DEBTOR_METHOD_LABEL[led.method] || 'ไม่คิดดอกเบี้ย'}{led.useInterest ? ` · ${led.rate}%/ปี` : ''}</div>
@@ -6869,7 +6890,7 @@ tbody tr.alt td{background:#fafaf9}
   </div>
   <div class="meta-box">
     <div class="lbl">ถึง (ลูกหนี้)</div>
-    <div class="v"><b>${d.debtor||'—'}</b>${d.phone?`<br/>โทร. ${d.phone}`:''}${d.address?`<br/>${d.address}`:''}</div>
+    <div class="v"><b>${d.debtor||'—'}</b> <span style="font-size:11px;color:#78716c">(${debtorTypeOf(d.type).label})</span>${d.phone?`<br/>โทร. ${d.phone}`:''}${d.address?`<br/>${d.address}`:''}</div>
   </div>
 </div>
 <div class="kpi-grid">
@@ -6910,16 +6931,30 @@ window.DebtorsView = function DebtorsView() {
   const [payModal, setPayModal]   = useState({ open:false, debtor:null });
   const [detailModal, setDetailModal] = useState({ open:false, debtor:null });
   const [showDone, setShowDone] = useState(false);
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const debtors = (app.companyDebtors || []).map(d => ({ d, led: computeDebtorLedger(d, todayStr()) }));
-  const active = debtors.filter(x => !x.led.done);
-  const done   = debtors.filter(x => x.led.done);
-  const shown  = (showDone ? debtors : active).slice().sort((a,b)=> b.led.outstanding - a.led.outstanding);
+  const byTypeFilter = typeFilter === 'all' ? debtors : debtors.filter(x => (x.d.type || 'general') === typeFilter);
+  const active = byTypeFilter.filter(x => !x.led.done);
+  const done   = byTypeFilter.filter(x => x.led.done);
+  const shown  = (showDone ? byTypeFilter : active).slice().sort((a,b)=> b.led.outstanding - a.led.outstanding);
 
-  const totalOutstanding = debtors.reduce((s,x)=>s+x.led.outstanding,0);
-  const totalPrincipalRemain = debtors.reduce((s,x)=>s+x.led.principalBal,0);
-  const totalAccrued = debtors.reduce((s,x)=>s+x.led.accrued,0);
-  const totalPaid = debtors.reduce((s,x)=>s+x.led.totalPaid,0);
+  const totalOutstanding = byTypeFilter.reduce((s,x)=>s+x.led.outstanding,0);
+  const totalPrincipalRemain = byTypeFilter.reduce((s,x)=>s+x.led.principalBal,0);
+  const totalAccrued = byTypeFilter.reduce((s,x)=>s+x.led.accrued,0);
+  const totalPaid = byTypeFilter.reduce((s,x)=>s+x.led.totalPaid,0);
+
+  // สรุปแยกตามประเภท (จากลูกหนี้ทั้งหมด ไม่ขึ้นกับตัวกรอง)
+  const typeSummary = DEBTOR_TYPES.map(t => {
+    const list = debtors.filter(x => (x.d.type || 'general') === t.id);
+    return {
+      ...t,
+      count: list.length,
+      activeCount: list.filter(x => !x.led.done).length,
+      outstanding: list.reduce((s,x)=>s+x.led.outstanding,0),
+      paid: list.reduce((s,x)=>s+x.led.totalPaid,0),
+    };
+  });
 
   const card = (label, value, sub, color, bg, border) => (
     <div style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'16px 18px' }}>
@@ -6951,7 +6986,35 @@ window.DebtorsView = function DebtorsView() {
           {card('ยอดค้างชำระรวม', '฿'+fmt(totalOutstanding), `${active.length} รายที่ยังค้าง`, '#c2410c', 'rgba(217,119,6,0.07)', 'rgba(217,119,6,0.25)')}
           {card('เงินต้นคงเหลือรวม', '฿'+fmt(totalPrincipalRemain), 'ยังไม่รวมดอกเบี้ย', '#1c1917', 'var(--bg-2)', 'var(--line)')}
           {card('ดอกเบี้ยค้างรวม', '฿'+fmt(totalAccrued), 'ลดต้นลดดอก (ถ้ามี)', '#7c3aed', 'rgba(124,58,237,0.07)', 'rgba(124,58,237,0.25)')}
-          {card('รับชำระมาแล้วรวม', '฿'+fmt(totalPaid), `ลูกหนี้ทั้งหมด ${debtors.length} ราย`, '#059669', 'rgba(5,150,105,0.07)', 'rgba(5,150,105,0.25)')}
+          {card('รับชำระมาแล้วรวม', '฿'+fmt(totalPaid), `${typeFilter==='all'?'ลูกหนี้ทั้งหมด':'เฉพาะประเภทที่เลือก'} ${byTypeFilter.length} ราย`, '#059669', 'rgba(5,150,105,0.07)', 'rgba(5,150,105,0.25)')}
+        </div>
+
+        {/* สรุปแยกตามประเภทลูกหนี้ */}
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, color:'var(--ink-3)', marginBottom:8 }}>สรุปยอดค้าง — แยกตามประเภท</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:12 }}>
+            {typeSummary.map(t => (
+              <div key={t.id} style={{ background:t.bg, border:`1px solid ${t.color}44`, borderRadius:12, padding:'14px 16px' }}>
+                <div className="row between" style={{ alignItems:'center', marginBottom:6 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:t.color }}>{t.label}</span>
+                  <span style={{ fontSize:11, color:'var(--ink-3)' }}>{t.activeCount} ค้าง / {t.count} ราย</span>
+                </div>
+                <div className="mono" style={{ fontSize:22, fontWeight:700, color:t.color, letterSpacing:-.5 }}>฿{fmt(t.outstanding)}</div>
+                <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:3 }}>รับชำระมาแล้ว ฿{fmt(t.paid)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ตัวกรองประเภท */}
+        <div className="row gap-8" style={{ flexWrap:'wrap', alignItems:'center' }}>
+          <span style={{ fontSize:12, color:'var(--ink-3)' }}>แสดง:</span>
+          <button className={"btn btn-sm " + (typeFilter==='all'?'btn-accent':'btn-ghost')} onClick={()=>setTypeFilter('all')}>ทั้งหมด ({debtors.length})</button>
+          {DEBTOR_TYPES.map(t => (
+            <button key={t.id} className={"btn btn-sm " + (typeFilter===t.id?'btn-accent':'btn-ghost')} onClick={()=>setTypeFilter(t.id)}>
+              {t.short} ({debtors.filter(x=>(x.d.type||'general')===t.id).length})
+            </button>
+          ))}
         </div>
 
         {done.length > 0 && (
@@ -6965,8 +7028,8 @@ window.DebtorsView = function DebtorsView() {
         {shown.length === 0 ? (
           <div style={{ textAlign:'center', color:'var(--ink-3)', padding:'40px 0' }}>
             <div style={{ fontSize:40, marginBottom:8 }}>📒</div>
-            <div style={{ fontSize:14 }}>ยังไม่มีรายการลูกหนี้</div>
-            <div style={{ fontSize:12, marginTop:4 }}>กด "เพิ่มลูกหนี้" เพื่อเริ่มติดตามยอดค้างชำระ</div>
+            <div style={{ fontSize:14 }}>{typeFilter==='all' ? 'ยังไม่มีรายการลูกหนี้' : `ไม่มีลูกหนี้ประเภท "${debtorTypeOf(typeFilter).label}"`}</div>
+            <div style={{ fontSize:12, marginTop:4 }}>{typeFilter==='all' ? 'กด "เพิ่มลูกหนี้" เพื่อเริ่มติดตามยอดค้างชำระ' : 'ลองเปลี่ยนตัวกรอง หรือเพิ่มลูกหนี้ใหม่'}</div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -6981,6 +7044,7 @@ window.DebtorsView = function DebtorsView() {
                     <div style={{ minWidth:0, flex:1 }}>
                       <div className="row gap-8" style={{ alignItems:'center', flexWrap:'wrap' }}>
                         <span style={{ fontWeight:700, fontSize:15 }}>{d.debtor}</span>
+                        {(() => { const t = debtorTypeOf(d.type); return <span className="badge" style={{ background:t.bg, color:t.color }}>{t.short}</span>; })()}
                         {led.done && <span className="badge" style={{ background:'rgba(22,163,74,0.12)', color:'#16a34a' }}>ชำระครบแล้ว ✓</span>}
                         {overdue && <span className="badge" style={{ background:'rgba(220,38,38,0.12)', color:'#dc2626' }}>เกินกำหนด</span>}
                         {led.useInterest && <span className="badge" style={{ background:'rgba(124,58,237,0.12)', color:'#7c3aed' }}><Icon name="percent" size={10}/> {led.rate}%/ปี</span>}
