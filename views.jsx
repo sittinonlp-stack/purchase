@@ -6397,6 +6397,58 @@ function computeDebtorLedger(d, asOf) {
   };
 }
 
+// บวกเดือนแบบ clamp วันที่สิ้นเดือน (31 ม.ค. +1 เดือน = 28/29 ก.พ.)
+function debtorAddMonths(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return dateStr;
+  const tm = d.getMonth() + n;
+  const y = d.getFullYear() + Math.floor(tm / 12);
+  const m = ((tm % 12) + 12) % 12;
+  const day = Math.min(d.getDate(), new Date(y, m + 1, 0).getDate());
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// สร้างตารางงวดผ่อนชำระ + สถานะแต่ละงวด (จับคู่กับยอดที่ชำระจริงสะสม)
+//   plan = { count, amount, firstDue, everyMonths }  เก็บใน meta.plan
+function computeInstallmentSchedule(d, asOf) {
+  asOf = asOf || todayStr();
+  const plan = d.meta && d.meta.plan;
+  if (!plan || !(Number(plan.count) > 0) || !plan.firstDue) return { enabled: false, rows: [] };
+  const count = Math.round(Number(plan.count) || 0);
+  const every = Math.max(1, Math.round(Number(plan.everyMonths) || 1));
+  const principal = Math.max(0, Number(d.principal) || 0);
+  let perAmt = Number(plan.amount) || 0;
+  if (!(perAmt > 0)) perAmt = Math.round((principal / count) * 100) / 100;
+
+  // ยอดชำระจริงสะสมทั้งหมด (เอาไว้เทียบว่างวดไหนถูกชำระแล้ว)
+  const totalPaid = ((d.meta && d.meta.payments) || [])
+    .filter(p => p && p.date && Number(p.amount) > 0)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+  const rows = [];
+  let remaining = principal;
+  let cum = 0;
+  for (let i = 1; i <= count; i++) {
+    const due = debtorAddMonths(plan.firstDue, (i - 1) * every);
+    const amt = i < count ? Math.min(perAmt, remaining) : remaining; // งวดสุดท้าย = เศษที่เหลือ
+    remaining = Math.max(0, remaining - amt);
+    const prevCum = cum; cum += amt;
+    let status, paidPortion = 0;
+    if (totalPaid >= cum - 0.5) { status = 'paid'; paidPortion = amt; }
+    else {
+      paidPortion = Math.max(0, Math.min(amt, totalPaid - prevCum));
+      if (paidPortion > 0.5) status = 'partial';
+      else if (due < asOf) status = 'overdue';
+      else status = 'pending';
+    }
+    rows.push({ no: i, due, amount: amt, cum, status, paidPortion });
+  }
+  const next = rows.find(r => r.status !== 'paid') || null;
+  const overdueCount = rows.filter(r => r.status === 'overdue').length;
+  const paidCount = rows.filter(r => r.status === 'paid').length;
+  return { enabled: true, rows, count, perAmt, every, next, overdueCount, paidCount, totalPaid, scheduledTotal: cum };
+}
+
 // ── Modal: เพิ่ม/แก้ไขลูกหนี้ ────────────────────────────
 function DebtorModal({ open, onClose, initial }) {
   const app = window.useApp();
@@ -6409,6 +6461,12 @@ function DebtorModal({ open, onClose, initial }) {
   const [method, setMethod]   = useState('none');
   const [rate, setRate]       = useState('');
   const [note, setNote]       = useState('');
+  // แผนการผ่อนชำระ
+  const [planOn, setPlanOn]     = useState(false);
+  const [planCount, setPlanCount] = useState('');
+  const [planAmount, setPlanAmount] = useState('');
+  const [planFirstDue, setPlanFirstDue] = useState('');
+  const [planEvery, setPlanEvery] = useState('1');
 
   useEffect(() => {
     if (!open) return;
@@ -6421,6 +6479,12 @@ function DebtorModal({ open, onClose, initial }) {
     setMethod(initial?.interestMethod || 'none');
     setRate(initial?.interestRate ? String(initial.interestRate) : '');
     setNote(initial?.note || '');
+    const pl = initial?.meta?.plan;
+    setPlanOn(!!(pl && Number(pl.count) > 0));
+    setPlanCount(pl?.count ? String(pl.count) : '');
+    setPlanAmount(pl?.amount ? String(pl.amount) : '');
+    setPlanFirstDue(pl?.firstDue || '');
+    setPlanEvery(pl?.everyMonths ? String(pl.everyMonths) : '1');
   }, [open, initial]); // eslint-disable-line
 
   const save = () => {
@@ -6430,15 +6494,35 @@ function DebtorModal({ open, onClose, initial }) {
     if (method === 'reducing' && !(rateNum > 0)) return app.pushToast('โปรดระบุอัตราดอกเบี้ยต่อปี', 'error');
     if (rateNum > DEBTOR_LEGAL_MAX_RATE)
       return app.pushToast(`อัตราดอกเบี้ยเกินเพดานกฎหมาย ${DEBTOR_LEGAL_MAX_RATE}%/ปี (เกินกว่านี้เป็นโมฆะและผิดกฎหมาย)`, 'error');
+    let plan = null;
+    if (planOn) {
+      const cnt = Math.round(Number(planCount) || 0);
+      if (!(cnt > 0)) return app.pushToast('โปรดระบุจำนวนงวดผ่อน', 'error');
+      if (!planFirstDue) return app.pushToast('โปรดระบุวันครบกำหนดงวดแรก', 'error');
+      plan = { count: cnt, amount: Number(planAmount) || 0, firstDue: planFirstDue, everyMonths: Math.max(1, Math.round(Number(planEvery) || 1)) };
+    }
     const payload = {
       debtor: debtor.trim(), phone: phone.trim(), address: address.trim(),
       principal: Number(principal) || 0, startDate, dueDate: dueDate || '',
       interestMethod: method, interestRate: rateNum, note: note.trim(),
     };
-    if (initial?.id) { app.updateCompanyDebtor(initial.id, payload); app.pushToast('แก้ไขลูกหนี้เรียบร้อย'); }
-    else { app.addCompanyDebtor({ ...payload, meta: { payments: [] } }); app.pushToast('เพิ่มลูกหนี้แล้ว'); }
+    if (initial?.id) {
+      const meta = { ...(initial.meta || {}), plan };
+      app.updateCompanyDebtor(initial.id, { ...payload, meta });
+      app.pushToast('แก้ไขลูกหนี้เรียบร้อย');
+    } else {
+      app.addCompanyDebtor({ ...payload, meta: { payments: [], plan } });
+      app.pushToast('เพิ่มลูกหนี้แล้ว');
+    }
     onClose();
   };
+
+  // ยอดแนะนำต่องวด = เงินต้น ÷ จำนวนงวด
+  const suggestPer = (() => {
+    const cnt = Math.round(Number(planCount) || 0);
+    const pr = Number(principal) || 0;
+    return cnt > 0 && pr > 0 ? Math.round((pr / cnt) * 100) / 100 : 0;
+  })();
 
   const IS = { background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, padding:'8px 12px', fontSize:13, color:'var(--ink-1)', fontFamily:'inherit', width:'100%', outline:'none', boxSizing:'border-box' };
   const LS = { fontSize:12, color:'var(--ink-3)', marginBottom:5, display:'block' };
@@ -6481,6 +6565,31 @@ function DebtorModal({ open, onClose, initial }) {
               <div style={{ fontSize:11, color:'var(--ink-3)', marginTop:8, lineHeight:1.6 }}>
                 ⚖️ ตามกฎหมายไทย: ดอกเบี้ยผิดนัดชำระ = <b>{DEBTOR_LEGAL_DEFAULT_RATE}%/ปี</b> (ป.พ.พ. ม.224) · เพดานเงินกู้ = <b>{DEBTOR_LEGAL_MAX_RATE}%/ปี</b> (เกินเป็นโมฆะ+ผิดอาญา)<br/>
                 คิดแบบ <b>ลดต้นลดดอก ไม่ทบต้น</b> (ดอกเบี้ย = เงินต้นคงเหลือ × อัตรา ÷ 365 × จำนวนวัน) — เงินที่ชำระจะตัดดอกเบี้ยก่อน แล้วจึงตัดเงินต้น (ม.329)
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding:'12px 14px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
+          <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:600, color:'var(--ink-2)', cursor:'pointer' }}>
+            <input type="checkbox" checked={planOn} onChange={e=>setPlanOn(e.target.checked)} /> แบ่งชำระเป็นงวด (แผนผ่อน)
+          </label>
+          {planOn && (
+            <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+                <div><label style={LS}>จำนวนงวด</label><input type="number" min="1" step="1" style={IS} value={planCount} onChange={e=>setPlanCount(e.target.value)} placeholder="เช่น 10" /></div>
+                <div><label style={LS}>ชำระทุก ๆ (เดือน)</label><input type="number" min="1" step="1" style={IS} value={planEvery} onChange={e=>setPlanEvery(e.target.value)} placeholder="1" /></div>
+                <div><label style={LS}>ครบกำหนดงวดแรก</label><input type="date" style={IS} value={planFirstDue} onChange={e=>setPlanFirstDue(e.target.value)} /></div>
+              </div>
+              <div>
+                <label style={LS}>ยอดต่องวด (บาท) — เว้นว่างได้ ระบบจะหารเท่า ๆ กัน</label>
+                <div className="row gap-8" style={{ alignItems:'center', flexWrap:'wrap' }}>
+                  <window.MoneyInput style={{ ...IS, fontFamily:'JetBrains Mono, monospace', width:160 }} value={planAmount} onChange={setPlanAmount} placeholder={suggestPer>0?fmt(suggestPer):'0.00'} />
+                  {suggestPer>0 && <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setPlanAmount(String(suggestPer))}>หารเท่ากัน ฿{fmt(suggestPer)}/งวด</button>}
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:'var(--ink-3)', lineHeight:1.6 }}>
+                ระบบจะสร้างตารางงวดพร้อม <b>วันครบกำหนดแต่ละงวด</b> และทำเครื่องหมาย ชำระแล้ว/ค้าง/เกินกำหนด อัตโนมัติจากยอดที่บันทึกชำระจริง · งวดสุดท้ายปรับเป็นเศษที่เหลือให้พอดีเงินต้น{method==='reducing'?' (ดอกเบี้ยคิดเพิ่มตามจริงต่างหาก)':''}
               </div>
             </div>
           )}
@@ -6548,7 +6657,14 @@ function DebtorDetailModal({ open, onClose, debtor, onEdit, onPay }) {
   if (!debtor) return null;
   debtor = (app.companyDebtors || []).find(x => x.id === debtor.id) || debtor; // ใช้ข้อมูลล่าสุดจาก store
   const led = computeDebtorLedger(debtor, todayStr());
+  const sched = computeInstallmentSchedule(debtor, todayStr());
   const payments = ((debtor.meta && debtor.meta.payments) || []).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const SCHED_BADGE = {
+    paid:    { t:'ชำระแล้ว',  bg:'rgba(22,163,74,0.12)',  c:'#16a34a' },
+    partial: { t:'บางส่วน',   bg:'rgba(217,119,6,0.12)',  c:'#c2410c' },
+    overdue: { t:'เกินกำหนด', bg:'rgba(220,38,38,0.12)',  c:'#dc2626' },
+    pending: { t:'รอชำระ',    bg:'var(--bg-3,#e5e7eb)',   c:'var(--ink-3)' },
+  };
 
   const delPayment = (pid) => {
     if (!confirm('ลบรายการชำระนี้?')) return;
@@ -6590,6 +6706,36 @@ function DebtorDetailModal({ open, onClose, debtor, onEdit, onPay }) {
           {debtor.note && <div>📝 {debtor.note}</div>}
         </div>
 
+        {sched.enabled && (
+          <div>
+            <div className="row between" style={{ marginBottom:8, flexWrap:'wrap', gap:6 }}>
+              <div style={{ fontWeight:600, fontSize:13 }}>ตารางงวดผ่อนชำระ ({sched.paidCount}/{sched.count} งวด)</div>
+              {sched.next
+                ? <span style={{ fontSize:11, color: sched.next.status==='overdue'?'#dc2626':'var(--ink-3)' }}>งวดถัดไป: งวดที่ {sched.next.no} · ครบกำหนด {fmtDate(sched.next.due)} · ฿{fmt(sched.next.amount)}</span>
+                : <span style={{ fontSize:11, color:'#16a34a' }}>ครบทุกงวดแล้ว ✓</span>}
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              {sched.rows.map(r => {
+                const b = SCHED_BADGE[r.status] || SCHED_BADGE.pending;
+                return (
+                  <div key={r.no} className="row between" style={{ padding:'8px 12px', background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:8, alignItems:'center' }}>
+                    <div className="row gap-8" style={{ alignItems:'center' }}>
+                      <span style={{ fontSize:12, fontWeight:700, minWidth:42 }}>งวด {r.no}</span>
+                      <span style={{ fontSize:12, color:'var(--ink-3)' }}>ครบกำหนด {fmtDate(r.due)}</span>
+                    </div>
+                    <div className="row gap-8" style={{ alignItems:'center' }}>
+                      {r.status==='partial' && <span style={{ fontSize:10, color:'#c2410c' }}>จ่ายแล้ว ฿{fmt(r.paidPortion)}</span>}
+                      <span className="mono" style={{ fontWeight:700, fontSize:13 }}>฿{fmt(r.amount)}</span>
+                      <span className="badge" style={{ background:b.bg, color:b.c, minWidth:66, textAlign:'center' }}>{b.t}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {led.useInterest && <div style={{ fontSize:10.5, color:'var(--ink-3)', marginTop:6 }}>* ยอดต่องวดเป็นเงินต้น ดอกเบี้ยคิดเพิ่มตามจำนวนวันจริง (ดูยอดคงค้างรวมด้านบน)</div>}
+          </div>
+        )}
+
         <div>
           <div className="row between" style={{ marginBottom:8 }}>
             <div style={{ fontWeight:600, fontSize:13 }}>ประวัติการชำระ ({payments.length} ครั้ง)</div>
@@ -6621,6 +6767,7 @@ function DebtorDetailModal({ open, onClose, debtor, onEdit, onPay }) {
 // ── PDF: ใบแจ้งยอดหนี้คงค้าง (ส่งให้ลูกหนี้) ────────────────
 function doExportDebtorStatement(d, companyName) {
   const led = computeDebtorLedger(d, todayStr());
+  const sched = computeInstallmentSchedule(d, todayStr());
   const fmtN = v => Number(v||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtD = s => s ? new Date(s+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'}) : '—';
   const now  = new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});
@@ -6641,6 +6788,19 @@ function doExportDebtorStatement(d, companyName) {
   const interestExplain = led.useInterest
     ? `<div class="note">คิดดอกเบี้ยแบบ <b>ลดต้นลดดอก (ดอกเบี้ยเชิงเดี่ยว ไม่ทบต้น)</b> อัตรา <b>${led.rate}% ต่อปี</b> — ดอกเบี้ย = เงินต้นคงเหลือ × อัตรา ÷ 365 × จำนวนวัน · การชำระตัดดอกเบี้ยก่อนแล้วจึงตัดเงินต้น (ป.พ.พ. ม.329) · ดอกเบี้ยค้างถึงวันที่ ${fmtD(led.asOf)} = <b>฿${fmtN(led.accrued)}</b></div>`
     : `<div class="note">เครดิตนี้ <b>ไม่มีการคิดดอกเบี้ย</b></div>`;
+
+  // ตารางงวดผ่อนชำระ (ถ้ามี)
+  const SCHED_TH = { paid:'ชำระแล้ว', partial:'ชำระบางส่วน', overdue:'เกินกำหนด', pending:'รอชำระ' };
+  const SCHED_COLOR = { paid:'#16a34a', partial:'#c2410c', overdue:'#dc2626', pending:'#78716c' };
+  const schedSection = sched.enabled ? `<div class="section">
+  <div class="section-title">ตารางงวดผ่อนชำระ (ชำระแล้ว ${sched.paidCount}/${sched.count} งวด)</div>
+  <table><thead><tr>
+    <th style="width:70px">งวดที่</th><th style="width:150px">ครบกำหนดภายใน</th><th class="r" style="width:130px">ยอดที่ต้องชำระ</th><th style="width:120px">สถานะ</th>
+  </tr></thead>
+  <tbody>${sched.rows.map((r,i)=>`<tr class="${i%2===0?'alt':''}"><td class="bold">งวด ${r.no}</td><td>${fmtD(r.due)}</td><td class="r bold">฿${fmtN(r.amount)}</td><td style="color:${SCHED_COLOR[r.status]||'#78716c'};font-weight:600">${SCHED_TH[r.status]||'รอชำระ'}${r.status==='partial'?` (จ่ายแล้ว ฿${fmtN(r.paidPortion)})`:''}</td></tr>`).join('')}</tbody>
+  </table>
+  ${led.useInterest?`<div class="note">* ยอดต่องวดข้างต้นเป็นเงินต้น — ดอกเบี้ยคิดเพิ่มตามจำนวนวันจริง (รวมอยู่ในยอดคงค้างด้านล่าง)</div>`:''}
+</div>` : '';
 
   const html = `<!DOCTYPE html><html lang="th"><head>
 <meta charset="UTF-8"><title>ใบแจ้งยอดหนี้คงค้าง — ${d.debtor||''}</title>
@@ -6717,6 +6877,7 @@ tbody tr.alt td{background:#fafaf9}
   <div class="kpi"><div class="kpi-label">ชำระมาแล้วรวม</div><div class="kpi-value" style="color:#059669">฿${fmtN(led.totalPaid)}</div></div>
   <div class="kpi accent"><div class="kpi-label">คงเหลือค้างชำระ</div><div class="kpi-value">฿${fmtN(led.outstanding)}</div></div>
 </div>
+${schedSection}
 <div class="section">
   <div class="section-title">ประวัติการชำระ (${led.rows.length} ครั้ง)</div>
   <table><thead><tr>
@@ -6811,7 +6972,9 @@ window.DebtorsView = function DebtorsView() {
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {shown.map(({ d, led }) => {
               const paidPct = led.principal0 > 0 ? Math.min(100, Math.round(led.toPrincipalSum / led.principal0 * 100)) : 0;
-              const overdue = isOverdue(d, led);
+              const sched = computeInstallmentSchedule(d, today);
+              const schedOverdue = sched.enabled && sched.overdueCount > 0 && !led.done;
+              const overdue = schedOverdue || isOverdue(d, led);
               return (
                 <div key={d.id} style={{ border:'1px solid var(--line)', borderRadius:12, padding:'14px 16px', background:'var(--bg-1)' }}>
                   <div className="row between" style={{ flexWrap:'wrap', gap:10, alignItems:'flex-start' }}>
@@ -6821,11 +6984,17 @@ window.DebtorsView = function DebtorsView() {
                         {led.done && <span className="badge" style={{ background:'rgba(22,163,74,0.12)', color:'#16a34a' }}>ชำระครบแล้ว ✓</span>}
                         {overdue && <span className="badge" style={{ background:'rgba(220,38,38,0.12)', color:'#dc2626' }}>เกินกำหนด</span>}
                         {led.useInterest && <span className="badge" style={{ background:'rgba(124,58,237,0.12)', color:'#7c3aed' }}><Icon name="percent" size={10}/> {led.rate}%/ปี</span>}
+                        {sched.enabled && <span className="badge" style={{ background:'rgba(14,165,233,0.12)', color:'#0ea5e9' }}>ผ่อน {sched.paidCount}/{sched.count} งวด</span>}
                       </div>
                       <div style={{ fontSize:12, color:'var(--ink-3)', marginTop:3 }}>
-                        {d.phone ? `📞 ${d.phone} · ` : ''}เริ่ม {fmtDate(d.startDate)}{d.dueDate ? ` · กำหนด ${fmtDate(d.dueDate)}` : ''}
+                        {d.phone ? `📞 ${d.phone} · ` : ''}เริ่ม {fmtDate(d.startDate)}{!sched.enabled && d.dueDate ? ` · กำหนด ${fmtDate(d.dueDate)}` : ''}
                         {led.lastPayDate ? ` · ชำระล่าสุด ${fmtDate(led.lastPayDate)}` : ' · ยังไม่ชำระ'}
                       </div>
+                      {sched.enabled && sched.next && (
+                        <div style={{ fontSize:12, marginTop:3, color: sched.next.status==='overdue'?'#dc2626':'#0ea5e9', fontWeight:600 }}>
+                          ⏱ งวดถัดไป: งวดที่ {sched.next.no}/{sched.count} · ครบกำหนด {fmtDate(sched.next.due)} · ฿{fmt(sched.next.amount)}{sched.next.status==='overdue'?' (เกินกำหนด)':''}
+                        </div>
+                      )}
                     </div>
                     <div style={{ textAlign:'right' }}>
                       <div style={{ fontSize:11, color:'var(--ink-3)' }}>คงเหลือค้างชำระ</div>
