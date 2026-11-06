@@ -382,7 +382,11 @@ function LaborContractSection({ form, set, cats }) {
   const delDraftGvd = (id) => set({ contractDraft: { ...draft, installments: (draft.installments || []).filter(g => g.id !== id) } });
   const addExistingGvd = () => { const nx = [...existing.installments, { id: newId(), detail: 'งานเพิ่มเติม', amount: 0, withdrawnDocId: null }]; app.updateLaborContract(existing.id, { installments: nx, total: nx.reduce((s, g) => s + Number(g.amount || 0), 0) }); };
 
-  const openContracts = (app.laborContracts || []).filter(c => c.status !== 'closed' && (c.installments || []).some(g => !g.withdrawnDocId));
+  // แสดงเฉพาะสัญญาของชุดทีมงานที่เลือกอยู่ (ถ้ายังไม่เลือกทีม ให้แสดงทั้งหมด)
+  const openContracts = (app.laborContracts || []).filter(c =>
+    c.status !== 'closed' &&
+    (c.installments || []).some(g => !g.withdrawnDocId) &&
+    (!form.workerTeamId || c.teamId === form.workerTeamId));
 
   if (!useContract) {
     return (
