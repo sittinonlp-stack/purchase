@@ -361,7 +361,7 @@ function Modal({ open, onClose, title, children, footer, width }) {
   if (!open) return null;
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" style={width ? { width } : undefined} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={width ? { width: `min(${width}px, 92vw)` } : undefined} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="card-title">{title}</h3>
           <button className="topbar-icon-btn" onClick={onClose}><Icon name="x" /></button>

@@ -3851,6 +3851,7 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 
 <div class="no-print print-wrap">
   <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" style="background:#64748b" onclick="window.close();setTimeout(function(){history.back()},150)">✕ ปิด / ย้อนกลับ</button>
     <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
     <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
   </div>
@@ -4270,6 +4271,7 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 </style></head><body>
 <div class="no-print print-wrap">
   <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" style="background:#64748b" onclick="window.close();setTimeout(function(){history.back()},150)">✕ ปิด / ย้อนกลับ</button>
     <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
     <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
   </div>
@@ -5060,6 +5062,7 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 
 <div class="no-print print-wrap">
   <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" style="background:#64748b" onclick="window.close();setTimeout(function(){history.back()},150)">✕ ปิด / ย้อนกลับ</button>
     <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
     <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
   </div>
@@ -5256,6 +5259,7 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 </style></head><body>
 <div class="no-print print-wrap">
   <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" style="background:#64748b" onclick="window.close();setTimeout(function(){history.back()},150)">✕ ปิด / ย้อนกลับ</button>
     <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
     <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
   </div>
@@ -5791,6 +5795,7 @@ tfoot td{padding:10px 14px;background:#1c1917;color:#fff;font-weight:600;font-si
 </style></head><body>
 <div class="no-print print-wrap">
   <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" style="background:#64748b" onclick="window.close();setTimeout(function(){history.back()},150)">✕ ปิด / ย้อนกลับ</button>
     <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
     <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขรายงานก่อนบันทึก</button>
   </div>
@@ -7051,6 +7056,7 @@ tbody tr.alt td{background:#fafaf9}
 </style></head><body>
 <div class="no-print print-wrap">
   <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="print-btn" style="background:#64748b" onclick="window.close();setTimeout(function(){history.back()},150)">✕ ปิด / ย้อนกลับ</button>
     <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
     <button class="print-btn" style="background:#0ea5e9" onclick="toggleEdit(this)">✏️ แก้ไขก่อนพิมพ์</button>
   </div>

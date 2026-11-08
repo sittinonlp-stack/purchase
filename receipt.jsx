@@ -186,10 +186,12 @@ body{
 .invoice-payment-label{font-size:10.5px;color:#666;letter-spacing:0.03em}
 .invoice-payment-value{font-size:12.5px;font-weight:600;color:#1f1d18;margin-top:1px}
 .invoice-payment-terms{margin-top:10px;padding-top:8px;border-top:1px dashed rgba(37,99,235,0.3);font-size:11.5px;color:#333}
+.popup-close{position:fixed;top:10px;right:10px;z-index:99999;background:#64748b;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-family:'Prompt',sans-serif;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 @media print{
   @page{size:A4;margin:0}
   body{display:block!important;padding:0!important;background:#fff!important}
   .printable-receipt{box-shadow:none!important;margin:0!important;position:static!important;width:210mm!important;min-height:297mm!important;padding:18mm 16mm!important}
+  .popup-close{display:none!important}
 }
 `;
 
@@ -216,7 +218,7 @@ function openPrintPopup(Component, title, rec, company, app) {
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
     (fontHref ? '<link href="' + fontHref + '" rel="stylesheet">' : '') +
     '<style>' + POPUP_CSS + '</style>' +
-    '</head><body><div id="proot"></div></body></html>');
+    '</head><body><button class="popup-close" onclick="window.close();setTimeout(function(){history.back()},150)">✕ ปิด</button><div id="proot"></div></body></html>');
   w.document.close();
   setTimeout(() => {
     try {
