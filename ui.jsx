@@ -11,6 +11,8 @@ const Icon = ({ name, size = 16, stroke = 1.75 }) => {
     home: <><path d="M3 11.5L12 4l9 7.5"/><path d="M5 10v10h14V10"/></>,
     cart: <><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 3h2l2.4 11.6a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 7H6"/></>,
     truck: <><rect x="2" y="7" width="11" height="10" rx="1"/><path d="M13 10h4l4 4v3h-8"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></>,
+    store: <><path d="M4 4h16l1 5a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"/><path d="M5 11v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8"/><path d="M9 20v-5h4v5"/></>,
+    external: <><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6"/></>,
     history: <><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></>,
     folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>,
     tag: <><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z"/><circle cx="8" cy="8" r="1.5"/></>,
@@ -722,6 +724,12 @@ function Sidebar() {
                 border:'1px solid rgba(59,130,246,0.35)' }}>{pendingDeposits}</span>
             )}
           </button>
+          <a className="nav-item" href="https://supplier-hub-puce.vercel.app/" target="_blank" rel="noopener noreferrer"
+            onClick={() => setSidebarOpen(false)}
+            style={{ textDecoration: 'none' }} title="เปิดระบบหาร้านค้า / ซัพพลายเออร์ (แท็บใหม่)">
+            <Icon name="store" /> ร้านค้า
+            <Icon name="external" size={13} style={{ marginLeft: 'auto', opacity: 0.55 }} />
+          </a>
 
           {app.isOwner && (
             <>
