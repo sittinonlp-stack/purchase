@@ -1017,6 +1017,9 @@ function InstallmentPayPanel({ rec }) {
   const [date, setDate] = useState(todayStr());
   const [slips, setSlips] = useState([]);
   const [note, setNote] = useState('');
+  // Lightbox สำหรับดูรูปสลิปของแต่ละงวด
+  const [lbImgs, setLbImgs] = useState([]);
+  const [lbIdx, setLbIdx] = useState(-1);
 
   const openPay = (it) => { setPayId(it.id); setDate(it.date || todayStr()); setSlips(it.slips || []); setNote(it.note || ''); };
   const commit = (nextInst) => {
@@ -1057,10 +1060,25 @@ function InstallmentPayPanel({ rec }) {
                   {it.detail && <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 2 }}>{it.detail}</div>}
                   {it.paid && it.date && <div style={{ fontSize: 11.5, color: 'var(--accent-ink)', marginTop: 3 }}>✓ จ่ายแล้ว {fmtDate(it.date)}{(it.slips || []).length > 0 ? ` · แนบสลิป ${it.slips.length}` : ''}</div>}
                 </div>
-                {it.paid
-                  ? <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => unpay(it)}>ยกเลิกจ่าย</button>
-                  : <button className="btn btn-accent btn-sm" onClick={() => canPay ? openPay(it) : app.pushToast('กรุณากดอนุมัติบิลก่อน จึงจะจ่ายงวดได้', 'error')}><Icon name="check" size={13} /> จ่ายงวดนี้</button>}
+                <div className="row gap-8" style={{ flexShrink: 0 }}>
+                  {it.paid && (it.slips || []).length > 0 &&
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setLbImgs(it.slips); setLbIdx(0); }}><Icon name="image" size={13} /> ดูสลิป ({it.slips.length})</button>}
+                  {it.paid
+                    ? <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => unpay(it)}>ยกเลิกจ่าย</button>
+                    : <button className="btn btn-accent btn-sm" onClick={() => canPay ? openPay(it) : app.pushToast('กรุณากดอนุมัติบิลก่อน จึงจะจ่ายงวดได้', 'error')}><Icon name="check" size={13} /> จ่ายงวดนี้</button>}
+                </div>
               </div>
+              {it.paid && (it.slips || []).length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 6, marginTop: 10 }}>
+                  {(it.slips || []).map((img, si) => (
+                    <button key={si} type="button" onClick={() => { setLbImgs(it.slips); setLbIdx(si); }}
+                      style={{ display: 'block', aspectRatio: '3/4', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg-2)', padding: 0, cursor: 'zoom-in' }}>
+                      <img className="zoomable" src={imgSrc(img)} alt={imgAlt(img, `สลิปงวด ${idx + 1}`)}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -1083,6 +1101,8 @@ function InstallmentPayPanel({ rec }) {
         </div>,
         document.body
       )}
+
+      <window.ImageLightbox images={lbImgs} index={lbIdx} onClose={() => setLbIdx(-1)} onChange={setLbIdx} />
     </div>
   );
 }
