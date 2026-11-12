@@ -2192,6 +2192,16 @@ function DepositReturnForm({ rec }) {
   const [returnDate, setReturnDate] = useState(todayStr());
   const [returnImages, setReturnImages] = useState([]);
   const [returnNote, setReturnNote] = useState('');
+  const autoRef = useRef(null);
+
+  // เปิดฟอร์มอัตโนมัติ + เลื่อนมาให้เห็น เมื่อกดปุ่ม "รับคืน" จากหน้ารายการ
+  useEffect(() => {
+    if (window.__depositReturnFocus === rec.id) {
+      window.__depositReturnFocus = null;
+      setExpanded(true);
+      setTimeout(() => { try { autoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 300);
+    }
+  }, [rec.id]);
 
   const handleConfirm = () => {
     if (!returnImages.length) {
@@ -2208,7 +2218,7 @@ function DepositReturnForm({ rec }) {
   };
 
   return (
-    <div>
+    <div ref={autoRef}>
       {/* Status row */}
       <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px',
         background:'rgba(234,179,8,0.08)', border:'1px solid rgba(234,179,8,0.3)', borderRadius:10 }}>
@@ -3170,10 +3180,17 @@ window.DepositsView = function DepositsView() {
                       </td>
                       <td>
                         {pending ? (
-                          <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:'nowrap',
-                            background:'rgba(234,179,8,0.15)', color:'#ca8a04', border:'1px solid rgba(234,179,8,0.35)' }}>
-                            ⏳ รอรับคืน
-                          </span>
+                          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-start', gap:6 }}>
+                            <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:'nowrap',
+                              background:'rgba(234,179,8,0.15)', color:'#ca8a04', border:'1px solid rgba(234,179,8,0.35)' }}>
+                              ⏳ รอรับคืน
+                            </span>
+                            <button className="btn btn-accent btn-sm"
+                              onClick={(e) => { e.stopPropagation(); window.__depositReturnFocus = r.id; app.setDetailId(r.id); }}
+                              title="แนบสลิปโอนคืน แล้วยืนยันรับเงินประกันคืน">
+                              <Icon name="check" size={12} /> รับคืน
+                            </button>
+                          </div>
                         ) : (
                           <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:'nowrap',
                             background:'rgba(22,163,74,0.13)', color:'#16a34a', border:'1px solid rgba(22,163,74,0.3)' }}>
