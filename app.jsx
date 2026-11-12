@@ -82,6 +82,7 @@ function Shell() {
   if (view === 'users')        { title = 'จัดการผู้ใช้'; sub = 'กำหนดสิทธิ์การเข้าถึง'; }
   if (view === 'deposits')     { title = 'เงินประกันสินค้า'; sub = 'ติดตามเงินมัดจำและสถานะการรับคืน'; }
   if (view === 'company-finance') { title = 'บัญชีบริษัท'; sub = 'รายรับค่าดำเนินการ 15% · รายจ่ายบริษัท · กำไร/ขาดทุน'; }
+  if (view === 'staff-opex')   { title = 'ลงค่าดำเนินการ'; sub = 'บันทึกค่าใช้จ่ายบริษัท · แนบใบเสร็จ · ติดตามสถานะ'; }
   if (view === 'debtors')      { title = 'ยอดลูกหนี้บริษัท'; sub = 'ติดตามยอดค้างชำระ · วันที่ชำระ · คงเหลือ · ออกใบแจ้งยอด'; }
 
   const initial = app.editingId ? app.records.find(r => r.id === app.editingId) : null;
@@ -140,6 +141,7 @@ function Shell() {
           {view === 'users'      && app.isAdmin && <window.UsersView />}
           {view === 'company-finance' && app.isOwner && <window.CompanyFinanceView />}
           {view === 'debtors'    && app.isOwner && <window.DebtorsView />}
+          {view === 'staff-opex' && <window.StaffOpexView />}
           {view === 'deposits'   && <window.DepositsView />}
           {view === 'new-labor' && (
             <window.LaborForm

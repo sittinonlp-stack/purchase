@@ -1020,11 +1020,15 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── บัญชีบริษัท: รายจ่ายบริษัท (เฉพาะ admin) ──────────
   const addCompanyExpense = useCallback((e) => {
-    const ne = { note: '', meta: {}, ...e, id: e.id || newId(), amount: Number(e.amount || 0) };
+    const ne = { note: '', meta: {}, status: 'approved', ...e, id: e.id || newId(), amount: Number(e.amount || 0) };
     setCompanyExpenses((xs) => [ne, ...xs]);
     if (dbOnline) dbSync(window.db.insertCompanyExpense(ne), 'insertCompanyExpense');
     return ne;
   }, [dbOnline, dbSync]);
+
+  // อนุมัติ / ไม่อนุมัติ รายการที่พนักงานลง (owner เท่านั้น — บังคับด้วย RLS)
+  const approveCompanyExpense = useCallback((id) => updateCompanyExpense(id, { status: 'approved' }), []); // eslint-disable-line
+  const rejectCompanyExpense  = useCallback((id) => updateCompanyExpense(id, { status: 'rejected' }), []); // eslint-disable-line
 
   const updateCompanyExpense = useCallback((id, patch) => {
     setCompanyExpenses((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -1038,7 +1042,7 @@ window.AppProvider = function AppProvider({ children }) {
 
   // ── บัญชีบริษัท: ประเภทค่าใช้จ่าย (เฉพาะ admin) ───────
   const addCompanyCat = useCallback((c) => {
-    const nc = { color: '#9ca3af', ...c, id: c.id || newId() };
+    const nc = { color: '#9ca3af', staffAllowed: false, staffMode: 'approve', ...c, id: c.id || newId() };
     setCompanyExpenseCats((cs) => [...cs, nc]);
     if (dbOnline) dbSync(window.db.insertCompanyCat(nc), 'insertCompanyCat');
     return nc;
@@ -1156,6 +1160,8 @@ window.AppProvider = function AppProvider({ children }) {
     laborContracts, addLaborContract, updateLaborContract, deleteLaborContract,
     incomeContracts, addIncomeContract, updateIncomeContract, deleteIncomeContract,
     companyExpenses, addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
+    approveCompanyExpense, rejectCompanyExpense,
+    currentUserId: session?.user?.id || null,
     companyExpenseCats, addCompanyCat, updateCompanyCat, deleteCompanyCat,
     companyCreditors, addCompanyCreditor, updateCompanyCreditor, deleteCompanyCreditor,
     companyDebtors, addCompanyDebtor, updateCompanyDebtor, deleteCompanyDebtor,

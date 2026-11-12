@@ -16,6 +16,10 @@ function imgAlt(img, fallback) {
   return img.name || fallback || '';
 }
 
+// รายจ่ายบริษัทที่ "เข้าบัญชีแล้ว" (approved) — ใช้กับการรวมยอดทุกจุด
+// (รายการพนักงานที่ยัง 'pending' / 'rejected' ไม่นับ เพื่อไม่ให้ยอดเพี้ยน · ของเดิมไม่มี status = นับ)
+function isPostedExpense(e) { return !e || !e.status || e.status === 'approved'; }
+
 
 
 // ---- Dashboard ----
@@ -5204,7 +5208,7 @@ function doExportCompanyExpenseReport({ companyExpenses=[], companyExpenseCats=[
   const addCat = (name, amt, cnt, color) => { if(!byCat[name]) byCat[name]={name, total:0, count:0, color: color||colorOf(name)}; byCat[name].total+=amt; byCat[name].count+=(cnt||0); };
   const addMonth = (ym, amt) => { if(ym) byMonth[ym]=(byMonth[ym]||0)+amt; };
 
-  const exps = companyExpenses.filter(e=>inR(e.date) && catIn(e.category||'—'));
+  const exps = companyExpenses.filter(e=>isPostedExpense(e) && inR(e.date) && catIn(e.category||'—'));
   exps.forEach(e=>{ addCat(e.category||'—', Number(e.amount||0), 1); addMonth((e.date||'').slice(0,7), Number(e.amount||0)); });
   const recSrc = companyRecurring.filter(r=>catIn(r.category));
   const recPm = recurringByMonth(recSrc, fromDate, toDate);
@@ -5441,15 +5445,30 @@ function CompanyCatManagerModal({ open, onClose }) {
               <button className="btn btn-ghost btn-sm" onClick={()=>setEditId(null)} title="ยกเลิก"><Icon name="x" size={13}/></button>
             </div>
           ) : (
-            <div key={c.id} className="row between" style={{ padding:'8px 10px', border:'1px solid var(--line)', borderRadius:8 }}>
-              <span className="row gap-8" style={{ alignItems:'center' }}>
-                <span style={{ width:12, height:12, borderRadius:'50%', background:c.color, display:'inline-block' }} />
-                {c.name}
-              </span>
-              <span className="row gap-8">
-                <button className="topbar-icon-btn" style={{ width:30, height:30 }} onClick={()=>startEdit(c)} title="แก้ไขประเภท"><Icon name="edit" size={13}/></button>
-                <button className="topbar-icon-btn" style={{ width:30, height:30, color:'var(--danger)' }} onClick={()=>del(c)} title="ลบประเภท"><Icon name="trash" size={13}/></button>
-              </span>
+            <div key={c.id} style={{ padding:'8px 10px', border:'1px solid var(--line)', borderRadius:8, display:'flex', flexDirection:'column', gap:8 }}>
+              <div className="row between">
+                <span className="row gap-8" style={{ alignItems:'center' }}>
+                  <span style={{ width:12, height:12, borderRadius:'50%', background:c.color, display:'inline-block' }} />
+                  {c.name}
+                </span>
+                <span className="row gap-8">
+                  <button className="topbar-icon-btn" style={{ width:30, height:30 }} onClick={()=>startEdit(c)} title="แก้ไขประเภท"><Icon name="edit" size={13}/></button>
+                  <button className="topbar-icon-btn" style={{ width:30, height:30, color:'var(--danger)' }} onClick={()=>del(c)} title="ลบประเภท"><Icon name="trash" size={13}/></button>
+                </span>
+              </div>
+              <div className="row gap-8" style={{ alignItems:'center', flexWrap:'wrap', fontSize:12, paddingLeft:20 }}>
+                <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', color:'var(--ink-2)' }}>
+                  <input type="checkbox" checked={!!c.staffAllowed} onChange={e=>app.updateCompanyCat(c.id, { staffAllowed: e.target.checked })} />
+                  ให้พนักงานลงได้
+                </label>
+                {c.staffAllowed && (
+                  <select value={c.staffMode||'approve'} onChange={e=>app.updateCompanyCat(c.id, { staffMode: e.target.value })}
+                    style={{ ...IS, padding:'4px 8px', fontSize:12, cursor:'pointer' }} title="โหมดการลงของพนักงาน">
+                    <option value="direct">เข้าบัญชีทันที (มีใบเสร็จ)</option>
+                    <option value="approve">ต้องรออนุมัติก่อน</option>
+                  </select>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -5621,7 +5640,7 @@ function CompanyReportModal({ open, onClose }) {
     const inRange = (d) => d && d>=fromDate && d<=toDate;
     const incomeGross = (app.records||[]).filter(r=>window.isIncome(r) && inRange(r.date)).reduce((s,r)=>s+computeTotals(r).total,0);
     const companyIncome = incomeGross * COMPANY_FEE_RATE;
-    const expenses = (app.companyExpenses||[]).filter(e=>inRange(e.date) && sel.includes(e.category));
+    const expenses = (app.companyExpenses||[]).filter(e=>isPostedExpense(e) && inRange(e.date) && sel.includes(e.category));
     // รายจ่ายประจำ (กระจายเข้าทุกเดือนในช่วง) เฉพาะประเภทที่เลือก + ยอดผ่อนเจ้าหนี้ (รวมเสมอ เหมือนรายงานอื่น)
     const recByCat = recurringByMonth((app.companyRecurring||[]).filter(r=>sel.includes(r.category)), fromDate, toDate).byCat;
     const recTotal = Object.values(recByCat).reduce((s,v)=>s+v,0);
@@ -5727,7 +5746,7 @@ function doExportProfitReport(opts) {
     }
   });
   companyExpenses.forEach(e => {
-    if (!inR(e.date) || !catOk(e)) return;
+    if (!isPostedExpense(e) || !inR(e.date) || !catOk(e)) return;
     ens(e.date.slice(0,7)).opex += Number(e.amount||0);
     const c = e.category || '—';
     catOpex[c] = (catOpex[c] || 0) + Number(e.amount||0);
@@ -5967,7 +5986,7 @@ function ProfitReportModal({ open, onClose }) {
     const inR = d => d && d>=fromDate && d<=toDate;
     let income=0, cost=0, opex=0;
     (app.records||[]).forEach(r=>{ if(!inR(r.date))return; if(window.isIncome(r))income+=computeTotals(r).total; else if(isExpense(r)&&countsInDashboard(r))cost+=computeTotals(r).total; });
-    (app.companyExpenses||[]).forEach(e=>{ if(inR(e.date) && selCats.includes(e.category))opex+=Number(e.amount||0); });
+    (app.companyExpenses||[]).forEach(e=>{ if(isPostedExpense(e) && inR(e.date) && selCats.includes(e.category))opex+=Number(e.amount||0); });
     opex += loanPaymentsByMonth(app.companyCreditors, fromDate, toDate).total;
     const recSrc = (app.companyRecurring||[]).filter(r=>selCats.includes(r.category));
     opex += recurringByMonth(recSrc, fromDate, toDate).total;
@@ -6087,7 +6106,7 @@ function CompanyExpenseReportModal({ open, onClose }) {
   const preview = useMemo(() => {
     const inR = d => d && d>=fromDate && d<=toDate;
     const catIn = n => selCats.includes(n);
-    let t = (app.companyExpenses||[]).filter(e=>inR(e.date) && catIn(e.category||'—')).reduce((s,e)=>s+Number(e.amount||0),0);
+    let t = (app.companyExpenses||[]).filter(e=>isPostedExpense(e) && inR(e.date) && catIn(e.category||'—')).reduce((s,e)=>s+Number(e.amount||0),0);
     t += recurringByMonth((app.companyRecurring||[]).filter(r=>catIn(r.category)), fromDate, toDate).total;
     if (catIn(LOAN_CAT)) t += loanPaymentsByMonth(app.companyCreditors, fromDate, toDate).total;
     return t;
@@ -6153,6 +6172,179 @@ function CompanyExpenseReportModal({ open, onClose }) {
   );
 }
 
+// ---- หน้า "ลงค่าดำเนินการ" — พนักงานลงรายจ่ายบริษัท + owner รีวิว/อนุมัติ ----
+window.StaffOpexView = function StaffOpexView() {
+  const app = window.useApp();
+  const isOwner = app.isOwner;
+  const allowedCats = (app.companyExpenseCats || []).filter(c => c.staffAllowed);
+  const myName = app.userProfile?.full_name || app.userProfile?.email || 'ฉัน';
+
+  const [date, setDate]     = useState(todayStr());
+  const [cat, setCat]       = useState('');
+  const [amount, setAmount] = useState('');
+  const [note, setNote]     = useState('');
+  const [slips, setSlips]   = useState([]);
+  const [editId, setEditId] = useState(null);
+  const [lbImgs, setLbImgs] = useState([]);
+  const [lbIdx, setLbIdx]   = useState(-1);
+
+  const catObj  = allowedCats.find(c => c.name === cat) || null;
+  const mode    = catObj?.staffMode || 'approve';
+  const needSlip = mode === 'direct';
+
+  const resetForm = () => { setEditId(null); setDate(todayStr()); setCat(''); setAmount(''); setNote(''); setSlips([]); };
+
+  const submit = () => {
+    if (!cat) return app.pushToast('เลือกประเภทค่าใช้จ่าย', 'error');
+    if (!(Number(amount) > 0)) return app.pushToast('ระบุจำนวนเงิน', 'error');
+    if (needSlip && slips.length === 0) return app.pushToast('หมวดนี้ต้องแนบใบเสร็จ/สลิปก่อนบันทึก', 'error');
+    const meta = { slips, by: { name: myName, email: app.userProfile?.email || '' } };
+    if (editId) {
+      app.updateCompanyExpense(editId, { date, category: cat, amount: Number(amount), note: note.trim(), meta });
+      app.pushToast('แก้ไขรายการแล้ว ✓');
+    } else {
+      const status = isOwner ? 'approved' : (mode === 'direct' ? 'approved' : 'pending');
+      app.addCompanyExpense({ date, category: cat, amount: Number(amount), note: note.trim(), meta, status });
+      app.pushToast(status === 'pending' ? 'ส่งขออนุมัติแล้ว — รอเจ้าของอนุมัติ ⏳' : 'บันทึกค่าดำเนินการแล้ว ✓');
+    }
+    resetForm();
+  };
+
+  const startEdit = (e) => {
+    setEditId(e.id); setDate(e.date || todayStr()); setCat(e.category || '');
+    setAmount(String(e.amount || '')); setNote(e.note || ''); setSlips(e.meta?.slips || []);
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (x) {}
+  };
+  const removeEntry = (e) => { if (confirm('ลบรายการนี้? การลบย้อนกลับไม่ได้')) { app.deleteCompanyExpense(e.id); if (editId === e.id) resetForm(); } };
+
+  const entries = (app.companyExpenses || [])
+    .filter(e => isOwner ? (e.meta?.by || e.status === 'pending' || e.status === 'rejected') : true)
+    .slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const pendingCount = entries.filter(e => e.status === 'pending').length;
+
+  const statusBadge = (st) => {
+    const map = {
+      approved: { t: '✓ เข้าบัญชีแล้ว', bg: 'rgba(22,163,74,0.13)', c: '#16a34a' },
+      pending:  { t: '⏳ รออนุมัติ',    bg: 'rgba(234,179,8,0.15)', c: '#ca8a04' },
+      rejected: { t: '✕ ไม่อนุมัติ',    bg: 'rgba(220,38,38,0.12)', c: '#dc2626' },
+    };
+    const s = map[st || 'approved'] || map.approved;
+    return <span style={{ padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: s.bg, color: s.c, whiteSpace: 'nowrap' }}>{s.t}</span>;
+  };
+  const colorOf = (n) => (app.companyExpenseCats || []).find(c => c.name === n)?.color || '#9ca3af';
+
+  const IS = { background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 8, padding: '9px 12px', fontSize: 13.5, color: 'var(--ink-1)', fontFamily: 'inherit', width: '100%', outline: 'none', boxSizing: 'border-box' };
+  const LS = { fontSize: 12, color: 'var(--ink-3)', marginBottom: 5, display: 'block' };
+  const H3 = { fontSize: 13, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 };
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">ลงค่าดำเนินการ</h1>
+          <div className="page-sub">{isOwner ? 'รีวิว/อนุมัติรายการที่พนักงานลง + ลงรายจ่ายบริษัทได้' : 'บันทึกค่าใช้จ่ายบริษัท แนบใบเสร็จ และติดตามสถานะ'}</div>
+        </div>
+        {isOwner && pendingCount > 0 && <span className="badge amber" style={{ alignSelf: 'center' }}>รออนุมัติ {pendingCount}</span>}
+      </div>
+
+      {allowedCats.length === 0 ? (
+        <div className="card" style={{ maxWidth: 720, textAlign: 'center', padding: '28px 20px', color: 'var(--ink-3)' }}>
+          {isOwner
+            ? 'ยังไม่ได้เปิดประเภทไหนให้พนักงานลง — ไปที่ "บัญชีบริษัท › จัดการประเภท" แล้วติ๊ก "ให้พนักงานลงได้" ในหมวดที่ต้องการ'
+            : 'ยังไม่มีประเภทค่าใช้จ่ายที่เปิดให้ลง — แจ้งเจ้าของบริษัทเพื่อเปิดสิทธิ์ให้'}
+        </div>
+      ) : (
+        <div className="card" style={{ maxWidth: 720, marginBottom: 16 }}>
+          <h3 style={H3}>{editId ? 'แก้ไขรายการ (รออนุมัติ)' : 'ลงรายจ่ายใหม่'}</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div><label style={LS}>วันที่</label><input type="date" style={IS} value={date} onChange={e => setDate(e.target.value)} /></div>
+              <div><label style={LS}>จำนวนเงิน (บาท)</label><window.MoneyInput style={{ ...IS, fontFamily: 'JetBrains Mono, monospace' }} value={amount} onChange={setAmount} placeholder="0.00" /></div>
+            </div>
+            <div>
+              <label style={LS}>ประเภทค่าใช้จ่าย</label>
+              <select style={{ ...IS, cursor: 'pointer' }} value={cat} onChange={e => setCat(e.target.value)}>
+                <option value="">— เลือกประเภท —</option>
+                {allowedCats.map(c => (
+                  <option key={c.id} value={c.name}>{c.name}{c.staffMode === 'direct' ? ' (เข้าบัญชีทันที)' : ' (รออนุมัติ)'}</option>
+                ))}
+              </select>
+              {cat && (
+                <div style={{ fontSize: 11.5, marginTop: 6, color: needSlip ? '#16a34a' : '#ca8a04' }}>
+                  {needSlip ? '• จ่ายแล้วมีใบเสร็จ → เข้าบัญชีบริษัททันที (ต้องแนบใบเสร็จ)' : '• ต้องรอเจ้าของอนุมัติก่อน จึงเข้าบัญชี'}
+                </div>
+              )}
+            </div>
+            <div><label style={LS}>หมายเหตุ / รายละเอียด</label><input style={IS} value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น ค่าน้ำมันไปหน้างานคุณโอ๋ / ค่าที่พักต่างจังหวัด" /></div>
+            <div>
+              <label style={LS}>แนบใบเสร็จ / สลิป {needSlip && <span style={{ color: 'var(--danger)' }}>* (บังคับ)</span>}</label>
+              <window.ImageUploader images={slips} onChange={setSlips} max={5} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              {editId && <button className="btn btn-ghost" onClick={resetForm}>ยกเลิก</button>}
+              <button className="btn btn-accent" onClick={submit}><Icon name="save" size={13} /> {editId ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="card" style={{ maxWidth: 720 }}>
+        <h3 style={H3}>{isOwner ? `รายการที่พนักงานลง (${entries.length})` : `ประวัติการลงของฉัน (${entries.length})`}</h3>
+        {entries.length === 0 ? (
+          <div className="text-small text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>ยังไม่มีรายการ</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {entries.map(e => {
+              const canStaffEdit = !isOwner && e.status === 'pending';
+              const imgs = e.meta?.slips || [];
+              return (
+                <div key={e.id} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+                  <div className="row between" style={{ alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: colorOf(e.category), display: 'inline-block' }} />
+                        <span style={{ fontWeight: 600 }}>{e.category || '—'}</span>
+                        {statusBadge(e.status)}
+                      </div>
+                      <div className="mono" style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>฿{fmt(Number(e.amount || 0))}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2 }}>
+                        {fmtDate(e.date)}{e.note ? ' · ' + e.note : ''}{isOwner && e.meta?.by?.name ? ' · ลงโดย ' + e.meta.by.name : ''}
+                      </div>
+                    </div>
+                    <div className="row gap-8" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {isOwner && e.status === 'pending' && <>
+                        <button className="btn btn-accent btn-sm" onClick={() => app.approveCompanyExpense(e.id)}><Icon name="check" size={12} /> อนุมัติ</button>
+                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => { if (confirm('ไม่อนุมัติรายการนี้?')) app.rejectCompanyExpense(e.id); }}>ไม่อนุมัติ</button>
+                      </>}
+                      {canStaffEdit && <>
+                        <button className="btn btn-ghost btn-sm" onClick={() => startEdit(e)}><Icon name="edit" size={12} /> แก้ไข</button>
+                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => removeEntry(e)}>ลบ</button>
+                      </>}
+                      {isOwner && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => removeEntry(e)} title="ลบรายการ"><Icon name="trash" size={12} /></button>}
+                    </div>
+                  </div>
+                  {imgs.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 6, marginTop: 10 }}>
+                      {imgs.map((img, si) => (
+                        <button key={si} type="button" onClick={() => { setLbImgs(imgs); setLbIdx(si); }}
+                          style={{ display: 'block', aspectRatio: '3/4', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg-2)', padding: 0, cursor: 'zoom-in' }}>
+                          <img className="zoomable" src={imgSrc(img)} alt={imgAlt(img, 'ใบเสร็จ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <window.ImageLightbox images={lbImgs} index={lbIdx} onClose={() => setLbIdx(-1)} onChange={setLbIdx} />
+    </>
+  );
+};
+
 // ---- หน้าบัญชีบริษัท ----
 window.CompanyFinanceView = function CompanyFinanceView() {
   const app = window.useApp();
@@ -6207,7 +6399,7 @@ window.CompanyFinanceView = function CompanyFinanceView() {
   const incomeRecs = (app.records||[]).filter(r=>window.isIncome(r) && inRange(r.date));
   const incomeGross = incomeRecs.reduce((s,r)=>s+computeTotals(r).total,0);
   const companyIncome = incomeGross * COMPANY_FEE_RATE;
-  const expenses = (app.companyExpenses||[]).filter(e=>inRange(e.date)).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const expenses = (app.companyExpenses||[]).filter(e=>isPostedExpense(e) && inRange(e.date)).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const expenseTotal = expenses.reduce((s,e)=>s+Number(e.amount||0),0);
   const loanOpexTotal = loanPaymentsByMonth(app.companyCreditors, bounds.from, bounds.to).total;
   const recData = recurringByMonth(app.companyRecurring, bounds.from, bounds.to);

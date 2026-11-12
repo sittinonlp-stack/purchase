@@ -724,6 +724,9 @@ function Sidebar() {
                 border:'1px solid rgba(59,130,246,0.35)' }}>{pendingDeposits}</span>
             )}
           </button>
+          <button className={"nav-item" + (view === 'staff-opex' ? " active" : "")} onClick={() => go('staff-opex')}>
+            <Icon name="clipboard" /> ลงค่าดำเนินการ
+          </button>
           <a className="nav-item" href="https://supplier-hub-puce.vercel.app/" target="_blank" rel="noopener noreferrer"
             onClick={() => setSidebarOpen(false)}
             style={{ textDecoration: 'none' }} title="เปิดระบบหาร้านค้า / ซัพพลายเออร์ (แท็บใหม่)">

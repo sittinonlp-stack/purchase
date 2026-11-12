@@ -94,13 +94,25 @@
   }
 
   // ── บัญชีบริษัท (company finance) — เฉพาะ admin ──
+  function dbCompanyCat(row) {
+    return { id: row.id, name: row.name, color: row.color || '#9ca3af', sortOrder: Number(row.sort_order || 0),
+      staffAllowed: Boolean(row.staff_allowed), staffMode: row.staff_mode || 'approve' };
+  }
+  function jsCompanyCat(c) {
+    const o = { id: c.id, name: c.name, color: c.color || '#9ca3af' };
+    if ('staffAllowed' in c) o.staff_allowed = Boolean(c.staffAllowed);
+    if ('staffMode'    in c) o.staff_mode    = c.staffMode || 'approve';
+    return o;
+  }
   function dbCompanyExpense(row) {
     return {
       id: row.id, date: row.date || '', category: row.category || '',
       amount: Number(row.amount || 0), note: row.note || '', meta: row.meta || {},
+      createdBy: row.created_by || null, status: row.status || 'approved',
     };
   }
   function jsCompanyExpense(e) {
+    // created_by + status กำหนดโดย trigger ฝั่ง DB (กันพนักงานตั้งเอง) — ส่งเฉพาะข้อมูลหลัก
     return {
       id: e.id, date: e.date || null, category: e.category || '',
       amount: Number(e.amount || 0), note: e.note || '', meta: e.meta || {},
@@ -510,7 +522,7 @@
             client.from('company_expense_categories').select('*').order('created_at'),
           ]);
           if (!ceErr)  companyExpenses    = (ceRows  || []).map(dbCompanyExpense);
-          if (!cecErr) companyExpenseCats = (cecRows || []).map(dbCat);
+          if (!cecErr) companyExpenseCats = (cecRows || []).map(dbCompanyCat);
         } catch (e) { /* ตารางบัญชีบริษัทยังไม่มี หรือไม่มีสิทธิ์ */ }
 
         // เจ้าหนี้ / เงินกู้ (owner-only)
@@ -724,6 +736,7 @@
       if ('amount'   in patch) dbPatch.amount   = Number(patch.amount || 0);
       if ('note'     in patch) dbPatch.note     = patch.note || '';
       if ('meta'     in patch) dbPatch.meta     = patch.meta || {};
+      if ('status'   in patch) dbPatch.status   = patch.status;
       if (Object.keys(dbPatch).length === 0) return;
       const { error } = await window.supabaseClient.from('company_expenses').update(dbPatch).eq('id', id);
       if (error) throw error;
@@ -733,13 +746,15 @@
       if (error) throw error;
     },
     async insertCompanyCat(c) {
-      const { error } = await window.supabaseClient.from('company_expense_categories').insert(jsCat(c));
+      const { error } = await window.supabaseClient.from('company_expense_categories').insert(jsCompanyCat(c));
       if (error) throw error;
     },
     async updateCompanyCat(id, patch) {
       const dbPatch = {};
-      if ('name'  in patch) dbPatch.name  = patch.name || '';
-      if ('color' in patch) dbPatch.color = patch.color || '#9ca3af';
+      if ('name'         in patch) dbPatch.name          = patch.name || '';
+      if ('color'        in patch) dbPatch.color         = patch.color || '#9ca3af';
+      if ('staffAllowed' in patch) dbPatch.staff_allowed = Boolean(patch.staffAllowed);
+      if ('staffMode'    in patch) dbPatch.staff_mode    = patch.staffMode || 'approve';
       if (Object.keys(dbPatch).length === 0) return;
       const { error } = await window.supabaseClient.from('company_expense_categories').update(dbPatch).eq('id', id);
       if (error) throw error;
