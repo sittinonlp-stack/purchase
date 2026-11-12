@@ -5462,11 +5462,9 @@ function CompanyCatManagerModal({ open, onClose }) {
                   ให้พนักงานลงได้
                 </label>
                 {c.staffAllowed && (
-                  <select value={c.staffMode||'approve'} onChange={e=>app.updateCompanyCat(c.id, { staffMode: e.target.value })}
-                    style={{ ...IS, padding:'4px 8px', fontSize:12, cursor:'pointer' }} title="โหมดการลงของพนักงาน">
-                    <option value="direct">เข้าบัญชีทันที (มีใบเสร็จ)</option>
-                    <option value="approve">ต้องรออนุมัติก่อน</option>
-                  </select>
+                  <span style={{ fontSize:11, color:'var(--ink-3)', display:'inline-flex', alignItems:'center', gap:4 }}>
+                    <Icon name="clock" size={12}/> พนักงานลงแล้วต้องรออนุมัติ
+                  </span>
                 )}
               </div>
             </div>
@@ -6188,24 +6186,21 @@ window.StaffOpexView = function StaffOpexView() {
   const [lbImgs, setLbImgs] = useState([]);
   const [lbIdx, setLbIdx]   = useState(-1);
 
-  const catObj  = allowedCats.find(c => c.name === cat) || null;
-  const mode    = catObj?.staffMode || 'approve';
-  const needSlip = mode === 'direct';
-
   const resetForm = () => { setEditId(null); setDate(todayStr()); setCat(''); setAmount(''); setNote(''); setSlips([]); };
 
   const submit = () => {
     if (!cat) return app.pushToast('เลือกประเภทค่าใช้จ่าย', 'error');
     if (!(Number(amount) > 0)) return app.pushToast('ระบุจำนวนเงิน', 'error');
-    if (needSlip && slips.length === 0) return app.pushToast('หมวดนี้ต้องแนบใบเสร็จ/สลิปก่อนบันทึก', 'error');
+    if (slips.length === 0) return app.pushToast('ต้องแนบใบเสร็จ/สลิปก่อนบันทึก', 'error');
     const meta = { slips, by: { name: myName, email: app.userProfile?.email || '' } };
     if (editId) {
       app.updateCompanyExpense(editId, { date, category: cat, amount: Number(amount), note: note.trim(), meta });
       app.pushToast('แก้ไขรายการแล้ว ✓');
     } else {
-      const status = isOwner ? 'approved' : (mode === 'direct' ? 'approved' : 'pending');
+      // พนักงานลง → 'รออนุมัติ' เสมอ · เจ้าของลงเอง → เข้าบัญชีทันที
+      const status = isOwner ? 'approved' : 'pending';
       app.addCompanyExpense({ date, category: cat, amount: Number(amount), note: note.trim(), meta, status });
-      app.pushToast(status === 'pending' ? 'ส่งขออนุมัติแล้ว — รอเจ้าของอนุมัติ ⏳' : 'บันทึกค่าดำเนินการแล้ว ✓');
+      app.pushToast(isOwner ? 'บันทึกค่าดำเนินการแล้ว ✓' : 'ส่งขออนุมัติแล้ว — รอเจ้าของอนุมัติ ⏳');
     }
     resetForm();
   };
@@ -6266,18 +6261,18 @@ window.StaffOpexView = function StaffOpexView() {
               <select style={{ ...IS, cursor: 'pointer' }} value={cat} onChange={e => setCat(e.target.value)}>
                 <option value="">— เลือกประเภท —</option>
                 {allowedCats.map(c => (
-                  <option key={c.id} value={c.name}>{c.name}{c.staffMode === 'direct' ? ' (เข้าบัญชีทันที)' : ' (รออนุมัติ)'}</option>
+                  <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
               </select>
-              {cat && (
-                <div style={{ fontSize: 11.5, marginTop: 6, color: needSlip ? '#16a34a' : '#ca8a04' }}>
-                  {needSlip ? '• จ่ายแล้วมีใบเสร็จ → เข้าบัญชีบริษัททันที (ต้องแนบใบเสร็จ)' : '• ต้องรอเจ้าของอนุมัติก่อน จึงเข้าบัญชี'}
+              {!isOwner && (
+                <div style={{ fontSize: 11.5, marginTop: 6, color: '#ca8a04' }}>
+                  <Icon name="clock" size={11} /> บันทึกแล้วจะส่งให้เจ้าของอนุมัติก่อน จึงเข้าบัญชีบริษัท
                 </div>
               )}
             </div>
             <div><label style={LS}>หมายเหตุ / รายละเอียด</label><input style={IS} value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น ค่าน้ำมันไปหน้างานคุณโอ๋ / ค่าที่พักต่างจังหวัด" /></div>
             <div>
-              <label style={LS}>แนบใบเสร็จ / สลิป {needSlip && <span style={{ color: 'var(--danger)' }}>* (บังคับ)</span>}</label>
+              <label style={LS}>แนบใบเสร็จ / สลิป <span style={{ color: 'var(--danger)' }}>* (บังคับ)</span></label>
               <window.ImageUploader images={slips} onChange={setSlips} max={5} />
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
