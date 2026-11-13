@@ -6258,40 +6258,87 @@ window.StaffOpexView = function StaffOpexView() {
             : 'ยังไม่มีประเภทค่าใช้จ่ายที่เปิดให้ลง — แจ้งเจ้าของบริษัทเพื่อเปิดสิทธิ์ให้'}
         </div>
       ) : formOpen ? (
-        <div className="card" style={{ maxWidth: 720, marginBottom: 16 }}>
-          <h3 style={H3}>{editId ? 'แก้ไขรายการ (รออนุมัติ)' : 'ลงรายจ่ายใหม่'}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div><label style={LS}>วันที่</label><input type="date" style={IS} value={date} onChange={e => setDate(e.target.value)} /></div>
-              <div><label style={LS}>จำนวนเงิน (บาท)</label><window.MoneyInput style={{ ...IS, fontFamily: 'JetBrains Mono, monospace' }} value={amount} onChange={setAmount} placeholder="0.00" /></div>
-            </div>
+        <div className="card" style={{ maxWidth: 520, marginBottom: 16, padding: 0, overflow: 'hidden' }}>
+          {/* หัวการ์ด */}
+          <div style={{ background: 'var(--accent)', padding: '15px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <label style={LS}>ประเภทค่าใช้จ่าย</label>
-              <select style={{ ...IS, cursor: 'pointer' }} value={cat} onChange={e => setCat(e.target.value)}>
-                <option value="">— เลือกประเภท —</option>
-                {allowedCats.map(c => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
-                ))}
-              </select>
-              {!isOwner && (
-                <div style={{ fontSize: 11.5, marginTop: 6, color: '#ca8a04' }}>
-                  <Icon name="clock" size={11} /> บันทึกแล้วจะส่งให้เจ้าของอนุมัติก่อน จึงเข้าบัญชีบริษัท
-                </div>
-              )}
+              <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.8)' }}>ค่าดำเนินการบริษัท</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginTop: 1 }}>{editId ? 'แก้ไขรายการ' : 'ลงรายจ่าย'}</div>
             </div>
-            <div><label style={LS}>หมายเหตุ / รายละเอียด</label><input style={IS} value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น ค่าน้ำมันไปหน้างานคุณโอ๋ / ค่าที่พักต่างจังหวัด" /></div>
+            <button type="button" onClick={closeForm} title="ปิด"
+              style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.18)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+
+          <div style={{ padding: '18px 16px 4px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* ยอดเงินเด่น */}
+            <div style={{ textAlign: 'center' }}>
+              <label style={{ ...LS, textAlign: 'center' }}>จำนวนเงิน (บาท)</label>
+              <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, borderBottom: '2px solid var(--accent)', padding: '0 10px 6px' }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>฿</span>
+                <window.MoneyInput value={amount} onChange={setAmount} placeholder="0"
+                  style={{ fontSize: 32, fontWeight: 700, textAlign: 'center', border: 'none', background: 'transparent', outline: 'none', width: 'min(52vw,180px)', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ink-1)', padding: 0 }} />
+              </div>
+            </div>
+
+            {/* วันที่ */}
             <div>
-              <label style={LS}>แนบใบเสร็จ / สลิป <span style={{ color: 'var(--danger)' }}>* (บังคับ)</span></label>
+              <label style={LS}><Icon name="calendar" size={13} /> วันที่</label>
+              <input type="date" style={{ ...IS, borderRadius: 12, padding: '12px 14px' }} value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+
+            {/* ประเภท — ปุ่ม chip */}
+            <div>
+              <label style={LS}><Icon name="tag" size={13} /> ประเภทค่าใช้จ่าย</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {allowedCats.map(c => {
+                  const on = cat === c.name;
+                  return (
+                    <button key={c.id} type="button" onClick={() => setCat(c.name)}
+                      style={{ padding: '9px 14px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
+                        border: '1px solid ' + (on ? 'var(--accent)' : 'var(--line)'),
+                        background: on ? 'var(--accent)' : 'var(--bg-2)',
+                        color: on ? '#fff' : 'var(--ink-2)',
+                        display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: on ? '#fff' : c.color, display: 'inline-block' }} />
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* หมายเหตุ */}
+            <div>
+              <label style={LS}><Icon name="edit" size={13} /> หมายเหตุ <span style={{ color: 'var(--ink-3)' }}>(ถ้ามี)</span></label>
+              <input style={{ ...IS, borderRadius: 12, padding: '12px 14px' }} value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น เติมน้ำมันไปหน้างานคุณโอ๋" />
+            </div>
+
+            {/* ใบเสร็จ */}
+            <div>
+              <label style={LS}><Icon name="receipt" size={13} /> ใบเสร็จ / สลิป <span style={{ color: 'var(--danger)' }}>* (บังคับ)</span></label>
               <window.ImageUploader images={slips} onChange={setSlips} max={5} />
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-ghost" onClick={closeForm}>ยกเลิก</button>
-              <button className="btn btn-accent" onClick={submit}><Icon name="save" size={13} /> {editId ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
-            </div>
+
+            {/* แจ้งเตือนรออนุมัติ */}
+            {!isOwner && (
+              <div style={{ background: 'rgba(234,179,8,0.12)', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <Icon name="clock" size={15} style={{ color: '#ca8a04', marginTop: 1, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: '#a16207', lineHeight: 1.5 }}>บันทึกแล้วจะส่งให้เจ้าของอนุมัติก่อน จึงเข้าบัญชีบริษัท</span>
+              </div>
+            )}
+          </div>
+
+          {/* ปุ่มด้านล่าง */}
+          <div style={{ padding: '14px 16px 16px', display: 'flex', gap: 10 }}>
+            <button className="btn btn-ghost" onClick={closeForm} style={{ flex: '0 0 auto' }}>ยกเลิก</button>
+            <button className="btn btn-accent" onClick={submit} style={{ flex: 1, justifyContent: 'center' }}><Icon name="save" size={14} /> {editId ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
           </div>
         </div>
       ) : null}
 
+      {!formOpen && (
       <div className="card" style={{ maxWidth: 720 }}>
         <h3 style={H3}>{isOwner ? `รายการที่พนักงานลง (${entries.length})` : `ประวัติการลงของฉัน (${entries.length})`}</h3>
         {entries.length === 0 ? (
@@ -6343,6 +6390,7 @@ window.StaffOpexView = function StaffOpexView() {
           </div>
         )}
       </div>
+      )}
 
       <window.ImageLightbox images={lbImgs} index={lbIdx} onClose={() => setLbIdx(-1)} onChange={setLbIdx} />
     </>
