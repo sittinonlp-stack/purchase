@@ -6184,6 +6184,7 @@ window.StaffOpexView = function StaffOpexView() {
   const [slips, setSlips]   = useState([]);
   const [editId, setEditId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
   const [lbImgs, setLbImgs] = useState([]);
   const [lbIdx, setLbIdx]   = useState(-1);
 
@@ -6344,53 +6345,93 @@ window.StaffOpexView = function StaffOpexView() {
         {entries.length === 0 ? (
           <div className="text-small text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>ยังไม่มีรายการ</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {entries.map(e => {
-              const canStaffEdit = !isOwner && e.status === 'pending';
-              const imgs = e.meta?.slips || [];
-              return (
-                <div key={e.id} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
-                  <div className="row between" style={{ alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: colorOf(e.category), display: 'inline-block' }} />
-                        <span style={{ fontWeight: 600 }}>{e.category || '—'}</span>
-                        {statusBadge(e.status)}
-                      </div>
-                      <div className="mono" style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>฿{fmt(Number(e.amount || 0))}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2 }}>
-                        {fmtDate(e.date)}{e.note ? ' · ' + e.note : ''}{isOwner && e.meta?.by?.name ? ' · ลงโดย ' + e.meta.by.name : ''}
-                      </div>
-                    </div>
-                    <div className="row gap-8" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      {isOwner && e.status === 'pending' && <>
-                        <button className="btn btn-accent btn-sm" onClick={() => app.approveCompanyExpense(e.id)}><Icon name="check" size={12} /> อนุมัติ</button>
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => { if (confirm('ไม่อนุมัติรายการนี้?')) app.rejectCompanyExpense(e.id); }}>ไม่อนุมัติ</button>
-                      </>}
-                      {canStaffEdit && <>
-                        <button className="btn btn-ghost btn-sm" onClick={() => startEdit(e)}><Icon name="edit" size={12} /> แก้ไข</button>
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => removeEntry(e)}>ลบ</button>
-                      </>}
-                      {isOwner && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => removeEntry(e)} title="ลบรายการ"><Icon name="trash" size={12} /></button>}
-                    </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {entries.map((e, i) => (
+              <button key={e.id} type="button" onClick={() => setDetail(e)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '11px 4px', borderTop: i === 0 ? 'none' : '1px solid var(--line)', fontFamily: 'inherit' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: colorOf(e.category), flexShrink: 0 }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{e.category || '—'}</span>
+                    {statusBadge(e.status)}
                   </div>
-                  {imgs.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 6, marginTop: 10 }}>
-                      {imgs.map((img, si) => (
-                        <button key={si} type="button" onClick={() => { setLbImgs(imgs); setLbIdx(si); }}
-                          style={{ display: 'block', aspectRatio: '3/4', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg-2)', padding: 0, cursor: 'zoom-in' }}>
-                          <img className="zoomable" src={imgSrc(img)} alt={imgAlt(img, 'ใบเสร็จ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {fmtDate(e.date)}{isOwner && e.meta?.by?.name ? ' · ' + e.meta.by.name : ''}{e.note ? ' · ' + e.note : ''}
+                  </div>
                 </div>
-              );
-            })}
+                <div className="mono" style={{ fontWeight: 700, fontSize: 14.5, flexShrink: 0 }}>฿{fmt(Number(e.amount || 0))}</div>
+                <Icon name="chevron" size={15} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
+              </button>
+            ))}
           </div>
         )}
       </div>
       )}
+
+      {detail && (() => {
+        const e = (app.companyExpenses || []).find(x => x.id === detail.id) || detail;
+        const imgs = e.meta?.slips || [];
+        const canStaffEdit = !isOwner && e.status === 'pending';
+        const approve = () => { app.approveCompanyExpense(e.id); app.pushToast('อนุมัติแล้ว — เข้าบัญชีบริษัท ✓'); setDetail(null); };
+        const reject  = () => { if (confirm('ไม่อนุมัติรายการนี้?')) { app.rejectCompanyExpense(e.id); setDetail(null); } };
+        const del     = () => { if (confirm('ลบรายการนี้? การลบย้อนกลับไม่ได้')) { app.deleteCompanyExpense(e.id); setDetail(null); } };
+        const rows = [
+          ['ประเภท', <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: colorOf(e.category), display: 'inline-block' }} />{e.category || '—'}</span>],
+          ['วันที่', fmtDate(e.date)],
+        ];
+        if (e.note) rows.push(['หมายเหตุ', e.note]);
+        if (isOwner && e.meta?.by?.name) rows.push(['ลงโดย', e.meta.by.name]);
+        const footer = (
+          <div style={{ display: 'flex', gap: 8, width: '100%', flexWrap: 'wrap', alignItems: 'center' }}>
+            {isOwner && e.status === 'pending' && (
+              <button className="btn btn-accent" style={{ flex: '1 1 140px', justifyContent: 'center' }} onClick={approve}><Icon name="check" size={14} /> อนุมัติ</button>
+            )}
+            {isOwner && e.status === 'pending' && (
+              <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={reject}>ไม่อนุมัติ</button>
+            )}
+            {canStaffEdit && (
+              <button className="btn btn-accent" style={{ flex: '1 1 120px', justifyContent: 'center' }} onClick={() => { setDetail(null); startEdit(e); }}><Icon name="edit" size={14} /> แก้ไข</button>
+            )}
+            {(canStaffEdit || (isOwner && e.status !== 'pending')) && (
+              <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={del}><Icon name="trash" size={14} /> ลบ</button>
+            )}
+            <button className="btn btn-ghost" style={{ marginLeft: 'auto' }} onClick={() => setDetail(null)}>ปิด</button>
+          </div>
+        );
+        return (
+          <window.Modal open={true} onClose={() => setDetail(null)} title="รายละเอียดรายการ" width={440} footer={footer}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div className="mono" style={{ fontSize: 30, fontWeight: 700 }}>฿{fmt(Number(e.amount || 0))}</div>
+                <div style={{ marginTop: 6 }}>{statusBadge(e.status)}</div>
+              </div>
+              <div style={{ border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
+                {rows.map((r, ri) => (
+                  <div key={ri} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 12px', borderTop: ri === 0 ? 'none' : '1px solid var(--line)', fontSize: 13.5 }}>
+                    <span style={{ color: 'var(--ink-3)', flexShrink: 0 }}>{r[0]}</span>
+                    <span style={{ textAlign: 'right', wordBreak: 'break-word' }}>{r[1]}</span>
+                  </div>
+                ))}
+              </div>
+              {imgs.length > 0 ? (
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 8 }}>ใบเสร็จ / สลิป ({imgs.length}) — แตะเพื่อดูเต็ม</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
+                    {imgs.map((img, si) => (
+                      <button key={si} type="button" onClick={() => { setLbImgs(imgs); setLbIdx(si); }}
+                        style={{ display: 'block', aspectRatio: '3/4', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg-2)', padding: 0, cursor: 'zoom-in' }}>
+                        <img className="zoomable" src={imgSrc(img)} alt={imgAlt(img, 'ใบเสร็จ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>ไม่มีใบเสร็จแนบ</div>
+              )}
+            </div>
+          </window.Modal>
+        );
+      })()}
 
       <window.ImageLightbox images={lbImgs} index={lbIdx} onClose={() => setLbIdx(-1)} onChange={setLbIdx} />
     </>
