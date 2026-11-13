@@ -6183,10 +6183,13 @@ window.StaffOpexView = function StaffOpexView() {
   const [note, setNote]     = useState('');
   const [slips, setSlips]   = useState([]);
   const [editId, setEditId] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [lbImgs, setLbImgs] = useState([]);
   const [lbIdx, setLbIdx]   = useState(-1);
 
   const resetForm = () => { setEditId(null); setDate(todayStr()); setCat(''); setAmount(''); setNote(''); setSlips([]); };
+  const closeForm = () => { resetForm(); setFormOpen(false); };
+  const openNew   = () => { resetForm(); setFormOpen(true); try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (x) {} };
 
   const submit = () => {
     if (!cat) return app.pushToast('เลือกประเภทค่าใช้จ่าย', 'error');
@@ -6202,12 +6205,13 @@ window.StaffOpexView = function StaffOpexView() {
       app.addCompanyExpense({ date, category: cat, amount: Number(amount), note: note.trim(), meta, status });
       app.pushToast(isOwner ? 'บันทึกค่าดำเนินการแล้ว ✓' : 'ส่งขออนุมัติแล้ว — รอเจ้าของอนุมัติ ⏳');
     }
-    resetForm();
+    closeForm();
   };
 
   const startEdit = (e) => {
     setEditId(e.id); setDate(e.date || todayStr()); setCat(e.category || '');
     setAmount(String(e.amount || '')); setNote(e.note || ''); setSlips(e.meta?.slips || []);
+    setFormOpen(true);
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (x) {}
   };
   const removeEntry = (e) => { if (confirm('ลบรายการนี้? การลบย้อนกลับไม่ได้')) { app.deleteCompanyExpense(e.id); if (editId === e.id) resetForm(); } };
@@ -6239,7 +6243,12 @@ window.StaffOpexView = function StaffOpexView() {
           <h1 className="page-title">ลงค่าดำเนินการ</h1>
           <div className="page-sub">{isOwner ? 'รีวิว/อนุมัติรายการที่พนักงานลง + ลงรายจ่ายบริษัทได้' : 'บันทึกค่าใช้จ่ายบริษัท แนบใบเสร็จ และติดตามสถานะ'}</div>
         </div>
-        {isOwner && pendingCount > 0 && <span className="badge amber" style={{ alignSelf: 'center' }}>รออนุมัติ {pendingCount}</span>}
+        <div className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          {isOwner && pendingCount > 0 && <span className="badge amber" style={{ alignSelf: 'center' }}>รออนุมัติ {pendingCount}</span>}
+          {allowedCats.length > 0 && !formOpen && (
+            <button className="btn btn-accent" onClick={openNew}><Icon name="plus" size={14} /> ลงรายจ่าย</button>
+          )}
+        </div>
       </div>
 
       {allowedCats.length === 0 ? (
@@ -6248,7 +6257,7 @@ window.StaffOpexView = function StaffOpexView() {
             ? 'ยังไม่ได้เปิดประเภทไหนให้พนักงานลง — ไปที่ "บัญชีบริษัท › จัดการประเภท" แล้วติ๊ก "ให้พนักงานลงได้" ในหมวดที่ต้องการ'
             : 'ยังไม่มีประเภทค่าใช้จ่ายที่เปิดให้ลง — แจ้งเจ้าของบริษัทเพื่อเปิดสิทธิ์ให้'}
         </div>
-      ) : (
+      ) : formOpen ? (
         <div className="card" style={{ maxWidth: 720, marginBottom: 16 }}>
           <h3 style={H3}>{editId ? 'แก้ไขรายการ (รออนุมัติ)' : 'ลงรายจ่ายใหม่'}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -6276,12 +6285,12 @@ window.StaffOpexView = function StaffOpexView() {
               <window.ImageUploader images={slips} onChange={setSlips} max={5} />
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              {editId && <button className="btn btn-ghost" onClick={resetForm}>ยกเลิก</button>}
+              <button className="btn btn-ghost" onClick={closeForm}>ยกเลิก</button>
               <button className="btn btn-accent" onClick={submit}><Icon name="save" size={13} /> {editId ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="card" style={{ maxWidth: 720 }}>
         <h3 style={H3}>{isOwner ? `รายการที่พนักงานลง (${entries.length})` : `ประวัติการลงของฉัน (${entries.length})`}</h3>
