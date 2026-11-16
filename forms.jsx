@@ -1181,6 +1181,24 @@ window.IncomeForm = function IncomeForm({ initial, onSubmit, onCancel }) {
         patch.vendor = p.client;
       }
     }
+    // เลือกโครงการ → ดึงสัญญางวดงานของโครงการนั้นขึ้นมาอัตโนมัติ (เลือกอันที่ยังค้างรับก่อน)
+    const projContracts = (app.incomeContracts || []).filter(c => c.projectId === projectId && c.status !== 'closed');
+    const pick = projContracts.find(c => (c.installments || []).some(g => !incGvdReceived(g))) || projContracts[0];
+    if (pick) {
+      patch.useIncomeContract = true;
+      patch.incomeContractId = pick.id;
+      patch.incomeContractDraft = null;
+      patch.receiveIds = [];
+      if (pick.client && !((patch.vendor || form.vendor) || '').trim()) patch.vendor = pick.client;
+    } else {
+      // ไม่มีสัญญาของโครงการนี้ → กลับเป็นโหมดกรอกเอง (กันค้างสัญญาของโครงการเดิม)
+      if (form.useIncomeContract && form.incomeContractId) {
+        patch.useIncomeContract = false;
+        patch.incomeContractId = '';
+        patch.incomeContractDraft = null;
+        patch.receiveIds = [];
+      }
+    }
     set(patch);
   };
 
