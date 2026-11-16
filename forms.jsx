@@ -987,6 +987,7 @@ function handleIncomeContractSubmit(app, form, onSubmit) {
 function IncomeContractSection({ form, set }) {
   const app = window.useApp();
   const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [editMode, setEditMode] = React.useState(false);
   const useC = !!form.useIncomeContract;
   const existing = form.incomeContractId ? (app.incomeContracts || []).find(c => c.id === form.incomeContractId) : null;
   const draft = form.incomeContractDraft || { title: '', installments: [] };
@@ -1004,12 +1005,27 @@ function IncomeContractSection({ form, set }) {
   const toggleReceive = (g) => { if (incGvdReceived(g)) return; syncItems(receiveIds.includes(g.id) ? receiveIds.filter(x => x !== g.id) : [...receiveIds, g.id]); };
   const toggleHistorical = (g) => { const on = !g.receivedHistorical; updDraftGvd(g.id, { receivedHistorical: on, receivedDate: on ? todayStr() : '' }); if (on && receiveIds.includes(g.id)) syncItems(receiveIds.filter(x => x !== g.id)); };
   const enableNew = () => set({ useIncomeContract: true, incomeContractId: '', incomeContractDraft: { title: form.vendor || '', installments: [{ id: newId(), detail: '', amount: '', receivedDocId: null }] }, receiveIds: [] });
-  const chooseExisting = (c) => { set({ useIncomeContract: true, incomeContractId: c.id, incomeContractDraft: null, receiveIds: [] }); setPickerOpen(false); };
+  const chooseExisting = (c) => {
+    // ผูกโครงการของงวดนั้นให้อัตโนมัติ + ดึงชื่อลูกค้ามาใส่ "ผู้จ่าย" ถ้ายังว่าง
+    const patch = { useIncomeContract: true, incomeContractId: c.id, incomeContractDraft: null, receiveIds: [] };
+    if (c.projectId) patch.projectId = c.projectId;
+    if (c.client && !(form.vendor || '').trim()) patch.vendor = c.client;
+    set(patch);
+    setPickerOpen(false);
+  };
   const disable = () => set({ useIncomeContract: false, incomeContractId: '', incomeContractDraft: null, receiveIds: [] });
   const updDraftGvd = (id, patch) => set({ incomeContractDraft: { ...draft, installments: (draft.installments || []).map(g => g.id === id ? { ...g, ...patch } : g) } });
   const addDraftGvd = () => set({ incomeContractDraft: { ...draft, installments: [...(draft.installments || []), { id: newId(), detail: '', amount: '', receivedDocId: null }] } });
   const delDraftGvd = (id) => set({ incomeContractDraft: { ...draft, installments: (draft.installments || []).filter(g => g.id !== id) } });
   const addExistingGvd = () => { const nx = [...existing.installments, { id: newId(), detail: 'งวดเพิ่มเติม', amount: 0, receivedDocId: null }]; app.updateIncomeContract(existing.id, { installments: nx, total: nx.reduce((s, g) => s + Number(g.amount || 0), 0) }); };
+  // แก้สถานะ "รับแล้ว (ยกมา)" ของงวดในสัญญาเดิมโดยตรง — เผื่อบางงวดรับไปแล้วแต่ไม่ได้ติ๊ก
+  const toggleExistingHist = (g) => {
+    if (!existing) return;
+    const on = !g.receivedHistorical;
+    const nx = existing.installments.map(x => x.id === g.id ? { ...x, receivedHistorical: on, receivedDate: on ? todayStr() : '' } : x);
+    app.updateIncomeContract(existing.id, { installments: nx });
+    if (on && receiveIds.includes(g.id)) syncItems(receiveIds.filter(x => x !== g.id));
+  };
   const openContracts = (app.incomeContracts || []).filter(c => c.status !== 'closed' && (c.installments || []).some(g => !incGvdReceived(g)));
 
   if (!useC) {
@@ -1048,6 +1064,12 @@ function IncomeContractSection({ form, set }) {
       <div className="row between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
         <strong style={{ color: 'var(--accent-ink)' }}>{existing ? 'งวดงานรับเงินลูกค้า' : 'ตั้งงวดงานรับเงินลูกค้า'}{existing?.title ? ' · ' + existing.title : ''}</strong>
         <div className="row gap-8">
+          {existing && (
+            <button type="button" className={"btn btn-sm " + (editMode ? "btn-accent" : "btn-ghost")}
+              onClick={() => setEditMode(m => !m)} title="แก้สถานะรับงวด เผื่อบางงวดรับไปแล้วแต่ไม่ได้ติ๊ก">
+              <Icon name={editMode ? "check" : "edit"} size={12} /> {editMode ? 'เสร็จ' : 'แก้ไขงวด'}
+            </button>
+          )}
           {existing && app.isAdmin && (
             <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}
               onClick={() => { const rc = (existing.installments || []).filter(g => g.receivedDocId).length; if (confirm('ลบงวดงานลูกค้านี้?' + (rc > 0 ? '\n\n⚠️ รับไปแล้ว ' + rc + ' งวด — บันทึกรายรับเดิมยังอยู่' : ''))) { app.deleteIncomeContract(existing.id); disable(); } }}><Icon name="trash" size={12} /> ลบ</button>
@@ -1077,6 +1099,10 @@ function IncomeContractSection({ form, set }) {
                 : <div className="input-affix" style={{ width: 120 }}><div className="input-affix-prefix">฿</div><window.MoneyInput className="input mono" placeholder="ยอด" value={g.amount} onChange={v => updDraftGvd(g.id, { amount: v })} /></div>}
               {byBill ? (
                 <button type="button" className="badge" style={{ background: 'var(--info-soft)', color: '#1a4fb0', cursor: 'pointer' }} onClick={() => app.setDetailId(g.receivedDocId)} title="เปิดดูบันทึกรายรับของงวดนี้">รับแล้ว · {g.receivedDocNo || 'ดูบิล'}</button>
+              ) : (existing && editMode) ? (
+                <button type="button" className={"status-chip" + (hist ? " on approve" : "")} onClick={() => toggleExistingHist(g)} title="กดเพื่อสลับสถานะ 'รับแล้ว (ยกมา)' ของงวดนี้ — ใช้กรณีรับเงินไปแล้วแต่ยังไม่ได้ติ๊ก">
+                  <span className="tick">{hist ? '✓' : ''}</span> รับแล้ว (ยกมา)
+                </button>
               ) : hist ? (
                 existing
                   ? <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>รับแล้ว (ยกมา)</span>
@@ -1096,7 +1122,9 @@ function IncomeContractSection({ form, set }) {
         <button type="button" className="btn btn-ghost btn-sm" onClick={existing ? addExistingGvd : addDraftGvd}><Icon name="plus" size={12} /> เพิ่มงวด (งานเพิ่ม)</button>
         {receiveIds.length > 0 && <span style={{ fontSize: 12.5, color: 'var(--accent-ink)' }}>รับรอบนี้ {receiveIds.length} งวด = <strong className="mono">฿{fmt(selectedTotal)}</strong></span>}
       </div>
-      <div className="text-small text-muted" style={{ marginTop: 8 }}>ยอดรายรับบิลนี้ = งวดที่ติ๊ก "รับงวดนี้" · รอบถัดไปสร้างบันทึกใหม่แล้วกด "เลือกงวดงานลูกค้าเดิม" · งวดที่รับแล้วคลิกดูบิลได้</div>
+      {existing && editMode
+        ? <div className="text-small" style={{ marginTop: 8, color: 'var(--accent-ink)' }}>🔧 โหมดแก้ไข: ติ๊ก "รับแล้ว (ยกมา)" ให้งวดที่รับเงินไปแล้วแต่ลืมติ๊ก (ไม่สร้างบิลใหม่) · กดซ้ำเพื่อยกเลิก · งวดที่ผูกกับบิลจริง (รับแล้ว · เลขบิล) แก้ที่นี่ไม่ได้ ต้องไปแก้ที่บิลนั้น</div>
+        : <div className="text-small text-muted" style={{ marginTop: 8 }}>ยอดรายรับบิลนี้ = งวดที่ติ๊ก "รับงวดนี้" · รอบถัดไปสร้างบันทึกใหม่แล้วกด "เลือกงวดงานลูกค้าเดิม" · งวดที่รับแล้วคลิกดูบิลได้</div>}
     </div>
   );
 }
