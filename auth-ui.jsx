@@ -8,11 +8,34 @@ function AuthScreen() {
   const [email, setEmail]       = React.useState('');
   const [password, setPassword] = React.useState('');
   const [fullName, setFullName] = React.useState('');
+  const [confirmPass, setConfirmPass] = React.useState('');
   const [loading, setLoading]   = React.useState(false);
   const [error, setError]       = React.useState('');
   const [success, setSuccess]   = React.useState('');
 
   const reset = () => { setError(''); setSuccess(''); };
+
+  const handleForgot = async (e) => {
+    e.preventDefault(); reset();
+    if (!email.trim()) { setError('กรุณากรอกอีเมล'); return; }
+    if (password.length < 6) { setError('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร'); return; }
+    if (password !== confirmPass) { setError('รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน'); return; }
+    setLoading(true);
+    const { data, error: err } = await window.supabaseClient.rpc('request_password_reset', { p_email: email.trim(), p_new_password: password });
+    setLoading(false);
+    if (err) { setError('ส่งคำขอไม่สำเร็จ ลองใหม่อีกครั้ง'); return; }
+    if (data && data.ok) {
+      setSuccess('ส่งคำขอเปลี่ยนรหัสผ่านแล้ว — รอเจ้าของระบบอนุมัติก่อน จึงจะใช้รหัสใหม่เข้าสู่ระบบได้');
+      setPassword(''); setConfirmPass('');
+      setTab('login');
+    } else if (data && data.reason === 'notfound') {
+      setError('ไม่พบอีเมลนี้ในระบบ — ตรวจสอบการสะกดอีกครั้ง หรือแจ้งผู้ดูแลระบบ');
+    } else if (data && data.reason === 'weak') {
+      setError('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร');
+    } else {
+      setError('ส่งคำขอไม่สำเร็จ ลองใหม่อีกครั้ง');
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault(); reset(); setLoading(true);
@@ -131,11 +154,13 @@ function AuthScreen() {
           </div>
 
           <h2 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 6px', color: '#111' }}>
-            {tab === 'login' ? 'ยินดีต้อนรับกลับ' : 'สร้างบัญชีใหม่'}
+            {tab === 'login' ? 'ยินดีต้อนรับกลับ' : tab === 'forgot' ? 'ลืมรหัสผ่าน' : 'สร้างบัญชีใหม่'}
           </h2>
           <p style={{ color: '#7a6f64', fontSize: 13, margin: '0 0 24px' }}>
             {tab === 'login'
               ? 'กรอกอีเมลและรหัสผ่านเพื่อเข้าใช้งาน'
+              : tab === 'forgot'
+              ? 'กรอกอีเมลและรหัสผ่านใหม่ที่ต้องการ — คำขอจะส่งให้เจ้าของระบบอนุมัติก่อน'
               : 'กรอกข้อมูลเพื่อขอสิทธิ์เข้าใช้งาน'}
           </p>
 
@@ -155,7 +180,7 @@ function AuthScreen() {
             }}>✅ {success}</div>
           )}
 
-          <form onSubmit={tab === 'login' ? handleLogin : handleRegister}>
+          <form onSubmit={tab === 'login' ? handleLogin : tab === 'forgot' ? handleForgot : handleRegister}>
             {/* Full name (register only) */}
             {tab === 'register' && (
               <div style={{ marginBottom: 16 }}>
@@ -175,13 +200,23 @@ function AuthScreen() {
             </div>
 
             {/* Password */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={labelStyle}>รหัสผ่าน</label>
+            <div style={{ marginBottom: tab === 'forgot' ? 16 : 24 }}>
+              <label style={labelStyle}>{tab === 'forgot' ? 'รหัสผ่านใหม่' : 'รหัสผ่าน'}</label>
               <input className="input" type="password"
-                placeholder={tab === 'register' ? 'อย่างน้อย 6 ตัวอักษร' : '••••••••'}
+                placeholder={tab === 'login' ? '••••••••' : 'อย่างน้อย 6 ตัวอักษร'}
                 value={password} onChange={e => setPassword(e.target.value)}
                 required style={{ width: '100%', boxSizing: 'border-box' }} />
             </div>
+
+            {/* Confirm password (forgot only) */}
+            {tab === 'forgot' && (
+              <div style={{ marginBottom: 24 }}>
+                <label style={labelStyle}>ยืนยันรหัสผ่านใหม่</label>
+                <input className="input" type="password" placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง"
+                  value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
+                  required style={{ width: '100%', boxSizing: 'border-box' }} />
+              </div>
+            )}
 
             <button type="submit" disabled={loading}
               className="btn-primary"
@@ -193,9 +228,27 @@ function AuthScreen() {
                     animation: 'spin 0.7s linear infinite' }} />
                   กำลังดำเนินการ…
                 </>
-              ) : tab === 'login' ? '🔑 เข้าสู่ระบบ' : '✉️ สมัครสมาชิก'}
+              ) : tab === 'login' ? '🔑 เข้าสู่ระบบ' : tab === 'forgot' ? '📨 ส่งคำขอเปลี่ยนรหัส' : '✉️ สมัครสมาชิก'}
             </button>
           </form>
+
+          {tab === 'login' && (
+            <p style={{ marginTop: 16, textAlign: 'center' }}>
+              <button type="button" onClick={() => { setTab('forgot'); reset(); setPassword(''); setConfirmPass(''); }}
+                style={{ background: 'none', border: 'none', color: '#047857', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                ลืมรหัสผ่าน?
+              </button>
+            </p>
+          )}
+
+          {tab === 'forgot' && (
+            <p style={{ marginTop: 16, textAlign: 'center' }}>
+              <button type="button" onClick={() => { setTab('login'); reset(); setConfirmPass(''); }}
+                style={{ background: 'none', border: 'none', color: '#7a6f64', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                ← กลับไปเข้าสู่ระบบ
+              </button>
+            </p>
+          )}
 
           {tab === 'register' && (
             <p style={{ marginTop: 16, fontSize: 12, color: '#9ca3af', textAlign: 'center', lineHeight: 1.6 }}>

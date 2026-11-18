@@ -367,6 +367,8 @@ window.AppProvider = function AppProvider({ children }) {
   const [workerTeams, setWorkerTeams] = useState(SEED_WORKER_TEAMS);
   const [laborContracts, setLaborContracts] = useState([]);
   const [incomeContracts, setIncomeContracts] = useState([]);
+  // คำขอรีเซ็ตรหัสผ่าน (รออนุมัติ) — เฉพาะ owner เห็นจาก RLS
+  const [pwResetRequests, setPwResetRequests] = useState([]);
   // บัญชีบริษัท (เฉพาะ admin) — non-admin จะได้ [] จาก RLS
   const [companyExpenses, setCompanyExpenses] = useState([]);
   const [companyExpenseCats, setCompanyExpenseCats] = useState([]);
@@ -1018,6 +1020,28 @@ window.AppProvider = function AppProvider({ children }) {
     if (dbOnline) dbSync(window.db.deleteIncomeContract(id), 'deleteIncomeContract');
   }, [dbOnline, dbSync]);
 
+  // ── คำขอรีเซ็ตรหัสผ่าน (owner อนุมัติ) ────────────────
+  const refreshPwResets = useCallback(async () => {
+    if (!dbOnline || !isOwner || !window.supabaseClient) { setPwResetRequests([]); return; }
+    try {
+      const { data } = await window.supabaseClient
+        .from('password_reset_requests').select('*')
+        .eq('status', 'pending').order('requested_at', { ascending: false });
+      setPwResetRequests(data || []);
+    } catch (e) { /* ignore */ }
+  }, [dbOnline, isOwner]);
+
+  useEffect(() => { refreshPwResets(); }, [refreshPwResets]);
+
+  const resolvePwReset = useCallback(async (id, approve) => {
+    try {
+      const { data, error } = await window.supabaseClient.rpc('resolve_password_reset', { p_id: id, p_approve: approve });
+      if (error || !(data && data.ok)) { pushToast('ดำเนินการไม่สำเร็จ', 'error'); return; }
+      setPwResetRequests((rs) => rs.filter((r) => r.id !== id));
+      pushToast(approve ? 'อนุมัติรหัสผ่านใหม่แล้ว ✓' : 'ไม่อนุมัติคำขอแล้ว');
+    } catch (e) { pushToast('ดำเนินการไม่สำเร็จ', 'error'); }
+  }, [pushToast]);
+
   // ── บัญชีบริษัท: รายจ่ายบริษัท (เฉพาะ admin) ──────────
   const addCompanyExpense = useCallback((e) => {
     const ne = { note: '', meta: {}, status: 'approved', ...e, id: e.id || newId(), amount: Number(e.amount || 0) };
@@ -1159,6 +1183,7 @@ window.AppProvider = function AppProvider({ children }) {
     workerTeams, addWorkerTeam, updateWorkerTeam, deleteWorkerTeam,
     laborContracts, addLaborContract, updateLaborContract, deleteLaborContract,
     incomeContracts, addIncomeContract, updateIncomeContract, deleteIncomeContract,
+    pwResetRequests, refreshPwResets, resolvePwReset,
     companyExpenses, addCompanyExpense, updateCompanyExpense, deleteCompanyExpense,
     approveCompanyExpense, rejectCompanyExpense,
     currentUserId: session?.user?.id || null,
@@ -1173,7 +1198,7 @@ window.AppProvider = function AppProvider({ children }) {
     detailId, setDetailId,
     editingId, setEditingId,
   }), [view, sidebarOpen, session, userProfile, isAdmin, isOwner, signOut, dbOnline,
-       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, companyExpenses, companyExpenseCats, companyCreditors, companyDebtors, companyRecurring, carryoverIncome, companyLastYearPL, records, toasts, detailId, editingId,
+       projects, matCats, machCats, laborCats, lumpLaborCats, otherCats, workerTeams, laborContracts, incomeContracts, pwResetRequests, refreshPwResets, resolvePwReset, companyExpenses, companyExpenseCats, companyCreditors, companyDebtors, companyRecurring, carryoverIncome, companyLastYearPL, records, toasts, detailId, editingId,
        archivedRecords, archivedLoaded, loadArchivedRecords,
        addRecord, updateRecord, deleteRecord, hydrateRecord, addProject, deleteProject, updateProject, archiveProject, unarchiveProject,
        addMatCat, updateMatCat, deleteMatCat, addMachCat, updateMachCat, deleteMachCat,

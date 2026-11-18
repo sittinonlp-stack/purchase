@@ -3245,6 +3245,7 @@ window.UsersView = function UsersView() {
   }, []);
 
   React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => { if (app.refreshPwResets) app.refreshPwResets(); }, []);
 
   const toggleRole = async (profile) => {
     const newRole = profile.role === 'admin' ? 'user' : 'admin';
@@ -3298,6 +3299,31 @@ window.UsersView = function UsersView() {
         </div>
         <window.HelpButton guideId="users" />
       </div>
+
+      {app.isOwner && (app.pwResetRequests || []).length > 0 && (
+        <div className="card" style={{ maxWidth: 760, marginBottom: 16, border: '1px solid var(--warn)' }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">🔑 คำขอเปลี่ยนรหัสผ่าน (รออนุมัติ {app.pwResetRequests.length})</div>
+              <div className="card-sub" style={{ color: 'var(--warn)' }}>⚠️ ยืนยันตัวตนผู้ขอก่อนอนุมัติ (โทร/ถามให้แน่ใจว่าเป็นเจ้าของบัญชีจริง) — หลังอนุมัติผู้ขอใช้รหัสใหม่เข้าระบบได้ทันที</div>
+            </div>
+          </div>
+          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {app.pwResetRequests.map(r => (
+              <div key={r.id} className="row between" style={{ flexWrap: 'wrap', gap: 8, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 10, background: 'var(--bg-2)' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{r.full_name || r.email}</div>
+                  <div className="text-small text-muted">{r.email} · ขอเมื่อ {fmtDate((r.requested_at || '').slice(0, 10))}</div>
+                </div>
+                <div className="row gap-8">
+                  <button className="btn btn-accent btn-sm" onClick={() => { if (confirm('อนุมัติรหัสผ่านใหม่ของ ' + (r.full_name || r.email) + '?\n\n⚠️ ยืนยันตัวตนผู้ขอแล้วใช่ไหม? หลังอนุมัติผู้ขอจะใช้รหัสใหม่เข้าระบบได้ทันที')) app.resolvePwReset(r.id, true); }}><Icon name="check" size={12} /> อนุมัติ</button>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => { if (confirm('ไม่อนุมัติคำขอเปลี่ยนรหัสของ ' + (r.full_name || r.email) + '?')) app.resolvePwReset(r.id, false); }}>ไม่อนุมัติ</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ maxWidth: 760 }}>
         {/* Legend */}

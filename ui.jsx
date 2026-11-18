@@ -762,6 +762,9 @@ function Sidebar() {
             <button className={"nav-item" + (view === 'users' ? " active" : "")} onClick={() => go('users')}
               style={{ color: 'var(--accent-light, #fbbf24)' }}>
               <Icon name="shield" /> จัดการผู้ใช้
+              {app.isOwner && (app.pwResetRequests || []).length > 0 && (
+                <span style={{ marginLeft: 'auto', background: '#dc2626', color: '#fff', minWidth: 18, height: 18, borderRadius: 9, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }} title="คำขอเปลี่ยนรหัสผ่านรออนุมัติ">{app.pwResetRequests.length}</span>
+              )}
             </button>
           )}
         </div>
