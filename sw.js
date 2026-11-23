@@ -5,7 +5,7 @@
 //           Network-only สำหรับ Supabase API
 // ============================================================
 
-const CACHE_NAME = 'jadsuea-v69';
+const CACHE_NAME = 'jadsuea-v70';
 const NET_TIMEOUT = 4000; // ms — ถ้า network ช้าเกินนี้ ใช้ cache แทน (กันค้าง)
 
 // ไฟล์ CDN ที่เปลี่ยนแปลงไม่บ่อย — ใช้ cache-first เพื่อความเร็ว
