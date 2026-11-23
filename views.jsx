@@ -6213,6 +6213,7 @@ window.StaffOpexView = function StaffOpexView() {
   const [detail, setDetail] = useState(null);
   const [lbImgs, setLbImgs] = useState([]);
   const [lbIdx, setLbIdx]   = useState(-1);
+  const [tab, setTab]       = useState('pending'); // pending | approved | rejected
 
   const resetForm = () => { setEditId(null); setDate(todayStr()); setCat(''); setAmount(''); setNote(''); setSlips([]); };
   const closeForm = () => { resetForm(); setFormOpen(false); };
@@ -6246,7 +6247,12 @@ window.StaffOpexView = function StaffOpexView() {
   const entries = (app.companyExpenses || [])
     .filter(e => isOwner ? (e.meta?.by || e.status === 'pending' || e.status === 'rejected') : true)
     .slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  const pendingCount = entries.filter(e => e.status === 'pending').length;
+  // แยกตามสถานะ: รออนุมัติ / อนุมัติแล้ว (เข้าบัญชี) / ไม่อนุมัติ
+  const statusKey = (e) => (e.status === 'approved' ? 'approved' : e.status === 'rejected' ? 'rejected' : 'pending');
+  const grouped = { pending: [], approved: [], rejected: [] };
+  entries.forEach(e => grouped[statusKey(e)].push(e));
+  const pendingCount = grouped.pending.length;
+  const shown = grouped[tab] || [];
 
   const statusBadge = (st) => {
     const map = {
@@ -6367,12 +6373,30 @@ window.StaffOpexView = function StaffOpexView() {
 
       {!formOpen && (
       <div className="card" style={{ maxWidth: 720 }}>
-        <h3 style={H3}>{isOwner ? `รายการที่พนักงานลง (${entries.length})` : `ประวัติการลงของฉัน (${entries.length})`}</h3>
-        {entries.length === 0 ? (
-          <div className="text-small text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>ยังไม่มีรายการ</div>
+        <h3 style={H3}>{isOwner ? 'รายการที่พนักงานลง' : 'ประวัติการลงของฉัน'}</h3>
+
+        {/* แท็บแยกสถานะ — รออนุมัติ / อนุมัติแล้ว / ไม่อนุมัติ */}
+        <div className="tabs" style={{ marginBottom: 16, flexWrap: 'wrap', maxWidth: '100%' }}>
+          <button className={"tab" + (tab === 'pending' ? ' active' : '')} onClick={() => setTab('pending')}>
+            <Icon name="clock" size={13} /> รออนุมัติ {grouped.pending.length > 0 && <span className="badge amber mono">{grouped.pending.length}</span>}
+          </button>
+          <button className={"tab" + (tab === 'approved' ? ' active' : '')} onClick={() => setTab('approved')}>
+            <Icon name="check" size={13} /> อนุมัติแล้ว {grouped.approved.length > 0 && <span className="badge gray mono">{grouped.approved.length}</span>}
+          </button>
+          {grouped.rejected.length > 0 && (
+            <button className={"tab" + (tab === 'rejected' ? ' active' : '')} onClick={() => setTab('rejected')}>
+              ไม่อนุมัติ <span className="badge gray mono">{grouped.rejected.length}</span>
+            </button>
+          )}
+        </div>
+
+        {shown.length === 0 ? (
+          <div className="text-small text-muted" style={{ textAlign: 'center', padding: '20px 0' }}>
+            {tab === 'pending' ? 'ไม่มีรายการที่รออนุมัติ' : tab === 'approved' ? 'ยังไม่มีรายการที่อนุมัติแล้ว' : 'ไม่มีรายการที่ไม่อนุมัติ'}
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {entries.map((e, i) => (
+            {shown.map((e, i) => (
               <button key={e.id} type="button" onClick={() => setDetail(e)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: '11px 4px', borderTop: i === 0 ? 'none' : '1px solid var(--line)', fontFamily: 'inherit' }}>
                 <span style={{ width: 9, height: 9, borderRadius: '50%', background: colorOf(e.category), flexShrink: 0 }} />
