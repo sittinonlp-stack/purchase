@@ -1026,7 +1026,10 @@ function IncomeContractSection({ form, set }) {
     app.updateIncomeContract(existing.id, { installments: nx });
     if (on && receiveIds.includes(g.id)) syncItems(receiveIds.filter(x => x !== g.id));
   };
-  const openContracts = (app.incomeContracts || []).filter(c => c.status !== 'closed' && (c.installments || []).some(g => !incGvdReceived(g)));
+  const selProj = form.projectId ? (app.projects || []).find(p => p.id === form.projectId) : null;
+  const allOpenContracts = (app.incomeContracts || []).filter(c => c.status !== 'closed' && (c.installments || []).some(g => !incGvdReceived(g)));
+  // เลือกโครงการไว้แล้ว → โชว์เฉพาะงวดของโครงการนั้น (กันเลือกผิด) · ยังไม่เลือก → โชว์ทั้งหมด
+  const openContracts = selProj ? allOpenContracts.filter(c => c.projectId === form.projectId) : allOpenContracts;
 
   if (!useC) {
     return (
@@ -1039,9 +1042,15 @@ function IncomeContractSection({ form, set }) {
         {pickerOpen && ReactDOM.createPortal(
           <div className="modal-overlay" onClick={() => setPickerOpen(false)}>
             <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-              <div className="modal-header"><h2 className="modal-title">เลือกงวดงานรับเงินลูกค้า (ที่ค้างรับ)</h2><button className="btn-icon" onClick={() => setPickerOpen(false)}><Icon name="x" size={16} /></button></div>
+              <div className="modal-header">
+                <div>
+                  <h2 className="modal-title" style={{ marginBottom: selProj ? 2 : 0 }}>เลือกงวดงานรับเงินลูกค้า (ที่ค้างรับ)</h2>
+                  {selProj && <div className="text-small text-muted">เฉพาะโครงการ: <strong style={{ color: 'var(--accent-ink)' }}>{selProj.name}</strong></div>}
+                </div>
+                <button className="btn-icon" onClick={() => setPickerOpen(false)}><Icon name="x" size={16} /></button>
+              </div>
               <div className="modal-body">
-                {openContracts.length === 0 ? <div className="text-small text-muted" style={{ textAlign: 'center', padding: '16px 0' }}>ยังไม่มีงวดงานลูกค้าที่ค้างรับ — กด "ตั้งงวดงานรับเงินลูกค้า" เพื่อเริ่ม</div> : openContracts.map(c => {
+                {openContracts.length === 0 ? <div className="text-small text-muted" style={{ textAlign: 'center', padding: '16px 0' }}>{selProj ? `โครงการ "${selProj.name}" ยังไม่มีงวดงานลูกค้าที่ค้างรับ — กด "ตั้งงวดงานรับเงินลูกค้า" เพื่อเริ่ม` : 'ยังไม่มีงวดงานลูกค้าที่ค้างรับ — กด "ตั้งงวดงานรับเงินลูกค้า" เพื่อเริ่ม'}</div> : openContracts.map(c => {
                   const proj = (app.projects || []).find(p => p.id === c.projectId);
                   const out = Number(c.total || 0) - (c.installments || []).filter(incGvdReceived).reduce((s, g) => s + Number(g.amount || 0), 0);
                   return (
